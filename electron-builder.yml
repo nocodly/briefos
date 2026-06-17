@@ -19,10 +19,11 @@ files:
 asarUnpack:
   - "**/*.node"
   - "resources/**"
-  - "node_modules/ffmpeg-static/**"
 
 # Bundle the Python diarizer + prompt markdown alongside the app.
 extraResources:
+  - from: node_modules/ffmpeg-static/ffmpeg.exe
+    to: ffmpeg.exe
   - from: python
     to: python
     filter:

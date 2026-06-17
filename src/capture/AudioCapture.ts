@@ -5,9 +5,11 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
 
-// In packaged app, ffmpeg-static is inside the asar — replace with the unpacked path.
-const _ffmpegRaw: string = ffmpegStatic as unknown as string
-const ffmpegPath: string = _ffmpegRaw.replace('app.asar', 'app.asar.unpacked')
+// In packaged app ffmpeg is copied to resources/ffmpeg.exe via extraResources.
+// In dev, use ffmpeg-static directly.
+const ffmpegPath: string = app.isPackaged
+  ? join(process.resourcesPath, 'ffmpeg.exe')
+  : (ffmpegStatic as unknown as string)
 
 // =============================================================================
 // AudioCapture — captures system audio (WASAPI loopback via dshow) + microphone
