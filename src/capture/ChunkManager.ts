@@ -4,7 +4,9 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
 
-const ffmpegPath: string = ffmpegStatic as unknown as string
+const ffmpegPath: string = app.isPackaged
+  ? join(process.resourcesPath, 'ffmpeg.exe')
+  : (ffmpegStatic as unknown as string)
 
 // =============================================================================
 // ChunkManager — splits a full WAV recording into 30s chunks with 2s overlap.
