@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, shell, screen } from 'electron'
+import { app, BrowserWindow, globalShortcut, shell, screen, session } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
 import { createTray, updateTrayState } from './tray'
@@ -57,6 +57,13 @@ function createMainWindow(): BrowserWindow {
   })
 
   // Allow the renderer to connect to external APIs (Supabase, OpenAI, Anthropic).
+  // Auto-grant microphone permission so Windows shows the OS privacy dialog
+  // automatically when the renderer calls getUserMedia — no manual config needed.
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'media') return callback(true)
+    callback(false)
+  })
+
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {

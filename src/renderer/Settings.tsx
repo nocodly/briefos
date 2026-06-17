@@ -96,6 +96,14 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
   const loadDevices = useCallback(async () => {
     setLoadingDevices(true)
     try {
+      // Request mic permission first — Windows won't expose devices to DirectShow
+      // until the user grants access via the OS privacy dialog.
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        stream.getTracks().forEach(t => t.stop())
+      } catch {
+        // Permission denied — proceed anyway, list will be empty
+      }
       const list = await invoke<string[]>('audio:listDevices')
       setDevices(list || [])
     } catch (err) {
