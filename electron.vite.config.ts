@@ -13,6 +13,9 @@ export default defineConfig({
     // externalizeDepsPlugin keeps node_modules out of the bundle so native
     // addons (better-sqlite3) and binaries (ffmpeg-static) resolve at runtime.
     plugins: [externalizeDepsPlugin()],
+    define: {
+      'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY ?? ''),
+    },
     build: {
       outDir: 'out/main',
       lib: {
