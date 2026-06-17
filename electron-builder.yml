@@ -45,7 +45,7 @@ win:
         - x64
   # electron-builder generates the .ico from this 256x256 PNG.
   icon: assets/icon.png
-  artifactName: ${productName}-Setup-${version}.${ext}
+  artifactName: ${productName}-Setup.${ext}
   # Code signing — supplied via env in CI (CSC_LINK / CSC_KEY_PASSWORD).
   # signtoolOptions:
   #   signingHashAlgorithms: ["sha256"]
