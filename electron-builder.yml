@@ -19,6 +19,7 @@ files:
 asarUnpack:
   - "**/*.node"
   - "resources/**"
+  - "node_modules/ffmpeg-static/**"
 
 # Bundle the Python diarizer + prompt markdown alongside the app.
 extraResources:
