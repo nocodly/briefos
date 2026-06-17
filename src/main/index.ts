@@ -1,4 +1,4 @@
-import { app, BrowserWindow, globalShortcut, shell, screen, session } from 'electron'
+import { app, BrowserWindow, globalShortcut, shell, screen } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
 import { createTray, updateTrayState } from './tray'
