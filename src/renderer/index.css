@@ -1,0 +1,50 @@
+/* Fonts + icon webfont. NOTE: loaded via CDN — for a fully offline (local-first)
+   build these should be vendored into the app and @font-face'd locally. */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.17.0/dist/tabler-icons.min.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: theme('colors.bg');
+    color: theme('colors.text');
+    font-family: theme('fontFamily.body');
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Tabler icon glyphs render as inline-block so gap/alignment behave. */
+  .ti {
+    display: inline-block;
+    line-height: 1;
+  }
+
+  /* Thin custom scrollbars to match the design system. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.border');
+    border-radius: 999px;
+    border: 3px solid theme('colors.bg');
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: theme('colors.text-4');
+  }
+}
+
+/* Overlay window is transparent + frameless; let the widget define its bg. */
+body.overlay {
+  background: transparent;
+}

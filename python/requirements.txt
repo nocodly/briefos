@@ -1,0 +1,9 @@
+# BriefOS speaker diarization (diarizer.py)
+# Install:  pip install -r python/requirements.txt
+#
+# pyannote.audio 3.1 pulls in torch/torchaudio. For GPU, install the CUDA
+# build of torch from https://pytorch.org first, then this file.
+
+pyannote.audio==3.1.1
+torch>=2.0.0
+torchaudio>=2.0.0

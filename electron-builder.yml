@@ -1,0 +1,66 @@
+# BriefOS — electron-builder configuration
+# @see https://www.electron.build/configuration/configuration
+appId: com.briefos.app
+productName: BriefOS
+copyright: Copyright © 2026 BriefOS
+asar: true
+
+directories:
+  output: release/${version}
+  buildResources: assets
+
+# electron-vite emits the bundled app into `out/` (main, preload, renderer).
+# Ship that plus the Python diarizer and the prompt templates.
+files:
+  - out/**/*
+  - package.json
+
+# Native deps (better-sqlite3) + Python scripts that must live unpacked on disk.
+asarUnpack:
+  - "**/*.node"
+  - "resources/**"
+
+# Bundle the Python diarizer + prompt markdown alongside the app.
+extraResources:
+  - from: python
+    to: python
+    filter:
+      - "**/*"
+  - from: src/ai/prompts
+    to: prompts
+    filter:
+      - "**/*.md"
+  # Runtime tray icons (idle/recording) read via process.resourcesPath/assets.
+  - from: assets
+    to: assets
+    filter:
+      - "tray-icon.png"
+      - "tray-icon-recording.png"
+      - "icon.png"
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # electron-builder generates the .ico from this 256x256 PNG.
+  icon: assets/icon.png
+  artifactName: ${productName}-Setup-${version}.${ext}
+  # Code signing — supplied via env in CI (CSC_LINK / CSC_KEY_PASSWORD).
+  # signtoolOptions:
+  #   signingHashAlgorithms: ["sha256"]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: BriefOS
+
+# Auto-update feed — GitHub Releases (electron-updater).
+publish:
+  provider: github
+  owner: nocodly
+  repo: briefos

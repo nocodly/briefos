@@ -1,0 +1,45 @@
+{
+  // Node side: Electron main + preload + all backend modules + build config.
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "types": ["node"],
+
+    /* Strictness */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Path aliases — must mirror electron.vite.config.ts */
+    "baseUrl": ".",
+    "paths": {
+      "@main/*": ["src/main/*"],
+      "@capture/*": ["src/capture/*"],
+      "@transcription/*": ["src/transcription/*"],
+      "@ai/*": ["src/ai/*"],
+      "@storage/*": ["src/storage/*"],
+      "@output/*": ["src/output/*"],
+      "@shared/*": ["src/shared/*"]
+    }
+  },
+  "include": [
+    "src/main",
+    "src/capture",
+    "src/transcription",
+    "src/ai",
+    "src/storage",
+    "src/output",
+    "src/shared",
+    "electron.vite.config.ts"
+  ]
+}

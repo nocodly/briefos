@@ -1,0 +1,60 @@
+name: Build BriefOS (Windows)
+
+# Build the Windows installer. Tag pushes (v*) publish a GitHub Release for
+# electron-updater; manual runs build artifacts without publishing.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write # needed to create/publish releases
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # Python toolchain is needed so node-gyp can rebuild native modules
+      # (better-sqlite3) against Electron's ABI during npm ci / install-app-deps.
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      # build:win runs electron-vite build + electron-builder --win.
+      # On tag pushes, --publish always uploads to the GitHub Release.
+      - name: Build installer
+        run: npm run build:win -- --publish ${{ startsWith(github.ref, 'refs/tags/v') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing (optional) — set these repo secrets to sign the .exe.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Upload installer artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefos-windows-setup
+          path: |
+            release/**/*.exe
+            release/**/*.blockmap
+            release/**/latest.yml
+          if-no-files-found: warn
