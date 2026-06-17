@@ -39,6 +39,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_STRIPE_PRO_LINK: ${{ secrets.VITE_STRIPE_PRO_LINK }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
