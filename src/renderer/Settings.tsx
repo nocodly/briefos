@@ -377,7 +377,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 // ── Update Banner ────────────────────────────────────────────────────────────
 
 function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
-  const { state, version, percent, error, check, install } = updater
+  const { state, version, percent, check, install } = updater
 
   if (state === 'idle') {
     return (
