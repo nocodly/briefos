@@ -19,7 +19,8 @@ const INVOKE_CHANNELS = new Set([
   'export:email', 'export:clipboard',
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
-  'audio:listDevices', 'audio:testLevels'
+  'audio:listDevices', 'audio:testLevels',
+  'updater:check', 'updater:install'
 ])
 
 // Push channels (main → renderer via webContents.send).

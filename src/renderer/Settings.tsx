@@ -3,6 +3,36 @@ import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { supabase, updateProfile, type PlanType } from './lib/supabaseClient'
 
+// ── Updater hook ─────────────────────────────────────────────────────────────
+type UpdaterState = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'none' | 'error'
+function useUpdater() {
+  const [state, setState] = useState<UpdaterState>('idle')
+  const [version, setVersion] = useState('')
+  const [percent, setPercent] = useState(0)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const sub = window.electron.on('updater:status', (data: any) => {
+      setState(data.state)
+      if (data.version) setVersion(data.version)
+      if (data.percent !== undefined) setPercent(data.percent)
+      if (data.error) setError(data.error)
+    })
+    return () => window.electron.off('updater:status', sub)
+  }, [])
+
+  const check = async () => {
+    setState('checking')
+    await invoke('updater:check')
+  }
+
+  const install = async () => {
+    await invoke('updater:install')
+  }
+
+  return { state, version, percent, error, check, install }
+}
+
 // =============================================================================
 // Settings — all configuration panels. Reads via settings:getAll, writes each
 // change via settings:set. Audio devices come from audio:listDevices.
@@ -75,6 +105,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
   const [error, setError] = useState('')
   const [testing, setTesting] = useState(false)
   const [levels, setLevels] = useState<AudioTestReport | null>(null)
+  const updater = useUpdater()
 
   useEffect(() => {
     invoke<Partial<SettingsState>>('settings:getAll')
@@ -150,6 +181,9 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
             {error}
           </div>
         )}
+
+        {/* Update banner */}
+        <UpdateBanner updater={updater} />
 
         {/* API Keys */}
         <Panel title="API Keys" icon="key" desc="Stored encrypted on your device.">
@@ -338,6 +372,108 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
       </div>
     </div>
   )
+}
+
+// ── Update Banner ────────────────────────────────────────────────────────────
+
+function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
+  const { state, version, percent, error, check, install } = updater
+
+  if (state === 'idle') {
+    return (
+      <div className="flex items-center justify-between bg-surface border border-border-soft rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 text-[12px] text-text-3">
+          <i className="ti ti-refresh text-[15px] text-accent" />
+          Check for app updates
+        </div>
+        <button
+          onClick={check}
+          className="text-[12px] font-medium text-accent hover:text-blue-mid bg-blue-tint hover:bg-blue-tint/80 px-3 py-1.5 rounded-lg transition-all"
+        >
+          Check now
+        </button>
+      </div>
+    )
+  }
+
+  if (state === 'checking') {
+    return (
+      <div className="flex items-center gap-2 bg-surface border border-border-soft rounded-lg px-4 py-3 text-[12px] text-text-3">
+        <i className="ti ti-loader-2 animate-spin-slow text-[15px] text-accent" />
+        Checking for updates…
+      </div>
+    )
+  }
+
+  if (state === 'none') {
+    return (
+      <div className="flex items-center justify-between bg-surface border border-border-soft rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 text-[12px] text-green">
+          <i className="ti ti-circle-check text-[15px]" />
+          You're on the latest version
+        </div>
+        <button onClick={check} className="text-[11px] text-text-4 hover:text-text-2 transition-all">Check again</button>
+      </div>
+    )
+  }
+
+  if (state === 'available' || state === 'downloading') {
+    return (
+      <div className="bg-blue-tint border border-accent/20 rounded-lg px-4 py-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-blue-deep">
+            <i className="ti ti-download text-[15px] text-accent" />
+            Update available{version ? ` — v${version}` : ''}
+          </div>
+          {state === 'downloading' && (
+            <span className="text-[11px] text-accent font-medium">{percent}%</span>
+          )}
+        </div>
+        {state === 'downloading' && (
+          <div className="w-full h-1.5 bg-blue-tint border border-accent/20 rounded-full overflow-hidden">
+            <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${percent}%` }} />
+          </div>
+        )}
+        <p className="text-[11px] text-text-3">
+          {state === 'downloading' ? 'Downloading… the app will restart automatically when done.' : 'Downloading update in the background…'}
+        </p>
+      </div>
+    )
+  }
+
+  if (state === 'downloaded') {
+    return (
+      <div className="bg-green-soft border border-green/20 rounded-lg px-4 py-3 flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-green mb-0.5">
+            <i className="ti ti-circle-check text-[15px]" />
+            Update ready{version ? ` — v${version}` : ''}
+          </div>
+          <p className="text-[11px] text-text-3">Restart the app to apply the update.</p>
+        </div>
+        <button
+          onClick={install}
+          className="bg-green hover:opacity-90 text-white rounded-lg px-4 py-2 text-[12px] font-semibold flex items-center gap-1.5 transition-all active:scale-[.97] shadow-sm"
+        >
+          <i className="ti ti-refresh text-[14px]" /> Restart & update
+        </button>
+      </div>
+    )
+  }
+
+  if (state === 'error') {
+    return (
+      <div className="flex items-center justify-between bg-red-soft border border-red/20 rounded-lg px-4 py-3">
+        <div className="flex items-center gap-2 text-[12px] text-red">
+          <i className="ti ti-alert-circle text-[14px]" />
+          Update check failed
+        </div>
+        <button onClick={check} className="text-[11px] text-red hover:text-red/80 transition-all">Retry</button>
+      </div>
+    )
+  }
+
+  return null
 }
 
 // ── Plan Panel ──────────────────────────────────────────────────────────────

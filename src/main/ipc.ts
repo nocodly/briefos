@@ -1,4 +1,6 @@
 import { ipcMain, clipboard, dialog, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import pkg from 'electron-updater'
+const { autoUpdater } = pkg
 import { getMainWindow, getOverlayWindow } from './index'
 import { getDatabase } from '@storage/Database'
 import { deleteMeetingFiles } from '@storage/FileManager'
@@ -264,6 +266,16 @@ export function registerIpcHandlers(): void {
     win.webContents.on('will-redirect', intercept)
     win.webContents.on('will-navigate', intercept)
 
+    return { ok: true }
+  })
+
+  // --- Updater -------------------------------------------------------------
+  handle('updater:check', async () => {
+    await autoUpdater.checkForUpdates()
+    return { ok: true }
+  })
+  handle('updater:install', async () => {
+    autoUpdater.quitAndInstall()
     return { ok: true }
   })
 
