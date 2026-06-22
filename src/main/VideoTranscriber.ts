@@ -164,7 +164,9 @@ export async function transcribeFile(filePath: string): Promise<TranscribeResult
 export async function transcribeUrl(url: string): Promise<TranscribeResult> {
   const id = randomUUID()
   const dir = tempDir()
-  const rawPath = join(dir, `${id}_raw`)
+  // yt-dlp always appends the audio format extension (.mp3) to the output path,
+  // so pass the full filename with extension to avoid a mismatch.
+  const rawPath = join(dir, `${id}_raw.mp3`)
   const audioPath = join(dir, `${id}.wav`)
 
   try {
