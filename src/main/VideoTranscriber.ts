@@ -55,18 +55,31 @@ function extractAudio(inputPath: string, outputPath: string): Promise<void> {
   })
 }
 
+interface YtDlpWrapCtor {
+  new (binaryPath: string): YtDlpWrapInstance
+  downloadFromGithub(binaryPath: string): Promise<void>
+}
+interface YtDlpWrapInstance {
+  exec(args: string[]): NodeJS.EventEmitter
+}
+
+/** Resolve the YTDlpWrap constructor from CJS module (handles default-export quirk). */
+function requireYtDlpWrap(): YtDlpWrapCtor {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('yt-dlp-wrap') as YtDlpWrapCtor | { default: YtDlpWrapCtor }
+  return typeof mod === 'function' ? mod : (mod as { default: YtDlpWrapCtor }).default
+}
+
 /** Ensure yt-dlp binary is available, downloading it once to userData if needed. */
-async function getYtDlp() {
-  const { default: YTDlpWrap } = await import('yt-dlp-wrap')
+async function getYtDlp(): Promise<YtDlpWrapInstance> {
+  const YTDlpWrap = requireYtDlpWrap()
   const binaryPath = join(app.getPath('userData'), process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
-  const wrap = new YTDlpWrap(binaryPath)
-  // Download binary on first use (no-op if already present).
   if (!existsSync(binaryPath)) {
     console.log('[transcribe] downloading yt-dlp binary…')
     await YTDlpWrap.downloadFromGithub(binaryPath)
     console.log('[transcribe] yt-dlp ready at', binaryPath)
   }
-  return wrap
+  return new YTDlpWrap(binaryPath)
 }
 
 /** Download best audio stream from a YouTube/social media URL via yt-dlp. */
