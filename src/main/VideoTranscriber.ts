@@ -1,11 +1,9 @@
 import { spawn } from 'node:child_process'
-import { mkdirSync, unlinkSync, existsSync } from 'node:fs'
+import { mkdirSync, unlinkSync, existsSync, createWriteStream } from 'node:fs'
 import { join, extname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import ffmpegStatic from 'ffmpeg-static'
-import ytdl from '@distube/ytdl-core'
-import { createWriteStream } from 'node:fs'
 import { WhisperClient } from '../transcription/WhisperClient'
 import { ChunkManager } from '../capture/ChunkManager'
 import { TranscriptMerger } from '../transcription/TranscriptMerger'
@@ -57,8 +55,15 @@ function extractAudio(inputPath: string, outputPath: string): Promise<void> {
   })
 }
 
-/** Download best audio stream from a YouTube/social media URL. */
-function downloadUrl(url: string, outputPath: string): Promise<void> {
+/** Download best audio stream from a YouTube/social media URL.
+ *
+ * ytdl-core is imported DYNAMICALLY so its dependency (undici) only loads
+ * when this function is first called — after the File global polyfill in
+ * index.ts has already run. A top-level static import would cause undici to
+ * load at startup before the polyfill, crashing with "File is not defined".
+ */
+async function downloadUrl(url: string, outputPath: string): Promise<void> {
+  const { default: ytdl } = await import('@distube/ytdl-core')
   return new Promise((resolve, reject) => {
     try {
       const stream = ytdl(url, { quality: 'highestaudio', filter: 'audioonly' })
