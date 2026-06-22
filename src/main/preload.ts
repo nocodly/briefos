@@ -20,7 +20,8 @@ const INVOKE_CHANNELS = new Set([
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
   'audio:listDevices', 'audio:testLevels',
-  'updater:check', 'updater:install'
+  'updater:check', 'updater:install',
+  'transcribe:file', 'transcribe:url'
 ])
 
 // Push channels (main → renderer via webContents.send).
@@ -29,7 +30,8 @@ const PUSH_CHANNELS = new Set([
   'progress:transcription', 'progress:summary', 'progress:periodReport',
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
-  'hotkey:toggleRecording', 'auth:deeplink'
+  'hotkey:toggleRecording', 'auth:deeplink',
+  'transcribe:progress'
 ])
 
 type Listener = (data: any) => void

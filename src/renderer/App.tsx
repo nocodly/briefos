@@ -7,10 +7,11 @@ import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
 import PlanPicker from './PlanPicker'
+import Transcribe from './Transcribe'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 
-export type Page = 'dashboard' | 'meeting' | 'period' | 'settings' | 'onboarding'
+export type Page = 'dashboard' | 'meeting' | 'period' | 'settings' | 'onboarding' | 'transcribe'
 
 export interface NavigateFn {
   (page: Page, meetingId?: string | null): void
@@ -195,6 +196,7 @@ export default function App() {
         {page === 'dashboard' && <Dashboard navigate={navigate} />}
         {page === 'meeting' && <MeetingView id={activeMeetingId} navigate={navigate} />}
         {page === 'period' && <PeriodReport />}
+        {page === 'transcribe' && <Transcribe />}
         {page === 'settings' && <Settings navigate={navigate} />}
       </main>
       {isProcessing && <Processing step={processingStep} />}
@@ -263,6 +265,12 @@ function Sidebar({
           label="Period Reports"
           active={page === 'period'}
           onClick={() => navigate('period')}
+        />
+        <NavItem
+          icon="file-text"
+          label="Transcribe"
+          active={page === 'transcribe'}
+          onClick={() => navigate('transcribe')}
         />
       </nav>
 

@@ -14,6 +14,7 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
+import { transcribeFile, transcribeUrl } from './VideoTranscriber'
 
 // =============================================================================
 // BriefOS IPC hub — the ONLY place channels are registered.
@@ -278,6 +279,10 @@ export function registerIpcHandlers(): void {
     autoUpdater.quitAndInstall()
     return { ok: true }
   })
+
+  // --- Video Transcriber ---------------------------------------------------
+  handle('transcribe:file', async (_e, filePath: string) => transcribeFile(filePath))
+  handle('transcribe:url', async (_e, url: string) => transcribeUrl(url))
 
   // --- Audio devices -------------------------------------------------------
   handle('audio:listDevices', async () => listAudioDevices())
