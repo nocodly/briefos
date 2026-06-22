@@ -7,7 +7,7 @@ import { SummaryEngine, type MeetingSummary } from '@ai/SummaryEngine'
 import { detectMeetingType } from '@ai/TemplateSelector'
 import { getDatabase } from '@storage/Database'
 import { cleanupChunks } from '@storage/FileManager'
-import { getAllSettings, isPro, isTrial } from './store'
+import { getAllSettings, isPro, isProOrByok, isTrial } from './store'
 import { updateTrayState } from './tray'
 import { createOverlayWindow, closeOverlayWindow } from './index'
 import { progress, emitRecordingTick, sendToRenderer } from './ipc'
@@ -157,9 +157,9 @@ class RecordingPipeline {
     const merger = new TranscriptMerger()
     const merged = merger.merge(transcribed)
 
-    // 4. Diarize (Pro + HF token only; failure → single speaker)
+    // 4. Diarize (BYOK/Pro + HF token only; failure → single speaker)
     let diar = null
-    if (isPro() && settings.huggingfaceToken) {
+    if (isProOrByok() && settings.huggingfaceToken) {
       progress.transcription(75, 'Detecting speakers')
       diar = await diarize(audioPath, { hfToken: settings.huggingfaceToken })
     }
@@ -212,8 +212,8 @@ class RecordingPipeline {
     const type =
       typeOverride && typeOverride !== 'auto' ? typeOverride : detectMeetingType(text)
 
-    // Model priority: user custom → plan-based default
-    const planModel = isPro() ? 'gpt-4o' : 'gpt-4o-mini'
+    // Model priority: user custom → plan-based default (byok/pro get gpt-4o — their key, their choice)
+    const planModel = isProOrByok() ? 'gpt-4o' : 'gpt-4o-mini'
     const engine = new SummaryEngine({
       anthropicApiKey: useAnthropic ? anthropicKey : undefined,
       openaiApiKey: openaiKey,

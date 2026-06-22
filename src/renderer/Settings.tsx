@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
-import { supabase, updateProfile, type PlanType, STRIPE_PRO_LINK } from './lib/supabaseClient'
+import { supabase, updateProfile, type PlanType } from './lib/supabaseClient'
 
 // =============================================================================
 // Settings — all configuration panels. Reads via settings:getAll, writes each
@@ -153,7 +153,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 
         {/* API Keys */}
         <Panel title="API Keys" icon="key" desc="Stored encrypted on your device.">
-          <Password label="OpenAI API key" value={s.openaiApiKey} saved={saved === 'openaiApiKey'} onSave={(v) => set('openaiApiKey', v)} placeholder="sk-… (optional — we cover this for trial/pro)" />
+          <Password label="OpenAI API key" value={s.openaiApiKey} saved={saved === 'openaiApiKey'} onSave={(v) => set('openaiApiKey', v)} placeholder="sk-… (required after 10 free meetings)" />
           <Password label="Anthropic API key" value={s.anthropicApiKey} saved={saved === 'anthropicApiKey'} onSave={(v) => set('anthropicApiKey', v)} placeholder="sk-ant-… (optional)" />
           <Password label="Hugging Face token" value={s.huggingfaceToken} saved={saved === 'huggingfaceToken'} onSave={(v) => set('huggingfaceToken', v)} placeholder="hf_…" />
 
@@ -212,9 +212,9 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
             {s.aiProvider === 'openai' && !s.aiModel && (
               <p className="text-[11px] text-text-3 mt-1 flex items-center gap-1.5">
                 <i className="ti ti-cpu text-[13px] text-accent" />
-                {s.plan === 'pro' || s.plan === 'enterprise'
-                  ? 'Default model: gpt-4o (Pro — best quality).'
-                  : 'Default model: gpt-4o-mini (trial / free). Upgrade to Pro for gpt-4o.'}
+                {s.plan === 'trial'
+                  ? 'Default model: gpt-4o-mini (free trial). Add your own key to use gpt-4o.'
+                  : 'Default model: gpt-4o (best quality).'}
               </p>
             )}
           </div>
@@ -343,10 +343,8 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 // ── Plan Panel ──────────────────────────────────────────────────────────────
 
 const PLAN_DEFS: { id: PlanType; name: string; price: string; badge?: string; badgeColor?: string; desc: string }[] = [
-  { id: 'trial',      name: 'Try Free',        price: '$0',     badge: '10 meetings',  badgeColor: 'bg-green-soft text-green',  desc: 'First 10 meetings on us, no API keys needed.' },
-  { id: 'byok',       name: 'Free + Own Keys', price: '$0',     badge: 'Unlimited',    badgeColor: 'bg-blue-tint text-accent',  desc: 'Unlimited meetings with your own OpenAI key. Anthropic key optional for Claude summaries.' },
-  { id: 'pro',        name: 'Pro',             price: '$12/mo', badge: 'Most popular', badgeColor: 'bg-accent text-white',      desc: 'All features, we cover API costs.' },
-  { id: 'enterprise', name: 'Enterprise',      price: 'Custom',                                                                  desc: 'On-premise, SSO, custom integrations.' },
+  { id: 'trial', name: 'Free Trial',       price: '$0', badge: '10 meetings', badgeColor: 'bg-green-soft text-green', desc: 'First 10 meetings on us, no API keys needed.' },
+  { id: 'byok',  name: 'Free + Own Keys', price: '$0', badge: 'All features', badgeColor: 'bg-blue-tint text-accent', desc: 'Unlimited meetings + all exports, diarization, reports. You pay ~$0.20–0.50/meeting via your own OpenAI key.' },
 ]
 
 function PlanPanel({ currentPlan, onPlanChange }: { currentPlan: string; onPlanChange: (p: PlanType) => void }) {
@@ -358,7 +356,7 @@ function PlanPanel({ currentPlan, onPlanChange }: { currentPlan: string; onPlanC
   const [showByokKeys, setShowByokKeys] = useState(false)
   const [openaiKey, setOpenaiKey] = useState('')
   const [anthropicKey, setAnthropicKey] = useState('')
-  const [waitingPayment, setWaitingPayment] = useState(false)
+
 
   useEffect(() => { setSelected((currentPlan as PlanType) || 'trial') }, [currentPlan])
 
@@ -391,21 +389,6 @@ function PlanPanel({ currentPlan, onPlanChange }: { currentPlan: string; onPlanC
     if (selected === 'byok') {
       // Need API keys before activating
       setShowByokKeys(true)
-      return
-    }
-    if (selected === 'pro') {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setErr('Not signed in'); return }
-      if (!STRIPE_PRO_LINK) { setErr('Stripe not configured yet — contact hello@briefos.app'); return }
-      // Append user ID so webhook can identify who paid
-      const checkoutUrl = `${STRIPE_PRO_LINK}?client_reference_id=${user.id}`
-      window.open(checkoutUrl, '_blank')
-      setWaitingPayment(true)
-      // Plan will update automatically via Supabase realtime when webhook fires
-      return
-    }
-    if (selected === 'enterprise') {
-      window.open('mailto:hello@briefos.app?subject=BriefOS Enterprise', '_blank')
       return
     }
     // trial
@@ -470,25 +453,6 @@ function PlanPanel({ currentPlan, onPlanChange }: { currentPlan: string; onPlanC
         })}
       </div>
 
-      {/* Waiting for Stripe payment */}
-      {waitingPayment && currentPlan !== 'pro' && (
-        <div className="bg-blue-tint border border-accent/20 rounded-lg px-4 py-3 flex items-center gap-3 animate-fade-up">
-          <i className="ti ti-loader-2 animate-spin-slow text-[18px] text-accent flex-shrink-0" />
-          <div>
-            <div className="text-[12px] font-semibold text-blue-deep">Waiting for payment confirmation…</div>
-            <div className="text-[11px] text-text-3 mt-0.5">Complete checkout in your browser. This will update automatically.</div>
-          </div>
-          <button onClick={() => setWaitingPayment(false)} className="ml-auto text-text-4 hover:text-text-2 text-[12px]">
-            <i className="ti ti-x" />
-          </button>
-        </div>
-      )}
-      {currentPlan === 'pro' && waitingPayment && (
-        <div className="bg-green-soft border border-green/20 rounded-lg px-4 py-3 flex items-center gap-2 animate-fade-up">
-          <i className="ti ti-circle-check text-[18px] text-green flex-shrink-0" />
-          <div className="text-[12px] font-semibold text-green">Pro activated! Welcome aboard 🎉</div>
-        </div>
-      )}
 
       {/* BYOK key collection */}
       {showByokKeys && (

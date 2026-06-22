@@ -25,7 +25,7 @@ interface PlanDef {
 const PLANS: PlanDef[] = [
   {
     id: 'trial',
-    name: 'Try Free',
+    name: 'Free Trial',
     price: '$0',
     badge: 'No card needed',
     badgeColor: 'bg-green-soft text-green',
@@ -43,48 +43,17 @@ const PLANS: PlanDef[] = [
     id: 'byok',
     name: 'Free + Own Keys',
     price: '$0',
-    badge: 'Unlimited',
+    badge: 'All features',
     badgeColor: 'bg-blue-tint text-accent',
-    description: 'Use your own OpenAI key. You pay ~$0.20–0.50 per meeting directly. Anthropic key optional.',
+    description: 'Use your own OpenAI key (~$0.20–0.50/meeting). All features unlocked — exports, diarization, reports.',
     features: [
       'Unlimited meetings',
-      'Your OpenAI key (Whisper + summaries)',
+      'Your OpenAI key (Whisper + GPT-4o)',
       'Optional: Anthropic key for Claude',
-      'All languages',
-      'Clipboard export'
+      'PDF · Notion · Slack · Email exports',
+      'Speaker diarization & Period Reports'
     ],
     cta: 'Use my own keys'
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    price: '$12',
-    period: '/ mo',
-    badge: 'Most popular',
-    badgeColor: 'bg-accent text-white',
-    description: 'We cover all API costs. Powerful exports, diarization and analytics.',
-    features: [
-      'Unlimited meetings',
-      'No API keys needed',
-      'PDF · Notion · Slack · Email',
-      'Speaker diarization',
-      'Period Intelligence Reports'
-    ],
-    cta: 'Go Pro'
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    price: 'Custom',
-    description: 'For teams that need on-premise deployment, SSO, and custom integrations.',
-    features: [
-      'Everything in Pro',
-      'On-premise deploy',
-      'SSO / Jira integration',
-      'Custom AI prompts',
-      'Dedicated support'
-    ],
-    cta: 'Contact us'
   }
 ]
 
@@ -103,11 +72,6 @@ export default function PlanPicker({ onDone }: Props) {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
-
-      if (selected === 'enterprise') {
-        // Just save the plan and let them contact us — no payment flow yet.
-      }
-
       await updateProfile(user.id, { plan: selected })
       await invoke('settings:set', { key: 'plan', value: selected })
       onDone()
@@ -132,7 +96,7 @@ export default function PlanPicker({ onDone }: Props) {
         </div>
 
         {/* Plan grid */}
-        <div className="grid grid-cols-2 gap-3 mb-5">
+        <div className="grid grid-cols-1 gap-3 mb-5">
           {PLANS.map((p) => (
             <button
               key={p.id}

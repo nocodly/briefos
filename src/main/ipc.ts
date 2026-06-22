@@ -2,7 +2,7 @@ import { ipcMain, clipboard, dialog, BrowserWindow, type IpcMainInvokeEvent } fr
 import { getMainWindow, getOverlayWindow } from './index'
 import { getDatabase } from '@storage/Database'
 import { deleteMeetingFiles } from '@storage/FileManager'
-import { getSetting, setSetting, getAllSettings, isPro, type AppSettings } from './store'
+import { getSetting, setSetting, getAllSettings, isProOrByok, type AppSettings } from './store'
 import { listAudioDevices, testAudioLevels } from '@capture/AudioCapture'
 import { getPipeline } from './RecordingPipeline'
 import { PeriodReportEngine } from '@ai/PeriodReportEngine'
@@ -87,9 +87,9 @@ export function emitRecordingTick(durationMs: number): void {
   }
 }
 
-// Exports (except clipboard) are a Pro feature.
-function requirePro(): void {
-  if (!isPro()) throw new Error('This export requires the Pro plan (Settings → Plan).')
+// Exports (except clipboard) require BYOK or Pro — trial users add their own key first.
+function requireProOrByok(): void {
+  if (!isProOrByok()) throw new Error('Exports require your own API key. Go to Settings → Plan and switch to Free + Own Keys.')
 }
 
 // Prompt for a PDF save location; returns null if the user cancels.
@@ -163,8 +163,8 @@ export function registerIpcHandlers(): void {
     getPipeline().generateSummary(payload.meetingId, undefined, payload.promptType)
   )
   handle('ai:generatePeriodReport', async (_e, payload: { from: string; to: string; label: string }) => {
-    // Period Reports are a Pro feature.
-    if (!isPro()) throw new Error('Period Reports require the Pro plan (Settings → Plan).')
+    // Period Reports require own API key (byok or pro).
+    if (!isProOrByok()) throw new Error('Period Reports require your own API key. Go to Settings → Plan → Free + Own Keys.')
     const openaiKey = getSetting('openaiApiKey') || process.env['OPENAI_API_KEY'] || ''
     const anthropicKey = getSetting('anthropicApiKey')
     const useAnthropic = getSetting('aiProvider') === 'anthropic' && !!anthropicKey
@@ -185,7 +185,7 @@ export function registerIpcHandlers(): void {
 
   // --- Export (output/*) ---------------------------------------------------
   handle('export:pdf', async (_e, payload: { meetingId: string; outputPath?: string }) => {
-    requirePro()
+    requireProOrByok()
     const meeting = getDatabase().getMeeting(payload.meetingId)
     const safe = String(meeting?.title || 'meeting').replace(/[^\w\-]+/g, '_').slice(0, 60)
     const target = payload.outputPath ?? (await choosePdfPath(`${safe}.pdf`))
@@ -194,14 +194,14 @@ export function registerIpcHandlers(): void {
     return { path }
   })
   handle('export:periodReportPdf', async (_e, payload: { reportId: string; outputPath?: string }) => {
-    requirePro()
+    requireProOrByok()
     const target = payload.outputPath ?? (await choosePdfPath('BriefOS_Period_Report.pdf'))
     if (!target) return { canceled: true }
     const path = await exportPeriodReportPdf(payload.reportId, target)
     return { path }
   })
   handle('export:notion', async (_e, meetingId: string) => {
-    requirePro()
+    requireProOrByok()
     const pageId = await exportToNotion(
       meetingId,
       getSetting('notionToken'),
@@ -210,13 +210,13 @@ export function registerIpcHandlers(): void {
     return { pageId }
   })
   handle('export:slack', async (_e, payload: { meetingId: string; webhookUrl: string }) => {
-    requirePro()
+    requireProOrByok()
     const webhookUrl = payload.webhookUrl || getSetting('slackWebhookUrl')
     await exportToSlack(payload.meetingId, webhookUrl)
     return { ok: true }
   })
   handle('export:email', async (_e, payload: { meetingId: string; recipients: string[] }) => {
-    requirePro()
+    requireProOrByok()
     await exportByEmail(payload.meetingId, payload.recipients)
     return { ok: true }
   })

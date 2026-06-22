@@ -90,6 +90,12 @@ export function isPro(): boolean {
   return plan === 'pro' || plan === 'enterprise'
 }
 
+/** Full feature access: BYOK users get all features since they pay for their own API. */
+export function isProOrByok(): boolean {
+  const plan = store.get('plan')
+  return plan === 'pro' || plan === 'enterprise' || plan === 'byok'
+}
+
 /** User brings their own API keys (byok or pro/enterprise with override). */
 export function isByok(): boolean {
   return store.get('plan') === 'byok'
