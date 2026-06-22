@@ -1,3 +1,11 @@
+// Polyfill File global for undici (required by @distube/ytdl-core) —
+// Electron's bundled Node does not expose File as a global by default.
+if (typeof (globalThis as Record<string, unknown>).File === 'undefined') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { File: NodeFile } = require('node:buffer') as { File: typeof globalThis.File }
+  ;(globalThis as Record<string, unknown>).File = NodeFile
+}
+
 import { app, BrowserWindow, globalShortcut, shell, screen } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
