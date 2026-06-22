@@ -88,7 +88,7 @@ export default function Transcribe() {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
-    if (file) transcribeFile(file.path)
+    if (file) transcribeFile((file as unknown as { path: string }).path)
   }
 
   const openFileDialog = async () => {
@@ -98,7 +98,8 @@ export default function Transcribe() {
     input.accept = 'video/*,audio/*,.mp4,.mov,.avi,.mkv,.webm,.mp3,.m4a,.wav,.ogg'
     input.onchange = () => {
       const file = input.files?.[0]
-      if (file) transcribeFile((file as File & { path: string }).path)
+      // Electron adds `.path` to File objects in the renderer; not in browser TS types.
+      if (file) transcribeFile((file as unknown as { path: string }).path)
     }
     input.click()
   }
