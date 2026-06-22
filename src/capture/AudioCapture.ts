@@ -27,6 +27,11 @@ export interface StartOptions {
   micDevice?: string
   /** Record the microphone ONLY (skip system-audio loopback entirely). */
   micOnly?: boolean
+  /**
+   * Use WASAPI native loopback when no dshow loopback device (VB-Cable, Stereo Mix, etc.)
+   * is found. Works on Windows 10/11 with no extra software. Default: true.
+   */
+  wasapiLoopbackFallback?: boolean
 }
 
 export interface RecordingHandle {
@@ -107,15 +112,24 @@ export class AudioCapture {
    * dshow device names with spaces/parentheses are passed as a single argv
    * element (spawn handles them — no shell quoting needed), e.g.:
    *   -f dshow -i audio=CABLE Output (VB-Audio Virtual Cable)
+   *
+   * When useWasapiLoopback is true, system audio is captured via WASAPI loopback
+   * (Windows native, no extra software) instead of a dshow loopback device.
    */
   private buildArgs(
     outputPath: string,
     systemDevice: string | undefined,
-    micDevice: string | undefined
+    micDevice: string | undefined,
+    useWasapiLoopback = false
   ): string[] {
     const args = ['-y']
     let inputCount = 0
-    if (systemDevice) {
+    if (useWasapiLoopback) {
+      // WASAPI loopback captures whatever plays through speakers/headphones.
+      // -i "" = default playback device; works on Windows 10/11 with no extra software.
+      args.push('-f', 'wasapi', '-loopback', '1', '-i', '')
+      inputCount++
+    } else if (systemDevice) {
       args.push('-f', 'dshow', '-i', `audio=${systemDevice}`)
       inputCount++
     }
@@ -149,16 +163,21 @@ export class AudioCapture {
     const systemDevice = micOnly ? undefined : pickSystemDevice(opts.systemDevice, available)
     const micDevice = pickMicDevice(opts.micDevice, systemDevice, available)
 
+    // If no dshow loopback device found, fall back to WASAPI native loopback
+    // (captures system audio on Windows 10/11 without any extra software).
+    const wasapiLoopbackFallback = opts.wasapiLoopbackFallback !== false
+    const useWasapiLoopback = !micOnly && !systemDevice && wasapiLoopbackFallback
+
     if (micOnly && !micDevice) {
       throw new Error('No microphone found. Open Settings → Audio and select a microphone.')
     }
-    if (!systemDevice && !micDevice) {
+    if (!useWasapiLoopback && !systemDevice && !micDevice) {
       throw new Error('No audio input devices found. Open Settings → Audio.')
     }
 
     console.log('[capture] starting recording')
-    console.log(`[capture] mode: ${micOnly ? 'microphone only' : 'system + microphone'}`)
-    console.log(`[capture] resolved system device: ${systemDevice ?? '(none)'}`)
+    console.log(`[capture] mode: ${micOnly ? 'microphone only' : useWasapiLoopback ? 'WASAPI loopback + microphone' : 'system (dshow) + microphone'}`)
+    console.log(`[capture] resolved system device: ${useWasapiLoopback ? '(WASAPI loopback)' : systemDevice ?? '(none)'}`)
     console.log(`[capture] resolved mic device:    ${micDevice ?? '(none)'}`)
 
     this.recordingId = randomUUID()
@@ -169,7 +188,7 @@ export class AudioCapture {
     this.stopping = false
     this.stderrTail = ''
 
-    const args = this.buildArgs(this.outputPath, systemDevice, micDevice)
+    const args = this.buildArgs(this.outputPath, systemDevice, micDevice, useWasapiLoopback)
     // Log the EXACT command. Quote args with spaces so it's copy-pasteable.
     const printable = args.map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')
     console.log(`[capture] FFmpeg command:\n  "${ffmpegPath}" ${printable}`)
