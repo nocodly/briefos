@@ -93,6 +93,7 @@ async function downloadUrl(url: string, outputPath: string): Promise<void> {
       '-x',                    // extract audio only
       '--audio-format', 'mp3',
       '--audio-quality', '0',
+      '--ffmpeg-location', ffmpegPath,
       '-o', outputPath,
       '--no-playlist',
       '--quiet',
