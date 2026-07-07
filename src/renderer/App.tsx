@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
 import PeriodReport from './PeriodReport'
@@ -208,6 +208,7 @@ export default function App() {
           </div>
         </div>
       )}
+      <UpdateToast />
     </div>
   )
 }
@@ -308,6 +309,81 @@ function Sidebar({
         />
       </div>
     </aside>
+  )
+}
+
+// ── Global update toast (shown on every page) ──────────────────────────────
+function UpdateToast() {
+  const [state, setState] = useState<'hidden' | 'downloading' | 'ready'>('hidden')
+  const [version, setVersion] = useState('')
+  const [percent, setPercent] = useState(0)
+  const [dismissed, setDismissed] = useState(false)
+  const installRef = useRef(invoke)
+
+  useEffect(() => {
+    const unsub = subscribe('updater:status', (data: { state: string; version?: string; percent?: number }) => {
+      if (data.state === 'downloading') {
+        setState('downloading')
+        setPercent(data.percent ?? 0)
+        setDismissed(false)
+      } else if (data.state === 'downloaded') {
+        setState('ready')
+        setVersion(data.version ?? '')
+        setDismissed(false)
+      } else if (data.state === 'none' || data.state === 'error') {
+        setState('hidden')
+      }
+    })
+    return unsub
+  }, [])
+
+  if (dismissed || state === 'hidden') return null
+
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] animate-fade-up">
+      <div className={`flex items-center gap-3 px-4 py-3 rounded-card shadow-xl border text-[13px] min-w-[320px] max-w-[420px]
+        ${state === 'ready'
+          ? 'bg-white border-accent/30 shadow-accent/10'
+          : 'bg-white border-border'}`}>
+
+        {state === 'downloading' ? (
+          <>
+            <i className="ti ti-loader-2 text-[18px] text-accent animate-spin-slow flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex justify-between mb-1">
+                <span className="font-semibold text-text">Downloading update…</span>
+                <span className="text-text-3">{percent}%</span>
+              </div>
+              <div className="h-1.5 bg-border rounded-full overflow-hidden">
+                <div className="h-full bg-accent rounded-full transition-all duration-300" style={{ width: `${percent}%` }} />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="w-8 h-8 rounded-lg bg-blue-tint flex items-center justify-center flex-shrink-0">
+              <i className="ti ti-refresh text-[17px] text-accent" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-text">New version ready{version ? ` — v${version}` : ''}</div>
+              <div className="text-[11px] text-text-3 mt-0.5">Restart BriefOS to apply the update</div>
+            </div>
+            <button
+              onClick={() => installRef.current('updater:install')}
+              className="flex-shrink-0 px-3 py-1.5 bg-accent text-white text-[12px] font-semibold rounded-lg hover:bg-accent/90 transition-all"
+            >
+              Restart
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
+              className="flex-shrink-0 text-text-3 hover:text-text transition-colors"
+            >
+              <i className="ti ti-x text-[14px]" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
   )
 }
 

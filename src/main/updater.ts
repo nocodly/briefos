@@ -43,10 +43,15 @@ export function initAutoUpdater(): void {
     sendToRenderer('updater:status', { state: 'error', error: String(err) })
   })
 
-  // Fire-and-forget; failures are surfaced via the 'error' event above.
+  // Check on startup, then every 4 hours.
   autoUpdater.checkForUpdatesAndNotify().catch((err) => {
     console.error('[updater] checkForUpdatesAndNotify failed', err)
   })
+  setInterval(() => {
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('[updater] periodic check failed', err)
+    })
+  }, 4 * 60 * 60 * 1000)
 }
 
 /** Manually trigger install + restart (e.g. from a renderer "Restart now" button). */
