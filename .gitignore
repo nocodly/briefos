@@ -50,3 +50,6 @@ python/__pycache__/
 python/*.pyc
 python/venv/
 python/.venv/
+
+# Supabase CLI local state
+supabase/.temp/

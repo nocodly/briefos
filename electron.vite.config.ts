@@ -13,9 +13,9 @@ export default defineConfig({
     // externalizeDepsPlugin keeps node_modules out of the bundle so native
     // addons (better-sqlite3) and binaries (ffmpeg-static) resolve at runtime.
     plugins: [externalizeDepsPlugin()],
-    define: {
-      'process.env.OPENAI_API_KEY': JSON.stringify(process.env.OPENAI_API_KEY ?? ''),
-    },
+    // SECURITY: never bake provider API keys into the bundle — anything in the
+    // shipped app can be extracted from app.asar. AI calls move to the server
+    // (see PLAN.md, stage 1); in dev the key is read from .env at runtime.
     build: {
       outDir: 'out/main',
       lib: {

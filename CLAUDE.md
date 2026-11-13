@@ -1,4 +1,18 @@
-# BriefOS — Claude Code Project Context
+# Minutama (formerly BriefOS) — Claude Code Project Context
+
+> **Rebrand + rebuild in progress.** Product name: **Minutama** (minutama.com).
+> The roadmap, target architecture and pricing live in `PLAN.md` — it overrides
+> the legacy notes below wherever they conflict. Key changes:
+> - AI provider keys live ONLY on the server (Supabase Edge Functions). Never
+>   bake keys into the app bundle (`define`), never ship `.env`.
+> - Paid plans are granted ONLY by the Stripe webhook (service role). The client
+>   must never write `plan` = pro/enterprise (DB trigger blocks it).
+> - Audio: mic + system loopback via Electron (no VB-Cable / FFmpeg capture),
+>   two channels "Me"/"Them" instead of the Python diarizer. Audio chunks may be
+>   sent to our server for transcription and are deleted right after.
+> - Tiers: Free (10 meetings/mo, 30-day history) and Pro ($12/mo). BYOK is removed.
+
+## Legacy context (BriefOS)
 
 ## What we're building
 BriefOS is a local-first AI meeting recorder for Windows.
