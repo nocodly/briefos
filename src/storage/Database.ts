@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import Database from 'better-sqlite3'
 import schemaSql from './schema.sql?raw'
-import type { TranscriptSegment } from '@transcription/TranscriptMerger'
+import type { ActionItem, TranscriptSegment } from '@shared/types'
 
 // =============================================================================
 // BriefOSDatabase — all better-sqlite3 access. JSON columns are stringified on
@@ -156,10 +156,20 @@ export class BriefOSDatabase {
       title: string
       notesMarkdown: string
       templateId: string
-      actionItems: unknown[]
+      actionItems: { text?: string; owner?: string; due?: string }[]
       decisions: unknown[]
     }
   ): void {
+    // Normalize the AI action items to the stored shape the exporters and
+    // Period Reports already understand.
+    const actionItems: ActionItem[] = (input.actionItems ?? [])
+      .filter((a) => a && typeof a.text === 'string' && a.text.trim())
+      .map((a) => ({
+        person: a.owner === 'me' ? 'Me' : a.owner === 'them' ? 'Them' : a.owner || '',
+        task: a.text!.trim(),
+        deadline: a.due || null,
+        priority: 'medium'
+      }))
     const tx = this.db.transaction(() => {
       this.db
         .prepare(
@@ -175,7 +185,7 @@ export class BriefOSDatabase {
       this.saveSummary(meetingId, {
         tldr: firstLine ?? input.title,
         decisions: input.decisions,
-        actionItems: input.actionItems
+        actionItems
       })
     })
     tx()

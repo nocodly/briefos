@@ -5,8 +5,6 @@ import { getMainWindow, getOverlayWindow } from './index'
 import { getDatabase } from '@storage/Database'
 import { deleteMeetingFiles } from '@storage/FileManager'
 import { getSetting, setSetting, getAllSettings, isProOrByok, type AppSettings } from './store'
-import { listAudioDevices, testAudioLevels } from '@capture/AudioCapture'
-import { getPipeline } from './RecordingPipeline'
 import {
   getRecordingStatus,
   reportRecordingState,
@@ -20,13 +18,12 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
-import { transcribeFile, transcribeUrl } from './VideoTranscriber'
 
 // =============================================================================
-// BriefOS IPC hub — the ONLY place channels are registered.
+// Minutama IPC hub — the ONLY place channels are registered.
 // Channel names are frozen (see electron-ipc skill); never invent new ones.
 //
-// Backend modules (Database, AudioCapture, WhisperClient, SummaryEngine,
+// Backend modules (Database, PeriodReportEngine,
 // exporters) are built in later steps. Handlers below are wired to real logic
 // incrementally; until then they return typed stubs marked with TODO(step:N).
 // Every handler is wrapped so a thrown error becomes a structured failure the
@@ -192,7 +189,7 @@ export function registerIpcHandlers(): void {
         title: string
         notesMarkdown: string
         templateId: string
-        actionItems: unknown[]
+        actionItems: { text?: string; owner?: string; due?: string }[]
         decisions: unknown[]
       }
     ) => {
@@ -236,12 +233,6 @@ export function registerIpcHandlers(): void {
   )
 
   // --- AI (SummaryEngine / PeriodReportEngine) -----------------------------
-  handle('ai:generateSummary', async (_e, meetingId: string) =>
-    getPipeline().generateSummary(meetingId)
-  )
-  handle('ai:regenerateSummary', async (_e, payload: { meetingId: string; promptType: string }) =>
-    getPipeline().generateSummary(payload.meetingId, undefined, payload.promptType)
-  )
   handle('ai:generatePeriodReport', async (_e, payload: { from: string; to: string; label: string }) => {
     // Period Reports require own API key (byok or pro).
     if (!isProOrByok()) throw new Error('Period Reports require your own API key. Go to Settings → Plan → Free + Own Keys.')
@@ -275,7 +266,7 @@ export function registerIpcHandlers(): void {
   })
   handle('export:periodReportPdf', async (_e, payload: { reportId: string; outputPath?: string }) => {
     requireProOrByok()
-    const target = payload.outputPath ?? (await choosePdfPath('BriefOS_Period_Report.pdf'))
+    const target = payload.outputPath ?? (await choosePdfPath('Minutama_Period_Report.pdf'))
     if (!target) return { canceled: true }
     const path = await exportPeriodReportPdf(payload.reportId, target)
     return { path }
@@ -357,20 +348,7 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
 
-  // --- Video Transcriber ---------------------------------------------------
-  handle('transcribe:file', async (_e, filePath: string) => transcribeFile(filePath))
-  handle('transcribe:url', async (_e, url: string) => transcribeUrl(url))
 
-  // --- Audio devices -------------------------------------------------------
-  handle('audio:listDevices', async () => listAudioDevices())
-  handle('audio:testLevels', async () => {
-    const s = getAllSettings()
-    return testAudioLevels({
-      systemDevice: s.systemAudioDevice,
-      micDevice: s.microphoneDevice,
-      micOnly: s.micOnly
-    })
-  })
 
   console.log('[ipc] handlers registered')
 }

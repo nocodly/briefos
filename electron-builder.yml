@@ -1,8 +1,8 @@
-# BriefOS — electron-builder configuration
+# Minutama — electron-builder configuration
 # @see https://www.electron.build/configuration/configuration
-appId: com.briefos.app
-productName: BriefOS
-copyright: Copyright © 2026 BriefOS
+appId: com.minutama.app
+productName: Minutama
+copyright: Copyright © 2026 Minutama
 asar: true
 
 directories:
@@ -10,24 +10,18 @@ directories:
   buildResources: assets
 
 # electron-vite emits the bundled app into `out/` (main, preload, renderer).
-# Ship that plus the Python diarizer and the prompt templates.
+# Ship that plus the prompt templates.
 files:
   - out/**/*
   - package.json
 
-# Native deps (better-sqlite3) + Python scripts that must live unpacked on disk.
+# Native deps (better-sqlite3) must live unpacked on disk.
 asarUnpack:
   - "**/*.node"
   - "resources/**"
 
-# Bundle the Python diarizer + prompt markdown alongside the app.
+# Bundle prompt markdown + tray icons alongside the app.
 extraResources:
-  - from: node_modules/ffmpeg-static/ffmpeg.exe
-    to: ffmpeg.exe
-  - from: python
-    to: python
-    filter:
-      - "**/*"
   - from: src/ai/prompts
     to: prompts
     filter:
@@ -59,7 +53,7 @@ nsis:
   deleteAppDataOnUninstall: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: BriefOS
+  shortcutName: Minutama
 
 # Auto-update feed — GitHub Releases (electron-updater).
 publish:

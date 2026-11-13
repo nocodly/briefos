@@ -1,11 +1,3 @@
-// Polyfill File global for undici (required by @distube/ytdl-core) —
-// Electron's bundled Node does not expose File as a global by default.
-if (typeof (globalThis as Record<string, unknown>).File === 'undefined') {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { File: NodeFile } = require('node:buffer') as { File: typeof globalThis.File }
-  ;(globalThis as Record<string, unknown>).File = NodeFile
-}
-
 import { app, BrowserWindow, desktopCapturer, globalShortcut, shell, screen } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
@@ -317,7 +309,7 @@ if (!gotLock) {
 
   // Tray app: keep running in the background when all windows are closed.
   app.on('window-all-closed', () => {
-    // Intentionally do NOT quit on Windows — BriefOS lives in the tray.
+    // Intentionally do NOT quit on Windows — Minutama lives in the tray.
   })
 
   app.on('before-quit', () => {

@@ -1,6 +1,6 @@
 import { Client } from '@notionhq/client'
 import { getDatabase } from '@storage/Database'
-import type { ActionItem } from '@ai/SummaryEngine'
+import type { ActionItem } from '@shared/types'
 
 // =============================================================================
 // NotionExporter — creates a Notion page for a meeting brief under a parent

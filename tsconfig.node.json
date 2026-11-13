@@ -24,8 +24,6 @@
     "baseUrl": ".",
     "paths": {
       "@main/*": ["src/main/*"],
-      "@capture/*": ["src/capture/*"],
-      "@transcription/*": ["src/transcription/*"],
       "@ai/*": ["src/ai/*"],
       "@storage/*": ["src/storage/*"],
       "@output/*": ["src/output/*"],
@@ -34,8 +32,6 @@
   },
   "include": [
     "src/main",
-    "src/capture",
-    "src/transcription",
     "src/ai",
     "src/storage",
     "src/output",

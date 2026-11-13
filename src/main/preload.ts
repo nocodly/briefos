@@ -16,14 +16,12 @@ const INVOKE_CHANNELS = new Set([
   'notes:create', 'notes:appendSegment', 'notes:replaceTranscript', 'notes:saveUserNotes', 'notes:setStatus', 'notes:saveEnhanced',
   'meetings:getAll', 'meetings:getOne', 'meetings:delete', 'meetings:search',
   'meetings:updateTitle', 'meetings:renameSpeakers',
-  'ai:generateSummary', 'ai:regenerateSummary', 'ai:generatePeriodReport',
+  'ai:generatePeriodReport',
   'export:pdf', 'export:periodReportPdf', 'export:notion', 'export:slack',
   'export:email', 'export:clipboard',
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
-  'audio:listDevices', 'audio:testLevels',
-  'updater:check', 'updater:install',
-  'transcribe:file', 'transcribe:url'
+  'updater:check', 'updater:install'
 ])
 
 // Push channels (main → renderer via webContents.send).
@@ -32,8 +30,7 @@ const PUSH_CHANNELS = new Set([
   'progress:transcription', 'progress:summary', 'progress:periodReport',
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
-  'hotkey:toggleRecording', 'auth:deeplink',
-  'transcribe:progress'
+  'hotkey:toggleRecording', 'auth:deeplink'
 ])
 
 type Listener = (data: any) => void

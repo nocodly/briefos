@@ -6,21 +6,19 @@ import Settings from './Settings'
 import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
-import PlanPicker from './PlanPicker'
-import Transcribe from './Transcribe'
 import LiveMeeting from './LiveMeeting'
 import { handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 
-export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding' | 'transcribe'
+export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
 
 export interface NavigateFn {
   (page: Page, meetingId?: string | null): void
 }
 
 // Top-level routing stages (before reaching the main app).
-type Stage = 'loading' | 'auth' | 'plan' | 'onboarding' | 'app'
+type Stage = 'loading' | 'auth' | 'onboarding' | 'app'
 
 export default function App() {
   const [stage, setStage] = useState<Stage>('loading')
@@ -142,14 +140,13 @@ export default function App() {
   // ── Auth callbacks ──────────────────────────────────────────────────────────
   const handleAuthSuccess = useCallback(async (isNew: boolean) => {
     if (isNew) {
-      setStage('plan')
+      setStage('onboarding')
     } else {
       const onboardingComplete = await invoke<boolean>('settings:get', 'onboardingComplete')
       setStage(onboardingComplete ? 'app' : 'onboarding')
     }
   }, [])
 
-  const handlePlanDone = useCallback(() => setStage('onboarding'), [])
   const handleOnboardingDone = useCallback(() => setStage('app'), [])
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -167,7 +164,6 @@ export default function App() {
   }
 
   if (stage === 'auth') return <AuthScreen onAuthSuccess={handleAuthSuccess} />
-  if (stage === 'plan') return <PlanPicker onDone={handlePlanDone} />
   if (stage === 'onboarding') return <Onboarding onDone={handleOnboardingDone} />
 
   return (
@@ -179,7 +175,6 @@ export default function App() {
         {page === 'live' && <LiveMeeting navigate={(p, id) => navigate(p, id)} />}
         {page === 'meeting' && <MeetingView id={activeMeetingId} navigate={navigate} />}
         {page === 'period' && <PeriodReport />}
-        {page === 'transcribe' && <Transcribe />}
         {page === 'settings' && <Settings navigate={navigate} />}
       </main>
       {isProcessing && <Processing step={processingStep} />}
@@ -199,31 +194,14 @@ export default function App() {
 function Sidebar({
   page,
   navigate,
-  settingsAlert
 }: {
   page: Page
   navigate: NavigateFn
-  settingsAlert?: boolean
 }) {
-  const [refCopied, setRefCopied] = useState(false)
-
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    // Clear key/token fields with empty strings; reset plan to valid default 'trial'.
-    for (const key of ['openaiApiKey', 'anthropicApiKey', 'huggingfaceToken', 'licenseKey'] as const) {
-      await invoke('settings:set', { key, value: '' as never }).catch(() => {})
-    }
     await invoke('settings:set', { key: 'plan', value: 'trial' as never }).catch(() => {})
     await invoke('settings:set', { key: 'onboardingComplete', value: false as never }).catch(() => {})
-  }
-
-  const handleCopyRef = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-    const link = `https://nocodly.com/briefos?ref=${user.id}`
-    await navigator.clipboard.writeText(link)
-    setRefCopied(true)
-    setTimeout(() => setRefCopied(false), 2000)
   }
 
   return (
@@ -259,39 +237,13 @@ function Sidebar({
           active={page === 'period'}
           onClick={() => navigate('period')}
         />
-        <NavItem
-          icon="file-text"
-          label="Transcribe"
-          active={page === 'transcribe'}
-          onClick={() => navigate('transcribe')}
-        />
       </nav>
-
-      {/* Referral */}
-      <div className="mx-2 mb-2 bg-white/5 rounded-lg p-3 border border-white/10">
-        <div className="flex items-center gap-1.5 mb-1">
-          <i className="ti ti-gift text-[13px] text-[#7CB9FF]" />
-          <span className="text-[11px] font-semibold text-white/80">Invite a friend</span>
-        </div>
-        <p className="text-[10px] text-white/40 mb-2 leading-relaxed">Get 3 months Pro free for each friend who signs up.</p>
-        <button
-          onClick={handleCopyRef}
-          className="w-full text-[10px] font-semibold bg-accent/80 hover:bg-accent text-white rounded-md py-1.5 transition-all flex items-center justify-center gap-1.5"
-        >
-          {refCopied ? (
-            <><i className="ti ti-check text-[12px]" /> Copied!</>
-          ) : (
-            <><i className="ti ti-copy text-[12px]" /> Copy invite link</>
-          )}
-        </button>
-      </div>
 
       <div className="p-2 border-t border-white/10 space-y-0.5">
         <NavItem
           icon="settings"
           label="Settings"
           active={page === 'settings'}
-          alert={settingsAlert}
           onClick={() => navigate('settings')}
         />
         <NavItem

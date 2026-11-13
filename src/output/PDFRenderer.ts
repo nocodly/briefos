@@ -9,7 +9,7 @@ import {
   priorityPill,
   keywordCloud
 } from './pdfTemplate'
-import type { ActionItem } from '@ai/SummaryEngine'
+import type { ActionItem } from '@shared/types'
 
 // =============================================================================
 // PDFRenderer — exports a single meeting's Brief to a styled A4 PDF via

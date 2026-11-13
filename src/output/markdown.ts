@@ -1,4 +1,4 @@
-import type { ActionItem } from '@ai/SummaryEngine'
+import type { ActionItem } from '@shared/types'
 
 // =============================================================================
 // Shared markdown builder for a meeting brief. Used by clipboard, Slack, and

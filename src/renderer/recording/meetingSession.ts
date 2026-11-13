@@ -264,7 +264,9 @@ async function getSystemAudio(): Promise<{ audio: MediaStream; capture: MediaStr
   try {
     const capture = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 1, width: 320, height: 180 },
-      audio: true
+      // Voice processing is for microphones; on loopback it only degrades
+      // the remote speakers' audio.
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
     })
     const tracks = capture.getAudioTracks()
     if (tracks.length === 0) {

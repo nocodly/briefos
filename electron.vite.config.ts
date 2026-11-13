@@ -5,7 +5,7 @@ import { config as loadEnv } from 'dotenv'
 
 loadEnv({ path: resolve(__dirname, '.env') })
 
-// BriefOS — electron-vite config.
+// Minutama — electron-vite config.
 // Three independent build targets: main (Node), preload (Node sandbox bridge),
 // renderer (React + Tailwind in the BrowserWindow).
 export default defineConfig({
@@ -23,14 +23,12 @@ export default defineConfig({
       },
       rollupOptions: {
         // Native + binary deps must never be bundled.
-        external: ['better-sqlite3', 'ffmpeg-static', 'node-record-lpcm16']
+        external: ['better-sqlite3']
       }
     },
     resolve: {
       alias: {
         '@main': resolve(__dirname, 'src/main'),
-        '@capture': resolve(__dirname, 'src/capture'),
-        '@transcription': resolve(__dirname, 'src/transcription'),
         '@ai': resolve(__dirname, 'src/ai'),
         '@storage': resolve(__dirname, 'src/storage'),
         '@output': resolve(__dirname, 'src/output'),

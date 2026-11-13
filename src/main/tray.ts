@@ -30,7 +30,7 @@ function trayImage(): Electron.NativeImage {
 
 function buildMenu(): Electron.Menu {
   return Menu.buildFromTemplate([
-    { label: 'BriefOS', enabled: false },
+    { label: 'Minutama', enabled: false },
     { type: 'separator' },
     recording
       ? {
@@ -47,7 +47,7 @@ function buildMenu(): Electron.Menu {
     { label: 'Open Dashboard', click: () => callbacks?.showDashboard() },
     { label: 'Settings', click: () => callbacks?.openSettings() },
     { type: 'separator' },
-    { label: 'Quit BriefOS', click: () => callbacks?.quit() }
+    { label: 'Quit Minutama', click: () => callbacks?.quit() }
   ])
 }
 
@@ -56,7 +56,7 @@ export function createTray(cb: TrayCallbacks): Tray {
   callbacks = cb
 
   tray = new Tray(trayImage())
-  tray.setToolTip('BriefOS — ready')
+  tray.setToolTip('Minutama — ready')
   tray.setContextMenu(buildMenu())
 
   // Double-click opens the dashboard (Windows convention).
@@ -71,7 +71,7 @@ export function updateTrayState(isRecording: boolean): void {
   console.log('[tray] updating state — recording:', isRecording)
   recording = isRecording
   tray.setImage(trayImage())
-  tray.setToolTip(isRecording ? 'BriefOS — recording…' : 'BriefOS — ready')
+  tray.setToolTip(isRecording ? 'Minutama — recording…' : 'Minutama — ready')
   tray.setContextMenu(buildMenu())
 }
 

@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import { startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke } from './lib/ipc'
-import { supabase, getProfile, TRIAL_LIMIT } from './lib/supabaseClient'
+import { getUsage, type UsageInfo } from './lib/usage'
 
 // =============================================================================
 // Dashboard — meeting list + full-text search + Start Recording CTA. Loads via
@@ -48,7 +48,7 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
   const [searching, setSearching] = useState(false)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [isTrial, setIsTrial] = useState(false)
+  const [usage, setUsage] = useState<UsageInfo | null>(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -68,11 +68,9 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
   }, [loadAll])
 
   useEffect(() => {
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
-      const profile = await getProfile(user.id)
-      setIsTrial(profile?.plan === 'trial')
-    })
+    getUsage()
+      .then(setUsage)
+      .catch((err) => console.error('[dashboard] usage load failed', err))
   }, [])
 
   // Debounced full-text search; empty query falls back to the full list.
@@ -127,24 +125,13 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
               {searching ? ' · search results' : ''}
             </p>
           </div>
-          {isTrial && (
-            <div className={`flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border ${
-              meetings.length >= TRIAL_LIMIT
-                ? 'bg-red-soft text-red border-red/20'
-                : meetings.length >= TRIAL_LIMIT * 0.7
-                ? 'bg-amber-soft text-amber border-amber/20'
-                : 'bg-blue-tint text-accent border-accent/20'
-            }`}>
-              <i className="ti ti-gift text-[13px]" />
-              {meetings.length}/{TRIAL_LIMIT} free meetings
-            </div>
-          )}
+          {usage && <UsageBadge usage={usage} />}
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={startRecording}
               className="bg-accent hover:bg-blue-mid text-white rounded-lg px-4 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97]"
             >
-              <i className="ti ti-microphone text-[15px]" /> Start Recording
+              <i className="ti ti-microphone text-[15px]" /> New meeting
             </button>
             <span className="text-[10px] text-text-4 flex items-center gap-1">
               <i className="ti ti-keyboard text-[11px]" />
@@ -165,31 +152,6 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
           />
         </div>
       </div>
-
-      {/* Trial / Demo banner */}
-      {isTrial && (
-        <div className="mx-8 mt-6 bg-blue-tint border border-accent/20 rounded-panel px-4 py-3 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <i className="ti ti-sparkles text-[16px] text-accent flex-shrink-0" />
-            <span className="text-[12px] text-text-2">
-              <span className="font-semibold text-blue-deep">Demo mode</span> — Found a bug?{' '}
-              <button
-                onClick={() => window.open('mailto:support@nocodly.com?subject=BriefOS Bug Report', '_blank')}
-                className="text-accent underline underline-offset-2 hover:text-blue-mid transition-all"
-              >
-                Email support@nocodly.com
-              </button>
-              {' '}and get <span className="font-semibold text-green">2 weeks Pro free</span>.
-            </span>
-          </div>
-          <button
-            onClick={() => window.open('mailto:support@nocodly.com?subject=BriefOS Bug Report&body=Hi! I found a bug in BriefOS:%0A%0ADescribe the issue here...%0A%0AMy email: ', '_blank')}
-            className="text-[11px] font-semibold bg-accent text-white px-3 py-1.5 rounded-lg hover:bg-blue-mid transition-all flex-shrink-0"
-          >
-            Report bug →
-          </button>
-        </div>
-      )}
 
       <div className="p-8">
         {error && (
@@ -316,7 +278,7 @@ function EmptyState({ searching, onStart }: { searching: boolean; onStart: () =>
         onClick={onStart}
         className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97]"
       >
-        <i className="ti ti-microphone text-[15px]" /> Start Recording
+        <i className="ti ti-microphone text-[15px]" /> New meeting
       </button>
     </div>
   )
@@ -327,6 +289,29 @@ function Centered({ icon, text, spin }: { icon: string; text: string; spin?: boo
     <div className="flex flex-col items-center justify-center gap-3 py-20 text-text-3">
       <i className={`ti ti-${icon} text-[28px] ${spin ? 'animate-spin-slow' : ''}`} />
       <span className="text-[13px]">{text}</span>
+    </div>
+  )
+}
+
+function UsageBadge({ usage }: { usage: UsageInfo }) {
+  if (usage.meetingsLimit === null) {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border bg-green-soft text-green border-green/20">
+        <i className="ti ti-crown text-[13px]" /> Pro · unlimited meetings
+      </div>
+    )
+  }
+  const left = Math.max(0, usage.meetingsLimit - usage.meetingsUsed)
+  const tone =
+    left === 0
+      ? 'bg-red-soft text-red border-red/20'
+      : left <= 3
+        ? 'bg-amber-soft text-amber border-amber/20'
+        : 'bg-blue-tint text-accent border-accent/20'
+  return (
+    <div className={`flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border ${tone}`}>
+      <i className="ti ti-gift text-[13px]" />
+      {usage.meetingsUsed}/{usage.meetingsLimit} free meetings this month
     </div>
   )
 }

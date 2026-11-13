@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import Markdown from './components/Markdown'
+import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
 
 // =============================================================================
@@ -42,6 +43,8 @@ interface Meeting {
   transcript: TranscriptRow[]
   enhanced_notes?: string | null
   user_notes?: string | null
+  server_id?: string | null
+  template_id?: string | null
 }
 
 function fmtDuration(s: number): string {
@@ -104,7 +107,21 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
   const regenerate = () =>
     runExport('Regenerate', async () => {
       if (!meeting) return
-      await invoke('ai:regenerateSummary', { meetingId: meeting.id, promptType: 'auto' })
+      // AI runs on the server, which only accepts meetings recorded with
+      // Minutama (they carry a server meeting id).
+      if (!meeting.server_id) throw new Error('This older meeting cannot be regenerated.')
+      const templateId = meeting.template_id || 'general'
+      const result = await enhanceNotes({
+        meetingId: meeting.server_id,
+        templateId,
+        userNotes: meeting.user_notes ?? '',
+        transcript: (meeting.transcript ?? []).map((r) => ({
+          speaker: r.speaker === 'Me' ? 'me' : 'them',
+          startMs: r.start_ms,
+          text: r.text
+        }))
+      })
+      await invoke('notes:saveEnhanced', { meetingId: meeting.id, templateId, ...result })
       await load()
     })
 
