@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
+import Markdown from './components/Markdown'
 import { invoke } from './lib/ipc'
 
 // =============================================================================
@@ -39,6 +40,8 @@ interface Meeting {
   accuracy: number
   summary: Summary | null
   transcript: TranscriptRow[]
+  enhanced_notes?: string | null
+  user_notes?: string | null
 }
 
 function fmtDuration(s: number): string {
@@ -155,7 +158,21 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
 
         <div className="pb-10">
           {tab === 'brief' &&
-            (s ? <Brief summary={s} /> : <NoSummary onGenerate={regenerate} busy={!!busy} />)}
+            (meeting.enhanced_notes ? (
+              <div className="max-w-[820px]">
+                <Markdown source={meeting.enhanced_notes} />
+                {meeting.user_notes?.trim() && (
+                  <details className="mt-6 text-[13px] text-text-3">
+                    <summary className="cursor-pointer">My original notes</summary>
+                    <pre className="whitespace-pre-wrap font-body mt-2 text-text-2">{meeting.user_notes}</pre>
+                  </details>
+                )}
+              </div>
+            ) : s ? (
+              <Brief summary={s} />
+            ) : (
+              <NoSummary onGenerate={regenerate} busy={!!busy} />
+            ))}
           {tab === 'transcript' && <Transcript rows={meeting.transcript ?? []} />}
         </div>
       </div>

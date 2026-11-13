@@ -85,7 +85,91 @@ export class BriefOSDatabase {
   private init(): void {
     // schema.sql is bundled as a string (?raw) so it survives Rollup bundling.
     this.db.exec(schemaSql)
+    this.migrate()
     console.log('[db] schema initialized')
+  }
+
+  /** Additive column migrations for the Minutama notepad (idempotent). */
+  private migrate(): void {
+    const cols = new Set(
+      (this.db.prepare('PRAGMA table_info(meetings)').all() as { name: string }[]).map((c) => c.name)
+    )
+    const add = (name: string, ddl: string) => {
+      if (!cols.has(name)) this.db.exec(`ALTER TABLE meetings ADD COLUMN ${name} ${ddl}`)
+    }
+    add('server_id', 'TEXT') //            meeting id from /meeting-start
+    add('user_notes', "TEXT DEFAULT ''") // what the user typed during the call
+    add('enhanced_notes', 'TEXT') //       AI notes (markdown)
+    add('template_id', "TEXT DEFAULT 'general'")
+    add('status', "TEXT DEFAULT 'done'") // recording | processing | done
+  }
+
+  // ─── NOTEPAD (Minutama) ────────────────────────────────────────────────
+
+  createNote(input: { serverId: string; startedAt: string; templateId: string; language?: string }): string {
+    const id = randomUUID()
+    this.db
+      .prepare(
+        `INSERT INTO meetings (id, title, type, started_at, language, server_id, template_id, status)
+         VALUES (?, 'Untitled meeting', 'other', ?, ?, ?, ?, 'recording')`
+      )
+      .run(id, input.startedAt, input.language || 'auto', input.serverId, input.templateId)
+    console.log('[db] created note', id)
+    return id
+  }
+
+  appendSegment(meetingId: string, seg: TranscriptSegment): void {
+    this.saveTranscriptSegments(meetingId, [seg])
+  }
+
+  saveUserNotes(meetingId: string, notes: string): void {
+    this.db
+      .prepare('UPDATE meetings SET user_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(notes, meetingId)
+  }
+
+  setNoteStatus(meetingId: string, status: 'recording' | 'processing' | 'done', durationS?: number): void {
+    if (durationS !== undefined) {
+      this.db
+        .prepare('UPDATE meetings SET status = ?, duration_s = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(status, Math.round(durationS), meetingId)
+    } else {
+      this.db
+        .prepare('UPDATE meetings SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(status, meetingId)
+    }
+  }
+
+  saveEnhanced(
+    meetingId: string,
+    input: {
+      title: string
+      notesMarkdown: string
+      templateId: string
+      actionItems: unknown[]
+      decisions: unknown[]
+    }
+  ): void {
+    const tx = this.db.transaction(() => {
+      this.db
+        .prepare(
+          `UPDATE meetings SET title = ?, enhanced_notes = ?, template_id = ?, status = 'done',
+             updated_at = CURRENT_TIMESTAMP WHERE id = ?`
+        )
+        .run(input.title || 'Untitled meeting', input.notesMarkdown, input.templateId, meetingId)
+      // Keep the summaries row in sync so Period Reports + exports still work.
+      const firstLine = input.notesMarkdown
+        .split('\n')
+        .map((l) => l.replace(/^[#>*\-\s]+/, '').trim())
+        .find((l) => l.length > 0)
+      this.saveSummary(meetingId, {
+        tldr: firstLine ?? input.title,
+        decisions: input.decisions,
+        actionItems: input.actionItems
+      })
+    })
+    tx()
+    console.log('[db] saved enhanced notes for', meetingId)
   }
 
   // ─── MEETINGS ──────────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
+import { startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke } from './lib/ipc'
 import { supabase, getProfile, TRIAL_LIMIT } from './lib/supabaseClient'
 
@@ -97,16 +98,11 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query])
 
-  const startRecording = async () => {
-    try {
-      if (isTrial && meetings.length >= TRIAL_LIMIT) {
-        setError(`You've used all ${TRIAL_LIMIT} free meetings. Upgrade to Pro or switch to Free + Own Keys in Settings → Plan.`)
-        return
-      }
-      await invoke('recording:start', {})
-    } catch (err) {
-      setError((err as Error).message)
-    }
+  // Quotas are enforced by the server (meeting-start); the notes page shows
+  // any plan-limit message.
+  const startRecording = () => {
+    navigate('live')
+    if (useMeetingSession.getState().status === 'idle') void startMeetingSession()
   }
 
   const remove = async (id: string) => {

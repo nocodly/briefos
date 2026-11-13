@@ -12,6 +12,8 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 // Two-way channels (ipcMain.handle / ipcRenderer.invoke).
 const INVOKE_CHANNELS = new Set([
   'recording:start', 'recording:stop', 'recording:pause', 'recording:resume', 'recording:status',
+  'recording:report',
+  'notes:create', 'notes:appendSegment', 'notes:saveUserNotes', 'notes:setStatus', 'notes:saveEnhanced',
   'meetings:getAll', 'meetings:getOne', 'meetings:delete', 'meetings:search',
   'meetings:updateTitle', 'meetings:renameSpeakers',
   'ai:generateSummary', 'ai:regenerateSummary', 'ai:generatePeriodReport',
@@ -26,7 +28,7 @@ const INVOKE_CHANNELS = new Set([
 
 // Push channels (main → renderer via webContents.send).
 const PUSH_CHANNELS = new Set([
-  'recording:tick',
+  'recording:tick', 'recording:command',
   'progress:transcription', 'progress:summary', 'progress:periodReport',
   'progress:done', 'progress:error',
   'updater:status', 'navigate',

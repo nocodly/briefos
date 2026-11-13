@@ -7,6 +7,12 @@ import { deleteMeetingFiles } from '@storage/FileManager'
 import { getSetting, setSetting, getAllSettings, isProOrByok, type AppSettings } from './store'
 import { listAudioDevices, testAudioLevels } from '@capture/AudioCapture'
 import { getPipeline } from './RecordingPipeline'
+import {
+  getRecordingStatus,
+  reportRecordingState,
+  sendRecordingCommand,
+  type RecordingReport
+} from './RecordingRelay'
 import { PeriodReportEngine } from '@ai/PeriodReportEngine'
 import { exportMeetingPdf } from '@output/PDFRenderer'
 import { exportPeriodReportPdf } from '@output/PeriodReportPDF'
@@ -111,18 +117,76 @@ async function choosePdfPath(defaultName: string): Promise<string | null> {
 export function registerIpcHandlers(): void {
   console.log('[ipc] registering handlers')
 
-  // --- Recording (RecordingPipeline) ---------------------------------------
-  handle('recording:start', async () => getPipeline().start())
-  handle('recording:stop', async () => getPipeline().stop())
+  // --- Recording (renderer-owned session, mirrored by RecordingRelay) -------
+  // Tray / overlay / hotkey call these; they are relayed to the main window.
+  handle('recording:start', async () => {
+    sendRecordingCommand('start')
+    return { ok: true }
+  })
+  handle('recording:stop', async () => {
+    sendRecordingCommand('stop')
+    return { ok: true }
+  })
   handle('recording:pause', async () => {
-    getPipeline().pause()
+    sendRecordingCommand('pause')
     return { ok: true }
   })
   handle('recording:resume', async () => {
-    getPipeline().resume()
+    sendRecordingCommand('resume')
     return { ok: true }
   })
-  handle('recording:status', async () => getPipeline().status())
+  handle('recording:status', async () => getRecordingStatus())
+  handle('recording:report', async (_e, report: RecordingReport) => {
+    reportRecordingState(report)
+    return { ok: true }
+  })
+
+  // --- Notepad (Minutama) ----------------------------------------------------
+  handle(
+    'notes:create',
+    async (_e, p: { serverId: string; startedAt: string; templateId: string; language?: string }) =>
+      getDatabase().createNote(p)
+  )
+  handle(
+    'notes:appendSegment',
+    async (_e, p: { meetingId: string; speaker: string; startMs: number; endMs: number; text: string }) => {
+      getDatabase().appendSegment(p.meetingId, {
+        speaker: p.speaker,
+        startMs: p.startMs,
+        endMs: p.endMs,
+        text: p.text
+      })
+      return { ok: true }
+    }
+  )
+  handle('notes:saveUserNotes', async (_e, p: { meetingId: string; notes: string }) => {
+    getDatabase().saveUserNotes(p.meetingId, p.notes)
+    return { ok: true }
+  })
+  handle(
+    'notes:setStatus',
+    async (_e, p: { meetingId: string; status: 'recording' | 'processing' | 'done'; durationS?: number }) => {
+      getDatabase().setNoteStatus(p.meetingId, p.status, p.durationS)
+      return { ok: true }
+    }
+  )
+  handle(
+    'notes:saveEnhanced',
+    async (
+      _e,
+      p: {
+        meetingId: string
+        title: string
+        notesMarkdown: string
+        templateId: string
+        actionItems: unknown[]
+        decisions: unknown[]
+      }
+    ) => {
+      getDatabase().saveEnhanced(p.meetingId, p)
+      return { ok: true }
+    }
+  )
 
   // --- Meetings (Database) -------------------------------------------------
   handle('meetings:getAll', async (_e, filters: { limit?: number; from?: string; to?: string } = {}) =>

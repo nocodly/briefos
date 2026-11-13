@@ -8,10 +8,12 @@ import Processing from './Processing'
 import AuthScreen from './AuthScreen'
 import PlanPicker from './PlanPicker'
 import Transcribe from './Transcribe'
+import LiveMeeting from './LiveMeeting'
+import { handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 
-export type Page = 'dashboard' | 'meeting' | 'period' | 'settings' | 'onboarding' | 'transcribe'
+export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding' | 'transcribe'
 
 export interface NavigateFn {
   (page: Page, meetingId?: string | null): void
@@ -27,7 +29,6 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStep, setProcessingStep] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [vbCableNeeded, setVbCableNeeded] = useState(false)
 
   const navigate = useCallback<NavigateFn>((p, id = null) => {
     setPage(p)
@@ -127,36 +128,16 @@ export default function App() {
     return () => unsubs.forEach((u) => u())
   }, [])
 
+  // Tray / overlay / hotkey commands are relayed by main; the session lives here.
   useEffect(() => {
-    const unsub = subscribe('hotkey:toggleRecording', async () => {
-      try {
-        const status = await invoke<{ recording: boolean }>('recording:status')
-        if (status?.recording) {
-          await invoke('recording:stop')
-        } else {
-          await invoke('recording:start', {})
-        }
-      } catch (err) {
-        console.error('[app] toggle recording failed', err)
-        setErrorMsg((err as Error).message)
-        setTimeout(() => setErrorMsg(''), 6000)
-      }
+    const unsub = subscribe('recording:command', (cmd) => {
+      const idle = useMeetingSession.getState().status === 'idle'
+      if (cmd === 'start' || (cmd === 'toggle' && idle)) setPage('live')
+      handleRecordingCommand(cmd)
     })
     return unsub
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      invoke<string[]>('audio:listDevices').catch(() => [] as string[]),
-      invoke<boolean>('settings:get', 'micOnly').catch(() => false)
-    ]).then(([devices, micOnly]) => {
-      if (cancelled) return
-      const detected = Array.isArray(devices) && devices.some((d) => /cable/i.test(d))
-      setVbCableNeeded(!detected && !micOnly)
-    })
-    return () => { cancelled = true }
-  }, [page])
 
   // ── Auth callbacks ──────────────────────────────────────────────────────────
   const handleAuthSuccess = useCallback(async (isNew: boolean) => {
@@ -191,9 +172,11 @@ export default function App() {
 
   return (
     <div className="flex min-h-screen bg-bg font-body text-text">
-      <Sidebar page={page} navigate={navigate} settingsAlert={vbCableNeeded} />
+      <Sidebar page={page} navigate={navigate} />
       <main className="flex-1 overflow-auto">
+        <RecordingBanner page={page} onOpen={() => setPage('live')} />
         {page === 'dashboard' && <Dashboard navigate={navigate} />}
+        {page === 'live' && <LiveMeeting navigate={(p, id) => navigate(p, id)} />}
         {page === 'meeting' && <MeetingView id={activeMeetingId} navigate={navigate} />}
         {page === 'period' && <PeriodReport />}
         {page === 'transcribe' && <Transcribe />}
@@ -250,11 +233,20 @@ function Sidebar({
           <i className="ti ti-broadcast text-[16px] text-white" />
         </div>
         <span className="font-display font-bold text-[14px] text-white">
-          Brief<span className="text-[#7CB9FF]">OS</span>
+          Minutama
         </span>
       </div>
 
       <nav className="p-2 flex-1">
+        <NavItem
+          icon="microphone"
+          label="New meeting"
+          active={page === 'live'}
+          onClick={() => {
+            navigate('live')
+            if (useMeetingSession.getState().status === 'idle') void startMeetingSession()
+          }}
+        />
         <NavItem
           icon="layout-dashboard"
           label="Dashboard"
@@ -366,7 +358,7 @@ function UpdateToast() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-text">New version ready{version ? ` — v${version}` : ''}</div>
-              <div className="text-[11px] text-text-3 mt-0.5">Restart BriefOS to apply the update</div>
+              <div className="text-[11px] text-text-3 mt-0.5">Restart Minutama to apply the update</div>
             </div>
             <button
               onClick={() => installRef.current('updater:install')}
@@ -412,6 +404,21 @@ function NavItem({
       {alert && !active && (
         <span className="ml-auto w-2 h-2 rounded-full bg-amber animate-pulse-dot" title="Action needed" />
       )}
+    </button>
+  )
+}
+
+// Thin bar shown on other pages while a meeting is being recorded.
+function RecordingBanner({ page, onOpen }: { page: Page; onOpen: () => void }) {
+  const status = useMeetingSession((st) => st.status)
+  if (page === 'live' || (status !== 'recording' && status !== 'paused')) return null
+  return (
+    <button
+      onClick={onOpen}
+      className="w-full flex items-center justify-center gap-2 py-1.5 bg-red text-white text-[12px] font-semibold"
+    >
+      <span className="w-2 h-2 rounded-full bg-white animate-pulse-dot" />
+      {status === 'paused' ? 'Meeting paused' : 'Recording meeting'} — open notes
     </button>
   )
 }

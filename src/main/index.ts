@@ -6,15 +6,15 @@ if (typeof (globalThis as Record<string, unknown>).File === 'undefined') {
   ;(globalThis as Record<string, unknown>).File = NodeFile
 }
 
-import { app, BrowserWindow, globalShortcut, shell, screen } from 'electron'
+import { app, BrowserWindow, desktopCapturer, globalShortcut, shell, screen } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
 import { createTray, updateTrayState } from './tray'
 import { registerIpcHandlers } from './ipc'
 import { initAutoUpdater } from './updater'
 import { enforceRetention } from '@storage/FileManager'
-import { getSetting, setSetting } from './store'
-import { listAudioDevices } from '@capture/AudioCapture'
+import { getSetting } from './store'
+import { sendRecordingCommand } from './RecordingRelay'
 
 // Load .env in development (production reads keys from electron-store).
 if (!app.isPackaged) {
@@ -55,7 +55,10 @@ function createMainWindow(): BrowserWindow {
       preload: PRELOAD,
       contextIsolation: true, // MUST be true (security requirement)
       nodeIntegration: false, // MUST be false
-      sandbox: false
+      sandbox: false,
+      // Recording runs in this renderer even while the window is hidden in the
+      // tray — never throttle its timers / MediaRecorder.
+      backgroundThrottling: false
     }
   })
 
@@ -68,8 +71,28 @@ function createMainWindow(): BrowserWindow {
   // Auto-grant microphone permission so Windows shows the OS privacy dialog
   // automatically when the renderer calls getUserMedia — no manual config needed.
   win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
-    if (permission === 'media') return callback(true)
+    if (permission === 'media' || permission === 'display-capture') return callback(true)
     callback(false)
+  })
+
+  // System audio WITHOUT VB-Cable: when the renderer calls getDisplayMedia we
+  // answer with the primary screen + Windows WASAPI 'loopback' audio. The
+  // renderer drops the video track immediately; only the audio is recorded.
+  win.webContents.session.setDisplayMediaRequestHandler((_request, callback) => {
+    desktopCapturer
+      .getSources({ types: ['screen'] })
+      .then((sources) => {
+        if (!sources.length) {
+          console.error('[main] no screen source for loopback audio')
+          callback({})
+          return
+        }
+        callback({ video: sources[0], audio: 'loopback' })
+      })
+      .catch((err) => {
+        console.error('[main] desktopCapturer failed', err)
+        callback({})
+      })
   })
 
   win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
@@ -189,7 +212,7 @@ export function closeOverlayWindow(): void {
 function registerGlobalShortcuts(): void {
   const toggle = globalShortcut.register('CommandOrControl+Shift+B', () => {
     console.log('[main] hotkey: toggle recording')
-    mainWindow?.webContents.send('hotkey:toggleRecording')
+    sendRecordingCommand('toggle')
   })
   const showDash = globalShortcut.register('CommandOrControl+Shift+D', () => {
     mainWindow?.show()
@@ -198,26 +221,6 @@ function registerGlobalShortcuts(): void {
 
   if (!toggle || !showDash) {
     console.warn('[main] one or more global shortcuts failed to register')
-  }
-}
-
-// Detect a VB-Cable / loopback device and auto-select it for system audio.
-async function autoConfigureAudio(): Promise<void> {
-  try {
-    const devices = await listAudioDevices()
-    const cable = devices.find((d) => /cable/i.test(d))
-    if (!cable) {
-      console.log('[main] no VB-Cable device detected')
-      return
-    }
-    const current = getSetting('systemAudioDevice')
-    // Switch only if the current choice isn't already a detected cable device.
-    if (!devices.includes(current) || !/cable/i.test(current)) {
-      setSetting('systemAudioDevice', cable)
-      console.log('[main] auto-selected VB-Cable device:', cable)
-    }
-  } catch (err) {
-    console.error('[main] audio auto-config failed', err)
   }
 }
 
@@ -274,7 +277,7 @@ if (!gotLock) {
         mainWindow?.show()
         mainWindow?.focus()
       },
-      toggleRecording: () => mainWindow?.webContents.send('hotkey:toggleRecording'),
+      toggleRecording: () => sendRecordingCommand('toggle'),
       openSettings: () => {
         mainWindow?.show()
         mainWindow?.webContents.send('navigate', '/settings')
@@ -295,9 +298,6 @@ if (!gotLock) {
       console.error('[main] retention sweep failed', err)
     }
 
-    // Auto-detect VB-Cable (or any loopback "CABLE" device) and select it for
-    // system audio so the user doesn't have to configure it manually.
-    void autoConfigureAudio()
 
     registerGlobalShortcuts()
 
