@@ -1,4 +1,4 @@
-import { ipcMain, clipboard, dialog, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { app, ipcMain, clipboard, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
 import { getMainWindow, getOverlayWindow } from './index'
@@ -309,11 +309,29 @@ export function registerIpcHandlers(): void {
   })
   handle('settings:getAll', async () => getAllSettings())
 
-  // --- Google OAuth (in-app BrowserWindow) ---------------------------------
-  // Opens the OAuth URL in a child window, intercepts the minutama:// redirect,
-  // and forwards the callback URL to the renderer via auth:deeplink — no custom
-  // OS protocol registration needed (works in both dev and packaged builds).
+  // --- Google OAuth ----------------------------------------------------------
+  // Installed app: open the sign-in in the user's own browser. Google blocks or
+  // stalls sign-in (2-step verification, passkeys) inside embedded windows, and
+  // the user is usually already signed in to Google there. Supabase redirects to
+  // minutama://auth/callback, Windows hands that URL to this app
+  // (second-instance → handleDeepLink → auth:deeplink).
+  // Dev (protocol not registered): fall back to an in-app window that
+  // intercepts the redirect.
   handle('auth:openOAuthWindow', async (_e, oauthUrl: string) => {
+    // Only ever open our Supabase auth endpoint (the renderer passes the URL).
+    const target = new URL(String(oauthUrl))
+    if (
+      target.protocol !== 'https:' ||
+      !target.hostname.endsWith('.supabase.co') ||
+      !target.pathname.startsWith('/auth/v1/')
+    ) {
+      throw new Error('Unexpected sign-in URL')
+    }
+    if (app.isPackaged) {
+      await shell.openExternal(target.toString())
+      return { external: true }
+    }
+
     const parent = getMainWindow() ?? undefined
     const win = new BrowserWindow({
       width: 520,
@@ -325,7 +343,7 @@ export function registerIpcHandlers(): void {
       webPreferences: { nodeIntegration: false, contextIsolation: true }
     })
 
-    win.loadURL(oauthUrl)
+    win.loadURL(target.toString())
 
     const intercept = (ev: Electron.Event, url: string) => {
       if (url.startsWith('minutama://') || url.startsWith('briefos://')) {

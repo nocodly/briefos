@@ -115,7 +115,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       })
       if (err) throw new Error(err.message)
       if (!data.url) throw new Error('No OAuth URL returned')
-      // Open inside a child BrowserWindow so we can intercept the redirect.
+      // Installed app: opens the user's browser; dev: an in-app window.
       await invoke('auth:openOAuthWindow', data.url)
       // Loading stays true until auth:deeplink arrives (see useEffect above).
     } catch (err) {
@@ -207,8 +207,16 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
             className="w-full flex items-center justify-center gap-2.5 border border-border hover:border-accent/40 bg-white/80 hover:bg-white rounded-xl py-2.5 text-[13px] font-medium text-text transition-all mb-5 disabled:opacity-60"
           >
             {googleLoading ? <i className="ti ti-loader-2 animate-spin-slow text-[16px] text-accent" /> : <GoogleIcon />}
-            {googleLoading ? 'Waiting for browser…' : 'Continue with Google'}
+            {googleLoading ? 'Finish signing in in your browser…' : 'Continue with Google'}
           </button>
+          {googleLoading && (
+            <p className="-mt-3 mb-5 text-center text-[11.5px] text-text-3">
+              Your browser opened Google sign-in. When it asks to open Minutama, click “Open”.{' '}
+              <button type="button" onClick={() => setGoogleLoading(false)} className="underline hover:text-text-2">
+                Cancel
+              </button>
+            </p>
+          )}
 
           <Divider />
 
