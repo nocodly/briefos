@@ -1,6 +1,6 @@
-/* Fonts + icon webfont. NOTE: loaded via CDN — for a fully offline (local-first)
-   build these should be vendored into the app and @font-face'd locally. */
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+/* Fonts + icon webfont. NOTE: loaded via CDN — for a fully offline build these
+   should be vendored into the app and @font-face'd locally. */
+@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import url('https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.17.0/dist/tabler-icons.min.css');
 
 @tailwind base;
@@ -8,6 +8,15 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Frosted-glass surfaces over the warm backdrop below. */
+    --glass-bg: rgba(255, 255, 255, 0.55);
+    --glass-surface: rgba(255, 255, 255, 0.68);
+    --glass-bg-2: rgba(255, 255, 255, 0.42);
+    --glass-border: rgba(21, 23, 28, 0.09);
+    --glass-border-soft: rgba(21, 23, 28, 0.055);
+  }
+
   html,
   body,
   #root {
@@ -16,31 +25,74 @@
 
   body {
     margin: 0;
-    background: theme('colors.bg');
     color: theme('colors.text');
     font-family: theme('fontFamily.body');
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    background-color: theme('colors.paper');
+    /* Warm, soft blobs give the glass panels something to frost. */
+    background-image:
+      radial-gradient(900px 600px at 8% -10%, rgba(255, 106, 61, 0.22), transparent 60%),
+      radial-gradient(700px 520px at 105% 15%, rgba(255, 176, 120, 0.25), transparent 60%),
+      radial-gradient(800px 600px at 60% 115%, rgba(255, 140, 90, 0.16), transparent 60%),
+      linear-gradient(180deg, #FBFAF7 0%, #F6F1EA 100%);
+    background-attachment: fixed;
   }
 
-  /* Tabler icon glyphs render as inline-block so gap/alignment behave. */
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+  }
+
   .ti {
     display: inline-block;
     line-height: 1;
   }
 
-  /* Thin custom scrollbars to match the design system. */
+  ::selection {
+    background: rgba(255, 106, 61, 0.22);
+  }
+
   ::-webkit-scrollbar {
     width: 10px;
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: theme('colors.border');
+    background: rgba(21, 23, 28, 0.14);
     border-radius: 999px;
-    border: 3px solid theme('colors.bg');
+    border: 3px solid transparent;
+    background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: theme('colors.text-4');
+    background-color: rgba(21, 23, 28, 0.28);
+  }
+}
+
+@layer components {
+  /* Frosted panel. Use for sidebars, cards and floating bars. */
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: theme('boxShadow.glass');
+    backdrop-filter: blur(22px) saturate(170%);
+  }
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    box-shadow: theme('boxShadow.glass-lg');
+    backdrop-filter: blur(28px) saturate(180%);
+  }
+  .glass-dark {
+    background: rgba(21, 23, 28, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(22px) saturate(160%);
+  }
+  .btn-accent {
+    background: linear-gradient(180deg, #FF7A50 0%, #FF6A3D 55%, #F25A2C 100%);
+    color: #fff;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 8px 20px -8px rgba(255, 106, 61, 0.7);
+  }
+  .btn-accent:hover {
+    filter: brightness(1.04);
   }
 }
 

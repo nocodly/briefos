@@ -10,6 +10,7 @@ import LiveMeeting from './LiveMeeting'
 import { handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
+import { Logo, LogoMark } from './components/Logo'
 
 export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
 
@@ -152,12 +153,10 @@ export default function App() {
   // ── Render ──────────────────────────────────────────────────────────────────
   if (stage === 'loading') {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center font-body">
-        <div className="flex flex-col items-center gap-3 text-text-3">
-          <div className="w-10 h-10 bg-blue-tint rounded-xl flex items-center justify-center">
-            <i className="ti ti-broadcast text-[22px] text-accent" />
-          </div>
-          <i className="ti ti-loader-2 text-[22px] animate-spin-slow" />
+      <div className="min-h-screen flex items-center justify-center font-body">
+        <div className="flex flex-col items-center gap-4 text-text-3">
+          <LogoMark size={44} className="drop-shadow-[0_10px_24px_rgba(255,106,61,.45)]" />
+          <i className="ti ti-loader-2 text-[20px] animate-spin-slow" />
         </div>
       </div>
     )
@@ -167,7 +166,7 @@ export default function App() {
   if (stage === 'onboarding') return <Onboarding onDone={handleOnboardingDone} />
 
   return (
-    <div className="flex min-h-screen bg-bg font-body text-text">
+    <div className="flex h-screen font-body text-text">
       <Sidebar page={page} navigate={navigate} />
       <main className="flex-1 overflow-auto">
         <RecordingBanner page={page} onOpen={() => setPage('live')} />
@@ -205,26 +204,24 @@ function Sidebar({
   }
 
   return (
-    <aside className="w-[200px] bg-blue-deep flex flex-col h-screen sticky top-0">
-      <div className="flex items-center gap-2 px-4 py-5 border-b border-white/10">
-        <div className="w-[26px] h-[26px] bg-accent rounded-md flex items-center justify-center flex-shrink-0">
-          <i className="ti ti-broadcast text-[16px] text-white" />
-        </div>
-        <span className="font-display font-bold text-[14px] text-white">
-          Minutama
-        </span>
+    <aside className="glass m-3 mr-0 w-[212px] flex-shrink-0 rounded-panel flex flex-col">
+      <div className="px-4 pt-5 pb-4">
+        <Logo size={26} />
       </div>
 
       <nav className="p-2 flex-1">
-        <NavItem
-          icon="microphone"
-          label="New meeting"
-          active={page === 'live'}
+        <button
           onClick={() => {
             navigate('live')
             if (useMeetingSession.getState().status === 'idle') void startMeetingSession()
           }}
-        />
+          className={`btn-accent w-full flex items-center justify-center gap-2 px-3 py-2.5 mb-3 rounded-xl text-[13px] font-semibold transition-all active:scale-[.98] ${
+            page === 'live' ? 'ring-2 ring-accent/30' : ''
+          }`}
+        >
+          <i className="ti ti-microphone text-[16px]" />
+          New meeting
+        </button>
         <NavItem
           icon="layout-dashboard"
           label="Dashboard"
@@ -239,7 +236,7 @@ function Sidebar({
         />
       </nav>
 
-      <div className="p-2 border-t border-white/10 space-y-0.5">
+      <div className="p-2 border-t border-border-soft space-y-0.5">
         <NavItem
           icon="settings"
           label="Settings"
@@ -285,10 +282,7 @@ function UpdateToast() {
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[70] animate-fade-up">
-      <div className={`flex items-center gap-3 px-4 py-3 rounded-card shadow-xl border text-[13px] min-w-[320px] max-w-[420px]
-        ${state === 'ready'
-          ? 'bg-white border-accent/30 shadow-accent/10'
-          : 'bg-white border-border'}`}>
+      <div className="glass-strong flex items-center gap-3 px-4 py-3 rounded-card text-[13px] min-w-[320px] max-w-[420px]">
 
         {state === 'downloading' ? (
           <>
@@ -305,7 +299,7 @@ function UpdateToast() {
           </>
         ) : (
           <>
-            <div className="w-8 h-8 rounded-lg bg-blue-tint flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-accent-soft flex items-center justify-center flex-shrink-0">
               <i className="ti ti-refresh text-[17px] text-accent" />
             </div>
             <div className="flex-1 min-w-0">
@@ -314,7 +308,7 @@ function UpdateToast() {
             </div>
             <button
               onClick={() => installRef.current('updater:install')}
-              className="flex-shrink-0 px-3 py-1.5 bg-accent text-white text-[12px] font-semibold rounded-lg hover:bg-accent/90 transition-all"
+              className="btn-accent flex-shrink-0 px-3 py-1.5 text-[12px] font-semibold rounded-lg transition-all"
             >
               Restart
             </button>
@@ -348,10 +342,12 @@ function NavItem({
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px] mb-0.5 transition-all ${
-        active ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white/80'
+        active
+          ? 'bg-white/85 text-text font-semibold shadow-[0_1px_2px_rgba(21,23,28,.06)]'
+          : 'text-text-2 hover:bg-white/50 hover:text-text'
       }`}
     >
-      <i className={`ti ti-${icon} text-[16px] w-[18px] text-center`} />
+      <i className={`ti ti-${icon} text-[16px] w-[18px] text-center ${active ? 'text-accent' : ''}`} />
       {label}
       {alert && !active && (
         <span className="ml-auto w-2 h-2 rounded-full bg-amber animate-pulse-dot" title="Action needed" />
@@ -367,7 +363,7 @@ function RecordingBanner({ page, onOpen }: { page: Page; onOpen: () => void }) {
   return (
     <button
       onClick={onOpen}
-      className="w-full flex items-center justify-center gap-2 py-1.5 bg-red text-white text-[12px] font-semibold"
+      className="sticky top-0 z-20 w-full flex items-center justify-center gap-2 py-1.5 bg-red/90 backdrop-blur text-white text-[12px] font-semibold"
     >
       <span className="w-2 h-2 rounded-full bg-white animate-pulse-dot" />
       {status === 'paused' ? 'Meeting paused' : 'Recording meeting'} — open notes

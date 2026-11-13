@@ -21,7 +21,7 @@ const AVATAR_COLORS = [
   'bg-green',
   'bg-amber',
   'bg-purple',
-  'bg-[#1B4F8A]',
+  'bg-accent-ink',
   'bg-[#0EA874]'
 ]
 
@@ -62,13 +62,13 @@ export default function SpeakerMapper({ meetingId, speakers, onComplete }: Speak
   }
 
   return (
-    <div className="fixed inset-0 bg-blue-deep/60 backdrop-blur-sm z-50 flex items-center justify-center font-body p-8">
-      <div className="bg-surface rounded-modal w-[480px] shadow-2xl animate-fade-up overflow-hidden">
+    <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm z-50 flex items-center justify-center font-body p-8">
+      <div className="glass-strong rounded-modal w-[480px] animate-fade-up overflow-hidden">
         <div className="px-7 pt-7 pb-5">
-          <div className="w-11 h-11 rounded-panel bg-blue-tint flex items-center justify-center mb-3">
+          <div className="w-11 h-11 rounded-panel bg-accent-soft flex items-center justify-center mb-3">
             <i className="ti ti-users text-[22px] text-accent" />
           </div>
-          <h2 className="font-display font-bold text-[20px] text-blue-deep mb-1">
+          <h2 className="font-display font-bold text-[20px] text-ink mb-1">
             Who was on the call?
           </h2>
           <p className="text-[12px] text-text-3">
@@ -114,7 +114,7 @@ export default function SpeakerMapper({ meetingId, speakers, onComplete }: Speak
           <button
             onClick={() => save(false)}
             disabled={saving}
-            className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97] disabled:opacity-60"
+            className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all active:scale-[.97] disabled:opacity-60"
           >
             {saving ? (
               <>

@@ -239,7 +239,7 @@ export function registerIpcHandlers(): void {
     const openaiKey = getSetting('openaiApiKey') || process.env['OPENAI_API_KEY'] || ''
     const anthropicKey = getSetting('anthropicApiKey')
     const useAnthropic = getSetting('aiProvider') === 'anthropic' && !!anthropicKey
-    if (!useAnthropic && !openaiKey) throw new Error('No AI key configured. Contact support@nocodly.com')
+    if (!useAnthropic && !openaiKey) throw new Error('No AI key configured. Contact hello@minutama.com')
     const planModel = 'gpt-4o'
     const engine = new PeriodReportEngine({
       anthropicApiKey: useAnthropic ? anthropicKey : undefined,
@@ -308,7 +308,7 @@ export function registerIpcHandlers(): void {
   handle('settings:getAll', async () => getAllSettings())
 
   // --- Google OAuth (in-app BrowserWindow) ---------------------------------
-  // Opens the OAuth URL in a child window, intercepts the briefos:// redirect,
+  // Opens the OAuth URL in a child window, intercepts the minutama:// redirect,
   // and forwards the callback URL to the renderer via auth:deeplink — no custom
   // OS protocol registration needed (works in both dev and packaged builds).
   handle('auth:openOAuthWindow', async (_e, oauthUrl: string) => {
@@ -319,13 +319,14 @@ export function registerIpcHandlers(): void {
       parent,
       modal: true,
       title: 'Sign in with Google',
+      autoHideMenuBar: true,
       webPreferences: { nodeIntegration: false, contextIsolation: true }
     })
 
     win.loadURL(oauthUrl)
 
     const intercept = (ev: Electron.Event, url: string) => {
-      if (url.startsWith('briefos://')) {
+      if (url.startsWith('minutama://') || url.startsWith('briefos://')) {
         ev.preventDefault()
         sendToRenderer('auth:deeplink', url)
         setImmediate(() => { if (!win.isDestroyed()) win.close() })

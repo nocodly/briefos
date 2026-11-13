@@ -40,8 +40,9 @@ function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#F7F9FC',
+    backgroundColor: '#FBFAF7',
     titleBarStyle: 'hiddenInset',
+    autoHideMenuBar: true,
     show: false, // shown on ready-to-show to avoid white flash
     webPreferences: {
       preload: PRELOAD,
@@ -216,7 +217,10 @@ function registerGlobalShortcuts(): void {
   }
 }
 
-// Handle OAuth deep links: briefos://auth/callback?code=...
+// Handle OAuth deep links: minutama://auth/callback?code=... (briefos:// kept
+// for links issued before the rebrand).
+const isAuthLink = (arg: string): boolean => arg.startsWith('minutama://') || arg.startsWith('briefos://')
+
 // Windows sends the URL as a second-instance argument.
 function handleDeepLink(url: string): void {
   console.log('[main] deep link:', url)
@@ -237,7 +241,7 @@ if (!gotLock) {
   // On Windows the deep-link URL arrives as a command-line argument of the
   // second instance (the first instance receives it via second-instance event).
   app.on('second-instance', (_event, argv) => {
-    const url = argv.find((arg) => arg.startsWith('briefos://'))
+    const url = argv.find(isAuthLink)
     if (url) {
       handleDeepLink(url)
     } else if (mainWindow) {
@@ -247,7 +251,8 @@ if (!gotLock) {
     }
   })
 
-  // Register briefos:// as a custom protocol so the OS routes OAuth callbacks here.
+  // Register minutama:// (and legacy briefos://) so the OS routes OAuth callbacks here.
+  app.setAsDefaultProtocolClient('minutama')
   app.setAsDefaultProtocolClient('briefos')
 
   // On macOS the deep link arrives via open-url (not second-instance).
@@ -256,9 +261,9 @@ if (!gotLock) {
   app.whenReady().then(() => {
     console.log('[main] app ready — APP_ENV:', process.env.APP_ENV ?? 'production')
 
-    // Dev-mode: if launched with a briefos:// URL directly (e.g. from a test),
+    // Dev-mode: if launched with a minutama:// URL directly (e.g. from a test),
     // handle it after the window is ready.
-    const devDeepLink = process.argv.find((arg) => arg.startsWith('briefos://'))
+    const devDeepLink = process.argv.find(isAuthLink)
     if (devDeepLink) setTimeout(() => handleDeepLink(devDeepLink), 1500)
 
     mainWindow = createMainWindow()

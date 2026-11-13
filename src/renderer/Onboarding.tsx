@@ -20,8 +20,8 @@ export default function Onboarding({ onDone }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-blue-deep flex items-center justify-center p-6 font-body">
-      <div className="w-full max-w-[520px] bg-surface rounded-modal p-8 shadow-xl animate-fade-up">
+    <div className="min-h-screen flex items-center justify-center p-6 font-body">
+      <div className="w-full max-w-[520px] glass-strong rounded-modal p-8 animate-fade-up">
         <div className="flex gap-1.5 mb-7">
           {[0, 1].map((i) => (
             <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border'}`} />
@@ -41,14 +41,14 @@ export default function Onboarding({ onDone }: Props) {
           {step === 0 ? (
             <button
               onClick={() => setStep(1)}
-              className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-semibold"
+              className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold"
             >
               Continue
             </button>
           ) : (
             <button
               onClick={finish}
-              className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-semibold"
+              className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold"
             >
               Start using Minutama
             </button>
@@ -67,12 +67,12 @@ function Welcome() {
   ]
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[26px] text-blue-deep mb-2">Welcome to Minutama</h1>
+      <h1 className="font-display font-extrabold text-[26px] text-ink mb-2">Welcome to Minutama</h1>
       <p className="text-[14px] text-text-2 mb-6">AI notes for every meeting.</p>
       <div className="space-y-4">
         {points.map((p) => (
           <div key={p.title} className="flex gap-3">
-            <div className="w-9 h-9 rounded-card bg-blue-tint flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-card bg-accent-soft flex items-center justify-center flex-shrink-0">
               <i className={`ti ti-${p.icon} text-[18px] text-accent`} />
             </div>
             <div>
@@ -120,14 +120,14 @@ function MicStep() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px] text-blue-deep mb-2">Allow your microphone</h1>
+      <h1 className="font-display font-extrabold text-[24px] text-ink mb-2">Allow your microphone</h1>
       <p className="text-[14px] text-text-2 mb-6">
         Minutama records your voice and your computer&apos;s audio only while you take notes. Audio is never stored.
       </p>
       {state === 'idle' && (
         <button
           onClick={allow}
-          className="w-full border-2 border-dashed border-accent/40 rounded-panel py-6 text-accent font-semibold text-[14px] hover:bg-blue-tint transition-all"
+          className="w-full border-2 border-dashed border-accent/40 rounded-panel py-6 text-accent font-semibold text-[14px] hover:bg-accent-soft transition-all"
         >
           <i className="ti ti-microphone text-[18px]" /> Allow microphone
         </button>

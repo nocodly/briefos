@@ -122,7 +122,7 @@ export async function exportPeriodReportPdf(
   if (!report) throw new Error(`Period report ${reportId} not found`)
 
   const safe = String(report.period_label || 'period').replace(/[^\w\-]+/g, '_').slice(0, 60)
-  const target = outputPath ?? join(app.getPath('downloads'), `BriefOS_${safe}.pdf`)
+  const target = outputPath ?? join(app.getPath('downloads'), `Minutama_${safe}.pdf`)
 
   let browser
   try {

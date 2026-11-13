@@ -4,9 +4,9 @@
 export const SITE = {
   name: 'Minutama',
   url: 'https://minutama.com',
-  tagline: 'AI notes for every meeting. No bot.',
+  tagline: 'Your AI meeting agent. No bot joins the call.',
   description:
-    'Minutama listens to your calls right on your computer — no bot joins — and turns a few typed words into clear notes, decisions and next steps. Free for Windows.',
+    'Minutama Agent listens to your calls right on your computer — no bot joins — writes clear notes, decisions and next steps, and gets them to where you work. Free for Windows.',
   email: 'hello@minutama.com',
   /** Windows installer. Override with NEXT_PUBLIC_DOWNLOAD_URL once releases move. */
   downloadUrl:

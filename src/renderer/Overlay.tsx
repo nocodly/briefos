@@ -59,7 +59,7 @@ export default function Overlay() {
 
   return (
     <div
-      className="h-screen w-screen flex items-center px-3.5 gap-3 bg-blue-deep/95 rounded-[18px] border border-white/10 shadow-2xl backdrop-blur-md select-none"
+      className="h-screen w-screen flex items-center px-3.5 gap-3 glass-dark rounded-[18px] shadow-2xl select-none"
       style={{ WebkitAppRegion: 'drag' } as unknown as React.CSSProperties}
     >
       {/* Recording status dot */}
@@ -110,7 +110,7 @@ function AudioWave({ active }: { active: boolean }) {
       {bars.map((h, i) => (
         <div
           key={i}
-          className="w-[3px] rounded-sm bg-[#7CB9FF]"
+          className="w-[3px] rounded-sm bg-accent"
           style={{
             height: active ? `${h}px` : '4px',
             transformOrigin: 'bottom',

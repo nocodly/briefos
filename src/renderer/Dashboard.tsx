@@ -33,11 +33,11 @@ function fmtDate(iso: string): string {
 }
 
 const TYPE_STYLE: Record<string, string> = {
-  standup: 'bg-blue-tint text-accent',
+  standup: 'bg-accent-soft text-accent',
   sales: 'bg-green-soft text-green',
   strategy: 'bg-purple-soft text-purple',
   onboarding: 'bg-amber-soft text-amber',
-  review: 'bg-blue-tint text-accent',
+  review: 'bg-accent-soft text-accent',
   other: 'bg-bg-2 text-text-3'
 }
 
@@ -116,10 +116,10 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
   return (
     <div className="min-h-screen bg-bg font-body text-text">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-bg/90 backdrop-blur border-b border-border px-8 py-5">
+      <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="font-display font-extrabold text-[24px] text-blue-deep">Meetings</h1>
+            <h1 className="font-display font-extrabold text-[24px] text-ink">Meetings</h1>
             <p className="text-[12px] text-text-3 mt-0.5">
               {meetings.length} {meetings.length === 1 ? 'meeting' : 'meetings'}
               {searching ? ' · search results' : ''}
@@ -129,7 +129,7 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
           <div className="flex flex-col items-end gap-1">
             <button
               onClick={startRecording}
-              className="bg-accent hover:bg-blue-mid text-white rounded-lg px-4 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97]"
+              className="btn-accent rounded-lg px-4 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all active:scale-[.97]"
             >
               <i className="ti ti-microphone text-[15px]" /> New meeting
             </button>
@@ -201,11 +201,11 @@ function MeetingCard({
 }) {
   const snippet = meeting.excerpt || meeting.tldr || ''
   return (
-    <div className="group bg-surface border border-border-soft rounded-panel shadow-sm hover:border-accent/40 hover:shadow-md transition-all">
+    <div className="group glass rounded-panel hover:border-accent/40  transition-all">
       <div className="flex items-center gap-4 p-[18px]">
         <button onClick={onOpen} className="flex-1 text-left min-w-0">
           <div className="flex items-center gap-2.5 mb-1">
-            <span className="font-display font-bold text-[15px] text-blue-deep truncate">
+            <span className="font-display font-bold text-[15px] text-ink truncate">
               {meeting.title}
             </span>
             <span
@@ -262,11 +262,11 @@ function MeetingCard({
 function EmptyState({ searching, onStart }: { searching: boolean; onStart: () => void }) {
   if (searching) return <Centered icon="search-off" text="No meetings match your search" />
   return (
-    <div className="bg-surface border border-border-soft rounded-panel p-12 text-center">
-      <div className="w-14 h-14 rounded-panel bg-blue-tint flex items-center justify-center mx-auto mb-4">
+    <div className="glass rounded-panel p-12 text-center">
+      <div className="w-14 h-14 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-4">
         <i className="ti ti-microphone-2 text-[28px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[17px] text-blue-deep mb-1">No meetings yet</h3>
+      <h3 className="font-display font-bold text-[17px] text-ink mb-1">No meetings yet</h3>
       <p className="text-[13px] text-text-3 mb-6 max-w-[320px] mx-auto">
         Join any call, press{' '}
         <kbd className="font-mono text-[11px] bg-bg-2 border border-border rounded px-1.5 py-0.5">
@@ -276,7 +276,7 @@ function EmptyState({ searching, onStart }: { searching: boolean; onStart: () =>
       </p>
       <button
         onClick={onStart}
-        className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97]"
+        className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all active:scale-[.97]"
       >
         <i className="ti ti-microphone text-[15px]" /> New meeting
       </button>
@@ -307,7 +307,7 @@ function UsageBadge({ usage }: { usage: UsageInfo }) {
       ? 'bg-red-soft text-red border-red/20'
       : left <= 3
         ? 'bg-amber-soft text-amber border-amber/20'
-        : 'bg-blue-tint text-accent border-accent/20'
+        : 'bg-accent-soft text-accent border-accent/20'
   return (
     <div className={`flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border ${tone}`}>
       <i className="ti ti-gift text-[13px]" />

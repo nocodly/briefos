@@ -101,8 +101,8 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 
   return (
     <div className="min-h-screen bg-bg font-body text-text">
-      <div className="sticky top-0 z-10 bg-bg/90 backdrop-blur border-b border-border px-8 py-5 flex items-center justify-between">
-        <h1 className="font-display font-extrabold text-[24px] text-blue-deep">Settings</h1>
+      <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5 flex items-center justify-between">
+        <h1 className="font-display font-extrabold text-[24px] text-ink">Settings</h1>
         <button
           onClick={() => navigate('dashboard')}
           className="text-text-3 hover:text-text-2 hover:bg-bg-2 rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all"
@@ -121,7 +121,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
         <Panel title="Plan" icon="crown" desc={email ? `Signed in as ${email}` : 'Your Minutama plan.'}>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="font-display font-bold text-[16px] text-blue-deep">
+              <div className="font-display font-bold text-[16px] text-ink">
                 {isPro ? 'Pro' : 'Free'}
               </div>
               <div className="text-[12px] text-text-3 mt-0.5">
@@ -135,7 +135,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
             {!isPro && (
               <button
                 onClick={upgrade}
-                className="bg-accent hover:bg-blue-mid text-white rounded-lg px-4 py-2 text-[13px] font-semibold flex items-center gap-1.5 transition-all"
+                className="btn-accent rounded-lg px-4 py-2 text-[13px] font-semibold flex items-center gap-1.5 transition-all"
               >
                 <i className="ti ti-crown text-[15px]" /> Upgrade — $12/mo
               </button>
@@ -170,14 +170,14 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
 
   if (state === 'idle') {
     return (
-      <div className="flex items-center justify-between bg-surface border border-border-soft rounded-lg px-4 py-3">
+      <div className="flex items-center justify-between glass rounded-xl px-4 py-3">
         <div className="flex items-center gap-2 text-[12px] text-text-3">
           <i className="ti ti-refresh text-[15px] text-accent" />
           Check for app updates
         </div>
         <button
           onClick={check}
-          className="text-[12px] font-medium text-accent hover:text-blue-mid bg-blue-tint hover:bg-blue-tint/80 px-3 py-1.5 rounded-lg transition-all"
+          className="text-[12px] font-medium text-accent hover:text-accent-ink bg-accent-soft hover:bg-accent-soft/80 px-3 py-1.5 rounded-lg transition-all"
         >
           Check now
         </button>
@@ -187,7 +187,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
 
   if (state === 'checking') {
     return (
-      <div className="flex items-center gap-2 bg-surface border border-border-soft rounded-lg px-4 py-3 text-[12px] text-text-3">
+      <div className="flex items-center gap-2 glass rounded-xl px-4 py-3 text-[12px] text-text-3">
         <i className="ti ti-loader-2 animate-spin-slow text-[15px] text-accent" />
         Checking for updates…
       </div>
@@ -196,7 +196,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
 
   if (state === 'none') {
     return (
-      <div className="flex items-center justify-between bg-surface border border-border-soft rounded-lg px-4 py-3">
+      <div className="flex items-center justify-between glass rounded-xl px-4 py-3">
         <div className="flex items-center gap-2 text-[12px] text-green">
           <i className="ti ti-circle-check text-[15px]" />
           You're on the latest version
@@ -208,9 +208,9 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
 
   if (state === 'available' || state === 'downloading') {
     return (
-      <div className="bg-blue-tint border border-accent/20 rounded-lg px-4 py-3 space-y-2">
+      <div className="bg-accent-soft border border-accent/20 rounded-lg px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-blue-deep">
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-ink">
             <i className="ti ti-download text-[15px] text-accent" />
             Update available{version ? ` — v${version}` : ''}
           </div>
@@ -219,7 +219,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
           )}
         </div>
         {state === 'downloading' && (
-          <div className="w-full h-1.5 bg-blue-tint border border-accent/20 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-accent-soft border border-accent/20 rounded-full overflow-hidden">
             <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${percent}%` }} />
           </div>
         )}
@@ -277,9 +277,9 @@ function Panel({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-surface border border-border-soft rounded-panel shadow-sm overflow-hidden">
+    <div className="glass rounded-panel overflow-hidden">
       <div className="px-[18px] py-3.5 border-b border-border-soft bg-bg flex items-center gap-2">
-        <div className="w-7 h-7 rounded-lg bg-blue-tint flex items-center justify-center">
+        <div className="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center">
           <i className={`ti ti-${icon} text-[15px] text-accent`} />
         </div>
         <div>

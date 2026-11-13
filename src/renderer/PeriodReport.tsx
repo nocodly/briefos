@@ -3,7 +3,7 @@ import { invoke, subscribe } from './lib/ipc'
 import Processing from './Processing'
 
 // =============================================================================
-// PeriodReport — BriefOS's differentiator. Pick a period → ai:generatePeriodReport
+// PeriodReport — Minutama's differentiator. Pick a period → ai:generatePeriodReport
 // → render the cross-meeting intelligence report. Listens to progress:periodReport
 // for live status and exports via export:periodReportPdf.
 // =============================================================================
@@ -181,7 +181,7 @@ export default function PeriodReport() {
   return (
     <div className="min-h-screen bg-bg font-body text-text">
       {/* Period picker bar */}
-      <div className="sticky top-0 z-10 bg-blue-deep px-8 py-5">
+      <div className="sticky top-3 z-10 glass-dark mx-6 mt-3 rounded-panel px-8 py-5">
         <h1 className="font-display font-extrabold text-[22px] text-white mb-3">
           Period Intelligence
         </h1>
@@ -263,15 +263,15 @@ function EmptyState({
   onGenerate: () => void
 }) {
   return (
-    <div className="bg-surface border border-border-soft rounded-panel p-12 text-center animate-fade-up">
-      <div className="w-14 h-14 rounded-panel bg-blue-tint flex items-center justify-center mx-auto mb-4">
+    <div className="glass rounded-panel p-12 text-center animate-fade-up">
+      <div className="w-14 h-14 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-4">
         <i className="ti ti-chart-histogram text-[28px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[18px] text-blue-deep mb-1">
+      <h3 className="font-display font-bold text-[18px] text-ink mb-1">
         Analyze {period.toLowerCase()}
       </h3>
       <p className="text-[13px] text-text-3 mb-1 max-w-[420px] mx-auto">
-        BriefOS reads every meeting in this period and surfaces decisions, open actions, recurring
+        Minutama reads every meeting in this period and surfaces decisions, open actions, recurring
         questions, themes, and who drove the conversation.
       </p>
       {count !== null && (
@@ -284,7 +284,7 @@ function EmptyState({
         <button
           onClick={onGenerate}
           disabled={count === 0}
-          className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97] disabled:opacity-50"
+          className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all active:scale-[.97] disabled:opacity-50"
         >
           <i className="ti ti-sparkles text-[15px]" /> Generate Report
         </button>
@@ -322,10 +322,10 @@ function ReportView({
   return (
     <div className="space-y-4 animate-fade-up">
       {/* Hero */}
-      <div className="bg-blue-deep rounded-panel px-7 py-6 text-white">
+      <div className="glass-dark rounded-panel px-7 py-6 text-white">
         <div className="flex items-start justify-between">
           <div>
-            <div className="text-[12px] text-[#B9CBE4] mb-1">{period}</div>
+            <div className="text-[12px] text-white/60 mb-1">{period}</div>
             <h2 className="font-display font-extrabold text-[22px]">Intelligence Report</h2>
           </div>
           <button
@@ -490,7 +490,7 @@ function ReportView({
           {report.keywords.length ? (
             <div className="flex flex-wrap gap-1.5">
               {report.keywords.map((k) => (
-                <span key={k} className="text-[11px] px-2.5 py-1 rounded-full bg-blue-tint text-text-2">
+                <span key={k} className="text-[11px] px-2.5 py-1 rounded-full bg-accent-soft text-text-2">
                   {k}
                 </span>
               ))}
@@ -508,14 +508,14 @@ function Stat({ num, label }: { num: number; label: string }) {
   return (
     <div>
       <div className="font-display font-extrabold text-[22px]">{num}</div>
-      <div className="text-[11px] text-[#B9CBE4] uppercase tracking-wide">{label}</div>
+      <div className="text-[11px] text-white/60 uppercase tracking-wide">{label}</div>
     </div>
   )
 }
 
 function Insight({ insight }: { insight: Insight }) {
   const style: Record<string, { c: string; icon: string }> = {
-    pattern: { c: 'bg-blue-tint text-accent', icon: 'chart-dots' },
+    pattern: { c: 'bg-accent-soft text-accent', icon: 'chart-dots' },
     warning: { c: 'bg-red-soft text-red', icon: 'alert-triangle' },
     opportunity: { c: 'bg-green-soft text-green', icon: 'trending-up' }
   }
@@ -558,9 +558,9 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-surface border border-border-soft rounded-panel shadow-sm overflow-hidden">
+    <div className="glass rounded-panel overflow-hidden">
       <div className="flex items-center gap-2 px-[18px] py-3.5 border-b border-border-soft bg-bg">
-        <div className="w-7 h-7 rounded-lg bg-blue-tint flex items-center justify-center">
+        <div className="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center">
           <i className={`ti ti-${icon} text-[15px] text-accent`} />
         </div>
         <span className="text-[12px] font-semibold text-text tracking-wide">{title}</span>

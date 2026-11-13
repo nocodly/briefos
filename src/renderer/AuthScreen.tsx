@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabaseClient'
 import { subscribe, invoke } from './lib/ipc'
+import { LogoMark } from './components/Logo'
 
 // =============================================================================
 // AuthScreen — Login / Register with email+password or Google OAuth.
-// Google flow: opens system browser → Google → Supabase → briefos://auth/callback
+// Google flow: in-app OAuth window → Google → Supabase → briefos://auth/callback.
+// The redirect is intercepted inside that window (auth:openOAuthWindow), so users
+// never see the scheme; it stays briefos:// because that URL is on the Supabase
+// redirect allow-list.
 // Main process catches the deep link and sends 'auth:deeplink' to the renderer.
 // =============================================================================
 
@@ -111,7 +115,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       })
       if (err) throw new Error(err.message)
       if (!data.url) throw new Error('No OAuth URL returned')
-      // Open inside a child BrowserWindow so we can intercept the briefos:// redirect.
+      // Open inside a child BrowserWindow so we can intercept the redirect.
       await invoke('auth:openOAuthWindow', data.url)
       // Loading stays true until auth:deeplink arrives (see useEffect above).
     } catch (err) {
@@ -120,84 +124,76 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-bg flex font-body text-text">
-      {/* ── Left panel ── */}
-      <div className="w-[420px] flex-shrink-0 bg-blue-deep flex flex-col justify-between p-10">
-        {/* Logos */}
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-[22px] h-[22px] rounded-md bg-white/10 flex items-center justify-center">
-              <i className="ti ti-code text-[13px] text-white/70" />
-            </div>
-            <span className="text-[12px] font-semibold text-white/50 tracking-wide uppercase">Developer</span>
-            <span className="text-white/20 mx-1">·</span>
-            <span className="text-[12px] font-bold text-white/70">Nocodly</span>
-          </div>
+  const inputCls =
+    'w-full text-[13px] bg-white/70 border border-border rounded-xl px-3.5 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:ring-4 focus:ring-accent/15 focus:outline-none transition-all'
 
-          <div className="flex items-center gap-2.5 mt-6">
-            <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-[0_4px_16px_rgba(26,86,219,.5)]">
-              <i className="ti ti-broadcast text-[22px] text-white" />
-            </div>
-            <span className="font-display font-extrabold text-[26px] text-white">
-              Brief<span className="text-[#7CB9FF]">OS</span>
+  return (
+    <div className="min-h-screen flex font-body text-text p-3 gap-3">
+      {/* ── Left: brand panel ── */}
+      <div className="bg-ink relative w-[420px] flex-shrink-0 rounded-panel overflow-hidden flex flex-col justify-between p-10 text-white">
+        <div className="pointer-events-none absolute -top-28 -left-20 h-80 w-80 rounded-full bg-accent/55 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-32 right-[-80px] h-96 w-96 rounded-full bg-accent/30 blur-3xl" />
+
+        <div className="relative">
+          <div className="flex items-center gap-2.5">
+            <LogoMark size={40} className="drop-shadow-[0_10px_24px_rgba(255,106,61,.55)]" />
+            <span className="font-display font-bold text-[24px] tracking-[-0.02em]">Minutama</span>
+            <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
+              Agent
             </span>
           </div>
-
-          <p className="text-[13px] text-white/50 mt-3 leading-relaxed max-w-[280px]">
-            AI meeting recorder that runs entirely on your computer.
+          <h1 className="font-display font-bold text-[30px] leading-[1.1] mt-8">
+            Your AI meeting agent.
+            <span className="block text-white/55">No bot joins the call.</span>
+          </h1>
+          <p className="text-[13px] text-white/60 mt-4 leading-relaxed max-w-[300px]">
+            Minutama listens on your computer, writes the notes, and sends decisions and next steps where you work.
           </p>
         </div>
 
-        {/* Trust features */}
-        <div className="space-y-5">
+        <div className="relative space-y-4">
           {[
-            { icon: 'device-laptop', title: 'Stored on your device', desc: 'All recordings and transcripts stay on your computer. Never uploaded.' },
-            { icon: 'lock', title: 'Direct API calls only', desc: 'Audio goes straight to OpenAI or Anthropic — no middleman server.' },
-            { icon: 'eye-off', title: 'Zero telemetry', desc: 'We don\'t track what you record, who you speak with, or when.' },
+            { icon: 'microphone-off', title: 'No meeting bot', desc: 'Captures your mic and computer audio — nobody sees a recorder join.' },
+            { icon: 'sparkles', title: 'Notes that write themselves', desc: 'Type a few words; Minutama turns them into clear notes, decisions and action items.' },
+            { icon: 'shield-lock', title: 'Private by default', desc: 'Audio is never stored. Notes live on your computer.' }
           ].map((f) => (
             <div key={f.icon} className="flex items-start gap-3">
-              <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <i className={`ti ti-${f.icon} text-[16px] text-[#7CB9FF]`} />
+              <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <i className={`ti ti-${f.icon} text-[16px] text-accent-pale`} />
               </div>
               <div>
-                <div className="text-[12px] font-semibold text-white">{f.title}</div>
-                <div className="text-[11px] text-white/45 mt-0.5 leading-relaxed">{f.desc}</div>
+                <div className="text-[12.5px] font-semibold">{f.title}</div>
+                <div className="text-[11.5px] text-white/50 mt-0.5 leading-relaxed">{f.desc}</div>
               </div>
             </div>
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center gap-2 mt-8">
-          <span className="text-[11px] text-white/30">Built by</span>
-          <button
-            onClick={() => window.open('https://nocodly.com', '_blank')}
-            className="text-[11px] text-white/50 hover:text-white/80 transition-all underline underline-offset-2"
-          >
-            nocodly.com
-          </button>
-        </div>
+        <button
+          onClick={() => window.open('https://minutama.com', '_blank')}
+          className="relative self-start text-[11px] text-white/40 hover:text-white/80 transition-all"
+        >
+          minutama.com
+        </button>
       </div>
 
-      {/* ── Right panel ── */}
-      <div className="flex-1 flex items-center justify-center p-10">
-        <div className="w-full max-w-[380px]">
-          <h2 className="font-display font-extrabold text-[24px] text-blue-deep mb-1">
+      {/* ── Right: form ── */}
+      <div className="flex-1 flex items-center justify-center p-6">
+        <div className="glass-strong w-full max-w-[400px] rounded-panel p-8">
+          <h2 className="font-display font-bold text-[24px] mb-1">
             {tab === 'register' ? 'Create your account' : 'Welcome back'}
           </h2>
-          <p className="text-[13px] text-text-3 mb-7">
-            {tab === 'register' ? '10 free meetings included — no card needed.' : 'Sign in to continue to BriefOS.'}
+          <p className="text-[13px] text-text-3 mb-6">
+            {tab === 'register' ? '10 free meetings a month — no card needed.' : 'Sign in to continue to Minutama.'}
           </p>
 
-          {/* Tabs */}
-          <div className="flex gap-1 bg-bg-2 rounded-lg p-1 mb-6">
+          <div className="flex gap-1 bg-sand/70 rounded-xl p-1 mb-5">
             {(['register', 'login'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => { setTab(t); setError('') }}
-                className={`flex-1 py-2 rounded-md text-[12px] font-semibold transition-all ${
-                  tab === t ? 'bg-surface shadow text-text' : 'text-text-3 hover:text-text-2'
+                className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all ${
+                  tab === t ? 'bg-white shadow-[0_1px_3px_rgba(21,23,28,.1)] text-text' : 'text-text-3 hover:text-text-2'
                 }`}
               >
                 {t === 'register' ? 'Create account' : 'Sign in'}
@@ -205,11 +201,10 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
             ))}
           </div>
 
-          {/* Google */}
           <button
             onClick={handleGoogle}
             disabled={googleLoading || loading}
-            className="w-full flex items-center justify-center gap-2.5 border border-border hover:border-accent/50 bg-surface hover:bg-blue-tint/30 rounded-lg py-2.5 text-[13px] font-medium text-text transition-all mb-5 disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2.5 border border-border hover:border-accent/40 bg-white/80 hover:bg-white rounded-xl py-2.5 text-[13px] font-medium text-text transition-all mb-5 disabled:opacity-60"
           >
             {googleLoading ? <i className="ti ti-loader-2 animate-spin-slow text-[16px] text-accent" /> : <GoogleIcon />}
             {googleLoading ? 'Waiting for browser…' : 'Continue with Google'}
@@ -219,7 +214,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
 
           <form onSubmit={handleSubmit} className="space-y-4 mt-5">
             <div>
-              <label className="block text-[12px] font-medium text-text mb-1.5">Email</label>
+              <label className="block text-[12px] font-medium text-text-2 mb-1.5">Email</label>
               <input
                 type="email"
                 value={email}
@@ -227,12 +222,12 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
                 placeholder="you@example.com"
                 required
                 autoFocus
-                className="w-full text-[13px] bg-bg border border-border rounded-lg px-3.5 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:outline-none transition-all"
+                className={inputCls}
               />
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-text mb-1.5">Password</label>
+              <label className="block text-[12px] font-medium text-text-2 mb-1.5">Password</label>
               <div className="relative">
                 <input
                   type={showPass ? 'text' : 'password'}
@@ -240,7 +235,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   required
-                  className="w-full text-[13px] bg-bg border border-border rounded-lg px-3.5 py-2.5 pr-10 text-text placeholder:text-text-4 focus:border-accent focus:outline-none transition-all"
+                  className={`${inputCls} pr-10`}
                 />
                 <button type="button" onClick={() => setShowPass((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-3 hover:text-text-2">
                   <i className={`ti ti-${showPass ? 'eye-off' : 'eye'} text-[15px]`} />
@@ -250,20 +245,20 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
 
             {tab === 'register' && (
               <div>
-                <label className="block text-[12px] font-medium text-text mb-1.5">Confirm password</label>
+                <label className="block text-[12px] font-medium text-text-2 mb-1.5">Confirm password</label>
                 <input
                   type={showPass ? 'text' : 'password'}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repeat password"
                   required
-                  className="w-full text-[13px] bg-bg border border-border rounded-lg px-3.5 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:outline-none transition-all"
+                  className={inputCls}
                 />
               </div>
             )}
 
             {error && (
-              <div className="text-[12px] text-red bg-red-soft border border-red/20 rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <div className="text-[12px] text-red bg-red-soft border border-red/20 rounded-xl px-3 py-2 flex items-center gap-1.5">
                 <i className="ti ti-alert-circle text-[14px] flex-shrink-0" />{error}
               </div>
             )}
@@ -271,7 +266,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
             <button
               type="submit"
               disabled={loading || googleLoading}
-              className="w-full bg-accent hover:bg-blue-mid text-white rounded-lg py-2.5 text-[13px] font-semibold flex items-center justify-center gap-2 transition-all shadow-[0_2px_8px_rgba(26,86,219,.25)] active:scale-[.98] disabled:opacity-60"
+              className="btn-accent w-full rounded-xl py-2.5 text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[.98] disabled:opacity-60"
             >
               {loading ? (
                 <><i className="ti ti-loader-2 animate-spin-slow text-[15px]" /> Please wait…</>
@@ -282,6 +277,13 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
               )}
             </button>
           </form>
+
+          <p className="text-[11px] text-text-3 mt-5 text-center leading-relaxed">
+            By continuing you agree to the{' '}
+            <button type="button" onClick={() => window.open('https://minutama.com/terms', '_blank')} className="underline hover:text-text-2">Terms</button>
+            {' '}and{' '}
+            <button type="button" onClick={() => window.open('https://minutama.com/privacy', '_blank')} className="underline hover:text-text-2">Privacy Policy</button>.
+          </p>
         </div>
       </div>
     </div>

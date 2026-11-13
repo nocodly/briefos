@@ -69,8 +69,8 @@ export default function Markdown({ source }: { source: string }) {
           key={blocks.length}
           className={
             level === 1
-              ? 'font-display font-bold text-[20px] text-blue-deep mt-2 mb-3'
-              : 'font-display font-bold text-[15px] text-blue-deep mt-5 mb-2'
+              ? 'font-display font-bold text-[20px] text-ink mt-2 mb-3'
+              : 'font-display font-bold text-[15px] text-ink mt-5 mb-2'
           }
         >
           {inline(h[2])}

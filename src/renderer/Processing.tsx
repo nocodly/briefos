@@ -47,10 +47,10 @@ export default function Processing({ step }: { step: string }) {
   const active = activeIndex(step)
 
   return (
-    <div className="fixed inset-0 bg-blue-deep/60 backdrop-blur-sm z-50 flex items-center justify-center font-body">
-      <div className="bg-surface rounded-modal p-9 w-[420px] shadow-2xl animate-fade-up">
-        <div className="w-14 h-14 border-[3px] border-blue-pale border-t-accent rounded-full animate-spin-slow mx-auto mb-5" />
-        <h2 className="font-display font-bold text-[20px] text-blue-deep text-center mb-1">
+    <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm z-50 flex items-center justify-center font-body">
+      <div className="glass-strong rounded-modal p-9 w-[420px] animate-fade-up">
+        <div className="w-14 h-14 border-[3px] border-accent-pale border-t-accent rounded-full animate-spin-slow mx-auto mb-5" />
+        <h2 className="font-display font-bold text-[20px] text-ink text-center mb-1">
           Analyzing your meeting
         </h2>
         <p className="text-[12px] text-text-3 text-center mb-6 min-h-[18px]">
@@ -66,7 +66,7 @@ export default function Processing({ step }: { step: string }) {
                 key={stage.key}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-card border transition-all ${
                   current
-                    ? 'border-accent/30 bg-blue-tint'
+                    ? 'border-accent/30 bg-accent-soft'
                     : done
                       ? 'border-border-soft bg-surface'
                       : 'border-border-soft bg-bg opacity-60'

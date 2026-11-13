@@ -82,9 +82,9 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
   const hasSession = Boolean(s.meetingId) && s.status !== 'starting'
 
   return (
-    <div className="h-screen flex flex-col bg-bg font-body text-text">
+    <div className="h-full flex flex-col font-body text-text">
       {/* ── Top bar ── */}
-      <div className="flex items-center gap-3 px-6 py-3 border-b border-border bg-surface">
+      <div className="glass mx-3 mt-3 rounded-panel flex items-center gap-3 px-5 py-3">
         <button
           onClick={() => navigate('dashboard')}
           className="text-text-3 hover:text-text transition-colors"
@@ -92,7 +92,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
         >
           <i className="ti ti-arrow-left text-[18px]" />
         </button>
-        <h1 className="font-display font-bold text-[16px] text-blue-deep flex-1 truncate">
+        <h1 className="font-display font-bold text-[16px] text-ink flex-1 truncate">
           {s.enhanced?.title ?? (live ? 'Meeting in progress' : 'New meeting')}
         </h1>
 
@@ -119,14 +119,14 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
             {s.status === 'recording' ? (
               <button
                 onClick={() => void pauseMeeting()}
-                className="px-3 py-1.5 rounded-lg border border-border text-[12px] text-text-2 hover:bg-blue-tint"
+                className="px-3 py-1.5 rounded-lg border border-border text-[12px] text-text-2 hover:bg-accent-soft"
               >
                 <i className="ti ti-player-pause text-[14px]" /> Pause
               </button>
             ) : (
               <button
                 onClick={() => resumeMeeting()}
-                className="px-3 py-1.5 rounded-lg border border-border text-[12px] text-text-2 hover:bg-blue-tint"
+                className="px-3 py-1.5 rounded-lg border border-border text-[12px] text-text-2 hover:bg-accent-soft"
               >
                 <i className="ti ti-player-play text-[14px]" /> Resume
               </button>
@@ -144,7 +144,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           <button
             onClick={() => void startMeetingSession()}
             disabled={s.status === 'starting'}
-            className="px-4 py-1.5 rounded-lg bg-accent text-white text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60"
+            className="px-4 py-1.5 rounded-lg btn-accent text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60"
           >
             <i className={`ti ${s.status === 'starting' ? 'ti-loader-2 animate-spin-slow' : 'ti-microphone'} text-[15px]`} />
             {s.status === 'starting' ? 'Starting…' : hasSession ? 'New meeting' : 'Start notes'}
@@ -164,7 +164,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
       {/* ── Error / upgrade banner ── */}
       {s.error && (
         <div
-          className={`mx-6 mt-3 px-4 py-2.5 rounded-card text-[13px] flex items-center gap-2 border ${
+          className={`mx-3 mt-3 px-4 py-2.5 rounded-card text-[13px] flex items-center gap-2 border ${
             s.upgradeNeeded ? 'bg-amber-soft border-amber/30 text-amber' : 'bg-red-soft border-red/20 text-red'
           }`}
         >
@@ -179,7 +179,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
       {/* ── Body ── */}
       <div className="flex-1 flex min-h-0">
         {/* Notes */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="glass m-3 flex-1 flex flex-col min-w-0 rounded-panel overflow-hidden">
           {s.enhanced && (
             <div className="flex gap-1 px-8 pt-4">
               {(['ai', 'notes'] as const).map((v) => (
@@ -187,7 +187,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
                   key={v}
                   onClick={() => setView(v)}
                   className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
-                    view === v ? 'bg-blue-tint text-accent' : 'text-text-3 hover:text-text'
+                    view === v ? 'bg-accent-soft text-accent' : 'text-text-3 hover:text-text'
                   }`}
                 >
                   {v === 'ai' ? '✨ AI notes' : 'My notes'}
@@ -224,7 +224,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
         </div>
 
         {/* Live transcript */}
-        <aside className="w-[340px] border-l border-border bg-surface flex flex-col">
+        <aside className="glass m-3 ml-0 w-[340px] rounded-panel flex flex-col overflow-hidden">
           <div className="px-4 py-3 border-b border-border-soft text-[12px] font-semibold text-text-2 flex items-center gap-2">
             <i className="ti ti-message-2 text-[15px]" /> Transcript
             {s.pendingUploads > 0 && <i className="ti ti-loader-2 animate-spin-slow text-text-3 ml-auto" />}
@@ -242,7 +242,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
                 </div>
                 <div
                   className={`text-[13px] leading-relaxed rounded-card px-3 py-2 ${
-                    seg.speaker === 'me' ? 'bg-blue-tint text-text' : 'bg-bg-2 text-text-2'
+                    seg.speaker === 'me' ? 'bg-accent-soft text-text' : 'bg-bg-2 text-text-2'
                   }`}
                 >
                   {seg.text}

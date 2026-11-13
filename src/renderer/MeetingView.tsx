@@ -229,7 +229,7 @@ function Hero({
   }
 
   return (
-    <div className="bg-blue-deep px-8 py-7">
+    <div className="glass-dark mx-6 mt-4 rounded-panel px-8 py-7 text-white">
       <button
         onClick={onBack}
         className="text-white/50 hover:text-white text-[12px] flex items-center gap-1 mb-3 transition-all"
@@ -256,7 +256,7 @@ function Hero({
         </h1>
       )}
 
-      <div className="flex items-center gap-5 mt-3 text-[12px] text-[#B9CBE4]">
+      <div className="flex items-center gap-5 mt-3 text-[12px] text-white/60">
         <span className="font-mono">{fmtDate(meeting.started_at)}</span>
         <span className="flex items-center gap-1">
           <i className="ti ti-clock text-[14px]" /> {fmtDuration(meeting.duration_s)}
@@ -291,7 +291,7 @@ function ExportBar(props: {
     <button
       onClick={onClick}
       disabled={!!props.busy}
-      className="bg-surface hover:bg-blue-tint text-text-2 hover:text-accent border border-border hover:border-accent rounded-lg px-3.5 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
+      className="bg-surface hover:bg-accent-soft text-text-2 hover:text-accent border border-border hover:border-accent rounded-lg px-3.5 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
     >
       <i
         className={`ti ti-${props.busy === label ? 'loader-2 animate-spin-slow' : icon} text-[14px]`}
@@ -311,7 +311,7 @@ function ExportBar(props: {
       <button
         onClick={props.onRegenerate}
         disabled={!!props.busy}
-        className="text-text-3 hover:text-accent hover:bg-blue-tint rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
+        className="text-text-3 hover:text-accent hover:bg-accent-soft rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
       >
         <i
           className={`ti ti-${props.busy === 'Regenerate' ? 'loader-2 animate-spin-slow' : 'refresh'} text-[14px]`}
@@ -358,9 +358,9 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-surface border border-border-soft rounded-panel shadow-sm overflow-hidden">
+    <div className="glass rounded-panel overflow-hidden">
       <div className="flex items-center gap-2 px-[18px] py-3.5 border-b border-border-soft bg-bg">
-        <div className="w-7 h-7 rounded-lg bg-blue-tint flex items-center justify-center">
+        <div className="w-7 h-7 rounded-lg bg-accent-soft flex items-center justify-center">
           <i className={`ti ti-${icon} text-[15px] text-accent`} />
         </div>
         <span className="text-[12px] font-semibold text-text tracking-wide">{title}</span>
@@ -436,7 +436,7 @@ function Brief({ summary }: { summary: Summary }) {
               {summary.keywords.map((k) => (
                 <span
                   key={k}
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-blue-tint text-text-2"
+                  className="text-[11px] px-2.5 py-1 rounded-full bg-accent-soft text-text-2"
                 >
                   {k}
                 </span>
@@ -509,16 +509,16 @@ function Transcript({ rows }: { rows: TranscriptRow[] }) {
 
 function NoSummary({ onGenerate, busy }: { onGenerate: () => void; busy: boolean }) {
   return (
-    <div className="bg-surface border border-border-soft rounded-panel p-10 text-center animate-fade-up">
-      <div className="w-12 h-12 rounded-panel bg-blue-tint flex items-center justify-center mx-auto mb-3">
+    <div className="glass rounded-panel p-10 text-center animate-fade-up">
+      <div className="w-12 h-12 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-3">
         <i className="ti ti-sparkles text-[24px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[16px] text-blue-deep mb-1">No summary yet</h3>
+      <h3 className="font-display font-bold text-[16px] text-ink mb-1">No summary yet</h3>
       <p className="text-[12px] text-text-3 mb-5">Generate an AI brief from this meeting's transcript.</p>
       <button
         onClick={onGenerate}
         disabled={busy}
-        className="bg-accent hover:bg-blue-mid text-white rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all shadow-[0_2px_8px_rgba(26,86,219,.22)] active:scale-[.97] disabled:opacity-60"
+        className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all active:scale-[.97] disabled:opacity-60"
       >
         <i className={`ti ti-${busy ? 'loader-2 animate-spin-slow' : 'sparkles'} text-[15px]`} />
         Generate Summary

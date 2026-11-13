@@ -96,6 +96,24 @@ function Check() {
   )
 }
 
+const AGENT_FEATURES = [
+  {
+    icon: '↗',
+    title: 'Sends notes where you work',
+    text: 'Every meeting lands automatically in Notion, Slack, email or any tool through a webhook (Zapier, Make, n8n).'
+  },
+  {
+    icon: '✦',
+    title: 'Works with Claude and other AI',
+    text: 'Connect Minutama to Claude through MCP in one click, so your assistant can search and act on every meeting.'
+  },
+  {
+    icon: '✓',
+    title: 'Proposes the next step',
+    text: '“You agreed to meet Thursday” → add to calendar? “Three tasks” → create a list? You approve, the agent does it.'
+  }
+]
+
 export default function Home() {
   return (
     <>
@@ -108,13 +126,13 @@ export default function Home() {
             className="pointer-events-none absolute left-1/2 top-[-220px] h-[520px] w-[900px] -translate-x-1/2 rounded-full bg-accent/10 blur-3xl"
           />
           <div className="container-x relative pb-24 pt-14 text-center sm:pb-44 sm:pt-20">
-            <p className="eyebrow animate-rise">AI notes · no meeting bot</p>
+            <p className="eyebrow animate-rise">AI meeting agent · no meeting bot</p>
             <h1 className="mx-auto mt-4 max-w-3xl animate-rise font-display text-[44px] font-extrabold leading-[1.02] tracking-[-0.035em] [animation-delay:.05s] sm:text-[68px]">
-              Meeting notes that <span className="text-accent">write themselves</span>
+              Your meeting agent. <span className="text-accent">Notes write themselves.</span>
             </h1>
             <p className="mx-auto mt-5 max-w-xl animate-rise text-[17px] leading-relaxed text-ink-2 [animation-delay:.1s] sm:text-[19px]">
-              Minutama listens on your computer — nothing joins the call — and turns a few typed words into clear
-              notes, decisions and next steps.
+              Minutama Agent listens on your computer — nothing joins the call — turns a few typed words into clear
+              notes, decisions and next steps, and gets them where your team works.
             </p>
             <div className="mt-8 flex animate-rise flex-col items-center justify-center gap-3 [animation-delay:.15s] sm:flex-row">
               <Link href="/download" className="btn-accent w-full sm:w-auto">
@@ -179,6 +197,32 @@ export default function Home() {
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── Agent (roadmap, clearly labelled) ── */}
+        <section id="agent" className="container-x scroll-mt-20 pt-24">
+          <p className="eyebrow">The agent</p>
+          <h2 className="h-section mt-3 max-w-2xl">Notes are the start. Your agent does the follow-through.</h2>
+          <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
+            After every call Minutama knows what was decided and who does what. Next, it takes that where you work —
+            always asking before it acts.
+          </p>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {AGENT_FEATURES.map((f) => (
+              <div key={f.title} className="rounded-xl2 border border-line bg-white p-7">
+                <div className="flex items-center justify-between">
+                  <span className="text-[22px] text-accent" aria-hidden="true">
+                    {f.icon}
+                  </span>
+                  <span className="rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[.08em] text-ink-3">
+                    Coming soon
+                  </span>
+                </div>
+                <h3 className="mt-4 font-display text-[20px] font-bold tracking-[-0.01em]">{f.title}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{f.text}</p>
+              </div>
+            ))}
           </div>
         </section>
 
