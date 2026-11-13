@@ -3,6 +3,7 @@ import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { supabase, STRIPE_PRO_LINK } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
+import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
 
 // ── Updater hook ─────────────────────────────────────────────────────────────
 type UpdaterState = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'none' | 'error'
@@ -47,6 +48,10 @@ interface SettingsState {
   notionToken: string
   notionParentPageId: string
   slackWebhookUrl: string
+  detectCalls: boolean
+  replyHints: boolean
+  agentProvider: AgentId
+  agentAutonomy: 'safe' | 'full'
 }
 
 const DEFAULTS: SettingsState = {
@@ -55,7 +60,11 @@ const DEFAULTS: SettingsState = {
   retentionDays: 90,
   notionToken: '',
   notionParentPageId: '',
-  slackWebhookUrl: ''
+  slackWebhookUrl: '',
+  detectCalls: true,
+  replyHints: true,
+  agentProvider: 'claude',
+  agentAutonomy: 'safe'
 }
 
 export default function Settings({ navigate }: { navigate: NavigateFn }) {
@@ -146,7 +155,18 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">
           <Text label="Start / stop hotkey" value={s.hotkeyRecord} saved={saved === 'hotkeyRecord'} onSave={(v) => set('hotkeyRecord', v)} placeholder="CmdOrCtrl+Shift+B" mono />
           <Toggle label="Launch at startup" value={s.launchAtStartup} onSave={(v) => set('launchAtStartup', v)} />
+          <Toggle label="Offer to take notes when a call starts" value={s.detectCalls} onSave={(v) => set('detectCalls', v)} />
+          <Toggle label="Live reply hints when someone asks you a question" value={s.replyHints} onSave={(v) => set('replyHints', v)} />
           <p className="text-[11px] text-text-3">Tip: use headphones for the cleanest "You / Them" separation.</p>
+        </Panel>
+
+        <Panel title="AI agents" icon="robot" desc="Hand tasks from your meetings to Claude Code or Codex on this computer — with your own account and tools.">
+          <AgentsSettings
+            provider={s.agentProvider}
+            autonomy={s.agentAutonomy}
+            onProvider={(v) => set('agentProvider', v)}
+            onAutonomy={(v) => set('agentAutonomy', v)}
+          />
         </Panel>
 
         <Panel title="Integrations" icon="plug" desc={isPro ? 'Send notes to your tools.' : 'Available on Pro.'}>
@@ -164,6 +184,117 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 }
 
 // ── Update Banner ────────────────────────────────────────────────────────────
+
+// ── AI agents panel ─────────────────────────────────────────────────────────
+function AgentsSettings({
+  provider,
+  autonomy,
+  onProvider,
+  onAutonomy
+}: {
+  provider: AgentId
+  autonomy: 'safe' | 'full'
+  onProvider: (v: AgentId) => void
+  onAutonomy: (v: 'safe' | 'full') => void
+}) {
+  const [agents, setAgents] = useState<AgentInfo[] | null>(null)
+  const [workdir, setWorkdir] = useState('')
+  const [checking, setChecking] = useState(false)
+
+  const refresh = useCallback(() => {
+    setChecking(true)
+    detectAgents()
+      .then((d) => {
+        setAgents(d.agents)
+        setWorkdir(d.workdir)
+      })
+      .catch(() => setAgents([]))
+      .finally(() => setChecking(false))
+  }, [])
+  useEffect(refresh, [refresh])
+
+  const INSTALL: Record<AgentId, string> = {
+    claude: 'https://claude.com/claude-code',
+    codex: 'https://developers.openai.com/codex/cli'
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2.5">
+        {(['claude', 'codex'] as AgentId[]).map((id) => {
+          const a = agents?.find((x) => x.id === id)
+          const selected = provider === id
+          return (
+            <div
+              key={id}
+              className={`rounded-xl border p-3.5 transition-all ${selected ? 'border-accent bg-accent-soft/60' : 'border-border bg-white/60'}`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[13px] flex-1">{AGENT_NAMES[id]}</span>
+                {a?.installed ? (
+                  <span className="text-[10.5px] font-semibold text-green flex items-center gap-1">
+                    <i className="ti ti-circle-check-filled" /> Connected
+                  </span>
+                ) : (
+                  <span className="text-[10.5px] text-text-3">{agents === null ? 'Checking…' : 'Not found'}</span>
+                )}
+              </div>
+              <div className="text-[11px] text-text-3 mt-1 truncate">{a?.version ?? (a?.installed ? 'Ready' : 'Install it, sign in once in a terminal')}</div>
+              <div className="mt-2.5">
+                {a?.installed ? (
+                  <button
+                    onClick={() => onProvider(id)}
+                    disabled={selected}
+                    className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold ${selected ? 'bg-white/80 text-accent-ink' : 'btn-accent'}`}
+                  >
+                    {selected ? 'Default agent' : 'Use this agent'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => window.open(INSTALL[id], '_blank')}
+                    className="rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text"
+                  >
+                    Install {AGENT_NAMES[id]} <i className="ti ti-external-link text-[12px]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="flex items-center gap-2 text-[11.5px] text-text-3">
+        <button onClick={refresh} className="underline hover:text-text-2" disabled={checking}>
+          {checking ? 'Checking…' : 'Check again'}
+        </button>
+        <span>·</span>
+        <span className="truncate">Works in: {workdir || '…'}</span>
+        <button
+          onClick={() => invoke<string | null>('agent:chooseWorkdir').then((d) => d && setWorkdir(d)).catch(() => {})}
+          className="underline hover:text-text-2 flex-shrink-0"
+        >
+          Change
+        </button>
+      </div>
+
+      <div className="rounded-xl border border-border bg-white/60 p-3">
+        <div className="text-[12px] font-medium text-text mb-2">What the agent may do</div>
+        {([
+          ['safe', 'Ask first (recommended)', 'Reads and drafts. Anything else follows the permissions you set in Claude Code / Codex.'],
+          ['full', 'Edit files', 'May create and change files in the folder above. It never bypasses your agent\'s own safety checks.']
+        ] as const).map(([v, title, desc]) => (
+          <label key={v} className="flex items-start gap-2.5 py-1.5 cursor-pointer">
+            <input type="radio" checked={autonomy === v} onChange={() => onAutonomy(v)} className="mt-0.5 accent-[#FF6A3D]" />
+            <span>
+              <span className="block text-[12.5px] font-medium text-text">{title}</span>
+              <span className="block text-[11px] text-text-3">{desc}</span>
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
   const { state, version, percent, check, install } = updater

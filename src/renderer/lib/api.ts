@@ -130,3 +130,17 @@ export const TEMPLATE_OPTIONS: { id: string; name: string; pro: boolean }[] = [
   { id: 'interview', name: 'Job interview', pro: true },
   { id: 'customer-discovery', name: 'Customer discovery', pro: true }
 ]
+
+export interface ReplySuggestion {
+  question: string | null
+  answer?: string
+}
+
+/** Live "what do I say?" hint for the latest question from the other side. */
+export function suggestReply(input: {
+  meetingId: string
+  transcript: { speaker: 'me' | 'them'; text: string }[]
+  userNotes: string
+}): Promise<ReplySuggestion> {
+  return call<ReplySuggestion>('suggest-reply', JSON.stringify(input), true)
+}

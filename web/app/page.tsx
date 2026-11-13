@@ -2,15 +2,34 @@ import Link from 'next/link'
 import { AppMock } from '@/components/AppMock'
 import { Footer, Nav, WindowsIcon } from '@/components/Chrome'
 import { Waitlist } from '@/components/Waitlist'
+import { AgentHandoffDemo, CallCapsuleDemo, ReplyHintDemo } from '@/components/AgentShowcase'
 import { PLANS } from '@/lib/site'
 
-const APPS = ['Zoom', 'Google Meet', 'Microsoft Teams', 'Slack huddles', 'Telegram', 'Discord', 'WhatsApp']
+const APPS = [
+  'Zoom',
+  'Google Meet',
+  'Microsoft Teams',
+  'Slack huddles',
+  'Telegram',
+  'Discord',
+  'WhatsApp',
+  'Webex',
+  'Skype',
+  'Signal',
+  'Viber',
+  'GoTo Meeting',
+  'RingCentral',
+  'Jitsi Meet',
+  'Whereby',
+  'Lark',
+  'any call in your browser'
+]
 
 const STEPS = [
   {
     n: '1',
     title: 'Start when the call starts',
-    text: 'Press Ctrl+Shift+B or click New meeting. Minutama hears your microphone and your computer’s sound. Nobody gets a bot in their call.'
+    text: 'Minutama notices the call and asks “Take notes?” — one click. It hears your microphone and your computer’s sound. Nobody gets a bot in their call.'
   },
   {
     n: '2',
@@ -99,18 +118,18 @@ function Check() {
 const AGENT_FEATURES = [
   {
     icon: '↗',
-    title: 'Sends notes where you work',
+    title: 'Notes sent where you work',
     text: 'Every meeting lands automatically in Notion, Slack, email or any tool through a webhook (Zapier, Make, n8n).'
   },
   {
     icon: '✦',
-    title: 'Works with Claude and other AI',
-    text: 'Connect Minutama to Claude through MCP in one click, so your assistant can search and act on every meeting.'
+    title: 'Ask Claude about any meeting',
+    text: 'Add Minutama to Claude as a connector, so your assistant can search and use all your meetings.'
   },
   {
-    icon: '✓',
-    title: 'Proposes the next step',
-    text: '“You agreed to meet Thursday” → add to calendar? “Three tasks” → create a list? You approve, the agent does it.'
+    icon: '◷',
+    title: 'Calendar and to-dos',
+    text: '“You agreed to meet Thursday” → add it to your calendar? “Three tasks” → create a list? You approve, the agent does it.'
   }
 ]
 
@@ -154,13 +173,17 @@ export default function Home() {
 
         {/* ── Works with ── */}
         <section className="border-y border-line bg-sand/60">
-          <div className="container-x flex flex-col items-center gap-4 py-8 sm:flex-row sm:justify-between">
-            <span className="text-[13px] font-semibold uppercase tracking-[.12em] text-ink-3">Works with</span>
-            <ul className="flex flex-wrap justify-center gap-x-7 gap-y-2 text-[15px] font-semibold text-ink-2">
-              {APPS.map((a) => (
-                <li key={a}>{a}</li>
-              ))}
-            </ul>
+          <div className="container-x flex flex-col items-center gap-4 py-8 sm:flex-row sm:gap-8">
+            <span className="flex-shrink-0 text-[13px] font-semibold uppercase tracking-[.12em] text-ink-3">Works with</span>
+            <div className="marquee relative w-full overflow-hidden">
+              <ul className="flex w-max animate-marquee gap-x-9 text-[15px] font-semibold text-ink-2 motion-reduce:animate-none">
+                {[...APPS, ...APPS].map((a, i) => (
+                  <li key={i} aria-hidden={i >= APPS.length} className="whitespace-nowrap">
+                    {a}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </section>
 
@@ -200,27 +223,73 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ── Agent (roadmap, clearly labelled) ── */}
+        {/* ── The agent ── */}
         <section id="agent" className="container-x scroll-mt-20 pt-24">
-          <p className="eyebrow">The agent</p>
-          <h2 className="h-section mt-3 max-w-2xl">Notes are the start. Your agent does the follow-through.</h2>
+          <p className="eyebrow">Minutama Agent</p>
+          <h2 className="h-section mt-3 max-w-3xl">An agent that sits beside you on every call.</h2>
           <p className="mt-4 max-w-2xl text-[17px] leading-relaxed text-ink-2">
-            After every call Minutama knows what was decided and who does what. Next, it takes that where you work —
-            always asking before it acts.
+            Only you see it. It notices the call, whispers answers when you are put on the spot, and hands the
+            follow-up to your own AI agent — always asking before it acts.
           </p>
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
+
+          <div className="mt-12 grid gap-6 lg:grid-cols-2">
+            <div>
+              <CallCapsuleDemo />
+              <h3 className="mt-5 font-display text-[21px] font-bold tracking-[-0.01em]">Never forget to hit record</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+                The moment Zoom, Meet, Teams or any call app turns on your microphone, a small capsule slides in:
+                “Take notes?” One click and you are recording.
+              </p>
+            </div>
+            <div>
+              <ReplyHintDemo />
+              <h3 className="mt-5 font-display text-[21px] font-bold tracking-[-0.01em]">Know what to say</h3>
+              <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+                When someone asks you a question, Minutama suggests a short answer from what was said and what you
+                noted — right in the capsule. Only you see it.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 grid items-center gap-10 rounded-[28px] bg-sand/70 p-6 sm:p-10 lg:grid-cols-2">
+            <div>
+              <p className="eyebrow">Works with your agent</p>
+              <h3 className="mt-3 font-display text-[30px] font-extrabold leading-tight tracking-[-0.02em]">
+                Connect Claude Code or Codex in one click.
+              </h3>
+              <p className="mt-3 text-[16px] leading-relaxed text-ink-2">
+                Minutama finds the agent already on your computer. Then any task from a call — “update the client
+                list”, “draft the follow-up” — goes to it with the full meeting context. It runs with your own account
+                and tools, and you approve every task first.
+              </p>
+              <ul className="mt-5 space-y-2 text-[15px] text-ink-2">
+                {[
+                  'Type or say a task during the call — or pick one from your notes',
+                  'See exactly what the agent receives before it runs',
+                  'Watch the result live, stop it any time'
+                ].map((t) => (
+                  <li key={t} className="flex gap-2">
+                    <span className="text-accent">✓</span> {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <AgentHandoffDemo />
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
             {AGENT_FEATURES.map((f) => (
-              <div key={f.title} className="rounded-xl2 border border-line bg-white p-7">
+              <div key={f.title} className="rounded-xl2 border border-line bg-white p-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-[22px] text-accent" aria-hidden="true">
+                  <span className="text-[20px] text-accent" aria-hidden="true">
                     {f.icon}
                   </span>
                   <span className="rounded-full bg-sand px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[.08em] text-ink-3">
                     Coming soon
                   </span>
                 </div>
-                <h3 className="mt-4 font-display text-[20px] font-bold tracking-[-0.01em]">{f.title}</h3>
-                <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{f.text}</p>
+                <h3 className="mt-3 font-display text-[18px] font-bold tracking-[-0.01em]">{f.title}</h3>
+                <p className="mt-1.5 text-[14.5px] leading-relaxed text-ink-2">{f.text}</p>
               </div>
             ))}
           </div>

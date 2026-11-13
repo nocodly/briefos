@@ -34,12 +34,14 @@ export default {
           '100%': { opacity: '1', transform: 'translateY(0)' }
         },
         blink: { '0%,100%': { opacity: '1' }, '50%': { opacity: '0.3' } },
-        bar: { '0%,100%': { transform: 'scaleY(.35)' }, '50%': { transform: 'scaleY(1)' } }
+        bar: { '0%,100%': { transform: 'scaleY(.35)' }, '50%': { transform: 'scaleY(1)' } },
+        marquee: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } }
       },
       animation: {
         rise: 'rise .7s cubic-bezier(.2,.7,.2,1) both',
         blink: 'blink 1.2s ease-in-out infinite',
-        bar: 'bar 1s ease-in-out infinite'
+        bar: 'bar 1s ease-in-out infinite',
+        marquee: 'marquee 40s linear infinite'
       }
     }
   },

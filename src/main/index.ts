@@ -7,6 +7,8 @@ import { initAutoUpdater } from './updater'
 import { enforceRetention } from '@storage/FileManager'
 import { getSetting } from './store'
 import { sendRecordingCommand } from './RecordingRelay'
+import { startCallDetector } from './CallDetector'
+import { capsuleOnCallEnd, capsuleOnCallStart, pushCapsuleState } from './Capsule'
 
 // Load .env in development (production reads keys from electron-store).
 if (!app.isPackaged) {
@@ -141,16 +143,17 @@ export function createOverlayWindow(): BrowserWindow {
   console.log('[main] creating overlay window')
 
   // Anchor to the top-right corner of the primary display's work area.
+  // Capsule sets its own size per state (see Capsule.ts); start small, right edge.
   const { workArea } = screen.getPrimaryDisplay()
-  const width = 240
-  const height = 110
-  const margin = 20
+  const width = 272
+  const height = 68
+  const margin = 16
 
   const win = new BrowserWindow({
     width,
     height,
     x: workArea.x + workArea.width - width - margin,
-    y: workArea.y + margin,
+    y: workArea.y + Math.round(workArea.height * 0.22),
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
@@ -176,7 +179,10 @@ export function createOverlayWindow(): BrowserWindow {
   // Reveal on ready-to-show, with did-finish-load as a fallback because
   // transparent frameless windows don't always emit ready-to-show on Windows.
   win.once('ready-to-show', () => revealOverlay(win))
-  win.webContents.once('did-finish-load', () => revealOverlay(win))
+  win.webContents.once('did-finish-load', () => {
+    revealOverlay(win)
+    pushCapsuleState()
+  })
 
   if (RENDERER_DEV_URL) {
     win.loadURL(`${RENDERER_DEV_URL}/overlay.html`)
@@ -297,6 +303,12 @@ if (!gotLock) {
 
 
     registerGlobalShortcuts()
+
+    // Notice calls (a call app takes the mic) and offer to start notes.
+    startCallDetector(
+      { onCallStart: capsuleOnCallStart, onCallEnd: capsuleOnCallEnd },
+      () => getSetting('detectCalls') !== false
+    )
 
     // Auto-update from GitHub Releases (no-op in dev).
     if (app.isPackaged) {

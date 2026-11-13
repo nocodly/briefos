@@ -22,7 +22,7 @@ export function Logo({ className = '' }: { className?: string }) {
     <span className={`inline-flex items-center gap-2 ${className}`}>
       <LogoMark />
       <span className="font-display text-[19px] font-bold tracking-[-0.02em]">Minutama</span>
-      <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-ink">
+      <span className="hidden rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] min-[420px]:inline-block font-semibold uppercase tracking-[.1em] text-accent-ink">
         Agent
       </span>
     </span>

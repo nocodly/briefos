@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from './components/Markdown'
+import { AgentRuns, SendToAgentModal } from './components/Agent'
 import { TEMPLATE_OPTIONS } from './lib/api'
 import {
   activeDurationMs,
+  addTaskToNotes,
   clearError,
   enhanceCurrent,
   levels,
@@ -67,6 +69,15 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
   const busy = s.status === 'finishing' || s.status === 'enhancing'
   const tick = useTicker(live)
   const [view, setView] = useState<'notes' | 'ai'>('notes')
+  const [side, setSide] = useState<'transcript' | 'agent'>('transcript')
+  const [agentTask, setAgentTask] = useState<string | null>(null)
+  const seenHints = useRef(0)
+
+  // A new reply hint pulls the Agent tab forward once.
+  useEffect(() => {
+    if (s.hints.length > seenHints.current) setSide('agent')
+    seenHints.current = s.hints.length
+  }, [s.hints.length])
   const transcriptEnd = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -225,10 +236,35 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
 
         {/* Live transcript */}
         <aside className="glass m-3 ml-0 w-[340px] rounded-panel flex flex-col overflow-hidden">
-          <div className="px-4 py-3 border-b border-border-soft text-[12px] font-semibold text-text-2 flex items-center gap-2">
-            <i className="ti ti-message-2 text-[15px]" /> Transcript
-            {s.pendingUploads > 0 && <i className="ti ti-loader-2 animate-spin-slow text-text-3 ml-auto" />}
+          <div className="px-2 pt-2 pb-1.5 border-b border-border-soft flex items-center gap-1">
+            {([
+              ['transcript', 'message-2', 'Transcript'],
+              ['agent', 'sparkles', 'Agent']
+            ] as const).map(([id, icon, label]) => (
+              <button
+                key={id}
+                onClick={() => setSide(id)}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-all ${
+                  side === id ? 'bg-white/85 text-text shadow-[0_1px_2px_rgba(21,23,28,.06)]' : 'text-text-3 hover:text-text'
+                }`}
+              >
+                <i className={`ti ti-${icon} text-[14px] ${side === id ? 'text-accent' : ''}`} /> {label}
+                {id === 'agent' && s.hints.length > 0 && (
+                  <span className="ml-0.5 rounded-full bg-accent px-1.5 text-[10px] text-white">{s.hints.length}</span>
+                )}
+              </button>
+            ))}
+            {s.pendingUploads > 0 && <i className="ti ti-loader-2 animate-spin-slow text-text-3 ml-auto mr-2" />}
           </div>
+          {side === 'agent' ? (
+            <AgentSide
+              hints={s.hints}
+              hintsNote={s.hintsNote}
+              live={live}
+              onSave={(t) => addTaskToNotes(t)}
+              onSend={(t) => setAgentTask(t)}
+            />
+          ) : (
           <div className="flex-1 overflow-auto px-4 py-3 space-y-3">
             {s.segments.length === 0 && (
               <p className="text-[12px] text-text-4 leading-relaxed">
@@ -251,8 +287,113 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
             ))}
             <div ref={transcriptEnd} />
           </div>
+          )}
         </aside>
       </div>
+      {agentTask !== null && (
+        <SendToAgentModal
+          task={agentTask}
+          context={{
+            title: s.enhanced?.title ?? 'Current meeting',
+            date: new Date().toLocaleDateString(),
+            notes: s.enhanced?.notesMarkdown ?? s.userNotes,
+            transcript: s.segments.map((g) => ({ speaker: g.speaker === 'me' ? 'Me' : 'Them', text: g.text }))
+          }}
+          onClose={() => setAgentTask(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Agent tab: reply hints + task box + agent runs ─────────────────────────
+
+function AgentSide({
+  hints,
+  hintsNote,
+  live,
+  onSave,
+  onSend
+}: {
+  hints: { id: string; question: string; answer: string }[]
+  hintsNote: string | null
+  live: boolean
+  onSave: (task: string) => void
+  onSend: (task: string) => void
+}) {
+  const [task, setTask] = useState('')
+  const [saved, setSaved] = useState(false)
+  const submit = (fn: (t: string) => void) => {
+    if (!task.trim()) return
+    fn(task.trim())
+    setTask('')
+  }
+
+  return (
+    <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
+      {/* Task box */}
+      <div className="rounded-card border border-border-soft bg-white/70 p-2.5">
+        <textarea
+          value={task}
+          onChange={(e) => {
+            setTask(e.target.value)
+            setSaved(false)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(onSend)
+          }}
+          rows={2}
+          placeholder="Tell your agent… e.g. “Send Anna the pricing deck”"
+          className="w-full resize-none bg-transparent text-[13px] leading-snug outline-none placeholder:text-text-4"
+        />
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <button
+            onClick={() => {
+              submit(onSave)
+              setSaved(true)
+            }}
+            disabled={!task.trim()}
+            className="rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text disabled:opacity-40"
+            title="Add to your notes as an action item"
+          >
+            <i className="ti ti-checkbox text-[13px]" /> Save task
+          </button>
+          <button
+            onClick={() => submit(onSend)}
+            disabled={!task.trim()}
+            className="btn-accent ml-auto rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold disabled:opacity-40"
+          >
+            <i className="ti ti-send text-[13px]" /> Send to agent
+          </button>
+        </div>
+        {saved && <div className="mt-1 text-[11px] text-green">Saved to your notes ✓</div>}
+      </div>
+
+      {/* Reply hints */}
+      <div>
+        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
+          <i className="ti ti-bulb text-[14px] text-accent" /> Reply hints
+        </div>
+        {hints.length === 0 ? (
+          <p className="text-[12px] text-text-4 leading-relaxed">
+            {live
+              ? 'When someone asks you a question, a suggested answer appears here and in the floating capsule.'
+              : 'Start a meeting to get live reply hints.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {hints.map((h) => (
+              <div key={h.id} className="rounded-card border border-accent/20 bg-accent-soft/60 px-3 py-2.5">
+                <div className="text-[11px] text-text-3">They asked: {h.question}</div>
+                <div className="mt-1 text-[13px] leading-snug text-text">“{h.answer}”</div>
+              </div>
+            ))}
+          </div>
+        )}
+        {hintsNote && <p className="mt-2 text-[11px] text-amber">{hintsNote}</p>}
+      </div>
+
+      <AgentRuns compact />
     </div>
   )
 }

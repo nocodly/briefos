@@ -1,4 +1,5 @@
-import { createOverlayWindow, closeOverlayWindow, getMainWindow } from './index'
+import { getMainWindow } from './index'
+import { capsuleOnRecordingStart, capsuleOnRecordingStop } from './Capsule'
 import { updateTrayState } from './tray'
 import { emitRecordingTick } from './ipc'
 
@@ -44,12 +45,12 @@ export function reportRecordingState(next: RecordingReport): void {
   if (state.recording && !wasRecording) {
     console.log('[relay] recording started', state.meetingId)
     updateTrayState(true)
-    createOverlayWindow()
+    capsuleOnRecordingStart()
     if (!tickTimer) tickTimer = setInterval(() => emitRecordingTick(currentDuration()), 1000)
   } else if (!state.recording && wasRecording) {
     console.log('[relay] recording stopped', state.meetingId)
     updateTrayState(false)
-    closeOverlayWindow()
+    capsuleOnRecordingStop()
     if (tickTimer) {
       clearInterval(tickTimer)
       tickTimer = null

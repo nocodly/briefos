@@ -32,6 +32,16 @@ export interface AppSettings {
   smtpPass: string
   emailFrom: string
   onboardingComplete: boolean
+  /** Show the "Start notes?" capsule when a call app starts using the mic. */
+  detectCalls: boolean
+  /** Live "what to say" hints while recording. */
+  replyHints: boolean
+  /** Coding agent tasks are handed to: Claude Code or Codex CLI. */
+  agentProvider: 'claude' | 'codex'
+  /** 'safe' = agent may read and draft only; 'full' = may edit files / run tools. */
+  agentAutonomy: 'safe' | 'full'
+  /** Working folder the agent runs in (empty = Documents/Minutama). */
+  agentWorkdir: string
 }
 
 const DEFAULTS: AppSettings = {
@@ -56,7 +66,12 @@ const DEFAULTS: AppSettings = {
   smtpUser: '',
   smtpPass: '',
   emailFrom: '',
-  onboardingComplete: false
+  onboardingComplete: false,
+  detectCalls: true,
+  replyHints: true,
+  agentProvider: 'claude',
+  agentAutonomy: 'safe',
+  agentWorkdir: ''
 }
 
 // encryptionKey obfuscates the on-disk JSON (electron-store uses AES-256-CBC).

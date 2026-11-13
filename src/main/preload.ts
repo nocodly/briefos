@@ -21,6 +21,8 @@ const INVOKE_CHANNELS = new Set([
   'export:email', 'export:clipboard',
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
+  'capsule:get', 'capsule:action', 'capsule:hint',
+  'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',
   'updater:check', 'updater:install'
 ])
 
@@ -30,7 +32,8 @@ const PUSH_CHANNELS = new Set([
   'progress:transcription', 'progress:summary', 'progress:periodReport',
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
-  'hotkey:toggleRecording', 'auth:deeplink'
+  'hotkey:toggleRecording', 'auth:deeplink',
+  'capsule:state', 'agent:output', 'agent:done'
 ])
 
 type Listener = (data: any) => void

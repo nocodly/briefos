@@ -4,6 +4,7 @@ import {
   ApiError,
   enhanceNotes,
   startMeeting,
+  suggestReply,
   transcribeChunk,
   type EnhancedNotes,
   type StartMeetingResult
@@ -49,6 +50,17 @@ interface SessionState {
   upgradeNeeded: boolean
   limits: StartMeetingResult['limits'] | null
   enhanced: EnhancedNotes | null
+  /** Live reply hints (newest first). */
+  hints: ReplyHint[]
+  /** Set when the plan's hint quota for this meeting is used up. */
+  hintsNote: string | null
+}
+
+export interface ReplyHint {
+  id: string
+  question: string
+  answer: string
+  at: number
 }
 
 export const useMeetingSession = create<SessionState>(() => ({
@@ -63,7 +75,9 @@ export const useMeetingSession = create<SessionState>(() => ({
   error: null,
   upgradeNeeded: false,
   limits: null,
-  enhanced: null
+  enhanced: null,
+  hints: [],
+  hintsNote: null
 }))
 
 const set = useMeetingSession.setState
@@ -218,6 +232,7 @@ async function runJob(job: Job): Promise<void> {
       text: text.trim()
     }
     if (!addSegment(seg)) return
+    if (seg.speaker === 'them' && looksLikeQuestion(seg.text)) scheduleHint()
     await invoke('notes:appendSegment', {
       meetingId,
       speaker: seg.speaker === 'me' ? 'Me' : 'Them',
@@ -285,6 +300,64 @@ async function getSystemAudio(): Promise<{ audio: MediaStream; capture: MediaStr
   }
 }
 
+// ─── Live reply hints ───────────────────────────────────────────────────────
+// When the other side asks something, ask the server for a short reply the
+// user could say. Shown in the live notes sidebar and in the floating capsule.
+
+const QUESTION_WORDS =
+  /^(what|how|when|where|why|who|which|can|could|would|will|do|does|did|are|is|should|have|has|як|що|коли|де|чому|хто|чи|скільки|який|яка|які|можете|можна|как|что|когда|где|почему|кто|сколько|какой|можете|можно|wie|was|wann|wo|warum|wer|können|kannst|haben|ist|sind)\b/i
+
+function looksLikeQuestion(text: string): boolean {
+  const t = text.trim()
+  if (t.includes('?')) return true
+  // Check each sentence start — transcripts often drop the question mark.
+  return t.split(/[.!]\s+/).some((sentence) => QUESTION_WORDS.test(sentence.trim()))
+}
+
+let hintsEnabled = true
+let hintTimer: ReturnType<typeof setTimeout> | null = null
+let hintInFlight = false
+let lastHintAt = 0
+const HINT_DEBOUNCE_MS = 2500
+const HINT_MIN_GAP_MS = 15_000
+
+function scheduleHint(): void {
+  if (!hintsEnabled || get().hintsNote) return
+  if (hintTimer) clearTimeout(hintTimer)
+  hintTimer = setTimeout(() => void requestHint(), HINT_DEBOUNCE_MS)
+}
+
+async function requestHint(): Promise<void> {
+  const { serverId, segments, userNotes, status } = get()
+  if (!serverId || (status !== 'recording' && status !== 'paused')) return
+  if (hintInFlight || Date.now() - lastHintAt < HINT_MIN_GAP_MS) return
+  hintInFlight = true
+  lastHintAt = Date.now()
+  try {
+    const res = await suggestReply({
+      meetingId: serverId,
+      transcript: segments.slice(-40).map(({ speaker, text }) => ({ speaker, text })),
+      userNotes
+    })
+    if (!res.question || !res.answer) return
+    const hint: ReplyHint = { id: String(Date.now()), question: res.question, answer: res.answer, at: Date.now() }
+    set({ hints: [hint, ...get().hints].slice(0, 12) })
+    await invoke('capsule:hint', { id: hint.id, question: hint.question, answer: hint.answer }).catch(() => {})
+  } catch (err) {
+    if (err instanceof ApiError && err.isPlanLimit) set({ hintsNote: err.message })
+    else console.warn('[session] reply hint failed', (err as Error).message)
+  } finally {
+    hintInFlight = false
+  }
+}
+
+/** Append a task line to the user's notes so it lands in the AI action items. */
+export function addTaskToNotes(task: string): void {
+  const line = `- [ ] ${task.trim()}`
+  const notes = get().userNotes
+  setUserNotes(notes.trim() ? `${notes.replace(/\s+$/, '')}\n${line}\n` : `${line}\n`)
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 export async function startMeeting_(templateId?: string): Promise<void> {
@@ -301,8 +374,12 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     segments: [],
     userNotes: '',
     enhanced: null,
+    hints: [],
+    hintsNote: null,
     templateId: templateId ?? s.templateId
   })
+  hintsEnabled = await invoke<boolean>('settings:get', 'replyHints').then((v) => v !== false).catch(() => true)
+  lastHintAt = 0
   console.log('[session] starting')
 
   try {

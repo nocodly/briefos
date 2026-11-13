@@ -18,6 +18,8 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
+import { capsuleDismiss, clearHint, getCapsule, showHint, type ReplyHint } from './Capsule'
+import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
 
 // =============================================================================
 // Minutama IPC hub — the ONLY place channels are registered.
@@ -337,6 +339,52 @@ export function registerIpcHandlers(): void {
     win.webContents.on('will-navigate', intercept)
 
     return { ok: true }
+  })
+
+  // --- Capsule (floating call prompt / recording widget) --------------------
+  handle('capsule:get', async () => getCapsule())
+  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint') => {
+    if (action === 'start') sendRecordingCommand('start')
+    else if (action === 'dismiss') capsuleDismiss()
+    else if (action === 'clearHint') clearHint()
+    else if (action === 'open') {
+      const win = getMainWindow()
+      win?.show()
+      win?.focus()
+    }
+    return { ok: true }
+  })
+  handle('capsule:hint', async (_e, hint: ReplyHint) => {
+    if (!hint || typeof hint.answer !== 'string') throw new Error('Bad hint')
+    showHint({ id: String(hint.id), question: String(hint.question).slice(0, 200), answer: hint.answer.slice(0, 600) })
+    return { ok: true }
+  })
+
+  // --- Coding agents (Claude Code / Codex on this computer) -----------------
+  handle('agent:detect', async () => ({ agents: await detectAgents(), workdir: agentWorkdir() }))
+  handle('agent:run', async (_e, payload: { prompt: string; agent?: AgentId }) => {
+    const prompt = String(payload?.prompt ?? '').trim()
+    if (!prompt) throw new Error('Empty task')
+    if (prompt.length > 60_000) throw new Error('Task is too long')
+    const agent = payload.agent === 'codex' ? 'codex' : payload.agent === 'claude' ? 'claude' : undefined
+    const runId = await startAgentRun(
+      prompt,
+      {
+        onOutput: (id, chunk) => sendToRenderer('agent:output', { runId: id, chunk }),
+        onDone: (id, result) => sendToRenderer('agent:done', { runId: id, ...result })
+      },
+      agent
+    )
+    return { runId }
+  })
+  handle('agent:cancel', async (_e, runId: string) => cancelAgentRun(String(runId)))
+  handle('agent:chooseWorkdir', async () => {
+    const win = getMainWindow()
+    const opts = { properties: ['openDirectory', 'createDirectory'] as ('openDirectory' | 'createDirectory')[] }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (res.canceled || !res.filePaths[0]) return null
+    setSetting('agentWorkdir', res.filePaths[0])
+    return res.filePaths[0]
   })
 
   // --- Updater -------------------------------------------------------------

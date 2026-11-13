@@ -11,6 +11,7 @@ import { handleRecordingCommand, startMeetingSession, useMeetingSession } from '
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
+import { initAgentEvents } from './components/Agent'
 
 export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
 
@@ -126,6 +127,9 @@ export default function App() {
     ]
     return () => unsubs.forEach((u) => u())
   }, [])
+
+  // Coding-agent output streams in from main for the whole app lifetime.
+  useEffect(() => initAgentEvents(), [])
 
   // Tray / overlay / hotkey commands are relayed by main; the session lives here.
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import Markdown from './components/Markdown'
+import { AgentRuns, SendToAgentModal } from './components/Agent'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
 
@@ -67,6 +68,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'brief' | 'transcript'>('brief')
+  const [agentTask, setAgentTask] = useState<string | null>(null)
   const [busy, setBusy] = useState('')
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
 
@@ -178,6 +180,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
             (meeting.enhanced_notes ? (
               <div className="max-w-[820px]">
                 <Markdown source={meeting.enhanced_notes} />
+                <AgentActions items={s?.actionItems ?? []} onSend={setAgentTask} />
                 {meeting.user_notes?.trim() && (
                   <details className="mt-6 text-[13px] text-text-3">
                     <summary className="cursor-pointer">My original notes</summary>
@@ -193,6 +196,19 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
           {tab === 'transcript' && <Transcript rows={meeting.transcript ?? []} />}
         </div>
       </div>
+
+      {agentTask !== null && (
+        <SendToAgentModal
+          task={agentTask}
+          context={{
+            title: meeting.title,
+            date: new Date(meeting.started_at).toLocaleDateString(),
+            notes: meeting.enhanced_notes ?? meeting.user_notes ?? '',
+            transcript: (meeting.transcript ?? []).map((r) => ({ speaker: r.speaker, text: r.text }))
+          }}
+          onClose={() => setAgentTask(null)}
+        />
+      )}
 
       {toast && (
         <div
@@ -446,6 +462,68 @@ function Brief({ summary }: { summary: Summary }) {
             <p className="text-[13px] text-text-3">None</p>
           )}
         </Card>
+      </div>
+    </div>
+  )
+}
+
+// Next steps → hand any of them (or a new task) to Claude Code / Codex.
+function AgentActions({ items, onSend }: { items: ActionItem[]; onSend: (task: string) => void }) {
+  const [custom, setCustom] = useState('')
+  return (
+    <div className="glass rounded-panel mt-8 p-5">
+      <div className="flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg bg-accent-soft flex items-center justify-center">
+          <i className="ti ti-robot text-[16px] text-accent" />
+        </div>
+        <div className="flex-1">
+          <div className="font-display font-bold text-[15px]">Hand it to your agent</div>
+          <div className="text-[11.5px] text-text-3">Claude Code or Codex does the follow-up — you approve every task.</div>
+        </div>
+      </div>
+      {items.length > 0 && (
+        <div className="mt-4 divide-y divide-border-soft">
+          {items.map((a, i) => (
+            <div key={i} className="flex items-center gap-3 py-2.5">
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] text-text">{a.task}</div>
+                <div className="text-[11px] text-text-3">
+                  {a.person}
+                  {a.deadline ? ` · ${a.deadline}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => onSend(a.task)}
+                className="flex-shrink-0 rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
+              >
+                <i className="ti ti-send text-[13px]" /> Send to agent
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <form
+        className="mt-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (custom.trim()) {
+            onSend(custom.trim())
+            setCustom('')
+          }
+        }}
+      >
+        <input
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          placeholder="Or ask anything… “Draft a follow-up email to the client”"
+          className="flex-1 rounded-xl border border-border bg-white/70 px-3 py-2 text-[13px] placeholder:text-text-4 focus:border-accent focus:outline-none"
+        />
+        <button disabled={!custom.trim()} className="btn-accent rounded-xl px-3.5 text-[12.5px] font-semibold disabled:opacity-40">
+          Send
+        </button>
+      </form>
+      <div className="mt-3">
+        <AgentRuns />
       </div>
     </div>
   )
