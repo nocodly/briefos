@@ -1,9 +1,9 @@
-name: Build BriefOS (Windows)
+name: Build Minutama (Windows)
 
+# Manual only for now: releases are built locally and uploaded with `gh release`,
+# so a tag push must not rebuild and overwrite the installer (CI lacks the
+# renderer's Supabase config secrets).
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -22,11 +22,6 @@ jobs:
         with:
           node-version: 20
           cache: npm
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
 
       - name: Install dependencies
         run: npm ci
