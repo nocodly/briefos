@@ -54,9 +54,26 @@ async function updateBy(column: 'id' | 'stripe_customer_id', value: string, fiel
   }
 }
 
+// The Stripe account may also serve OTHER products (other apps share it), and
+// a webhook endpoint receives every event of the account. Only act on
+// checkouts that clearly belong to Minutama: a client_reference_id that is a
+// user in OUR profiles table. Everything else is acknowledged and ignored, so
+// Stripe never retries/disables the endpoint because of foreign events.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+async function isOurUser(userId: string): Promise<boolean> {
+  if (!UUID_RE.test(userId)) return false
+  const { data, error } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle()
+  if (error) throw new Error(`profile lookup failed: ${error.message}`)
+  return Boolean(data)
+}
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id
-  if (!userId) throw new Error('checkout session has no client_reference_id')
+  if (!userId || !(await isOurUser(userId))) {
+    console.log(`[stripe-webhook] ignoring checkout ${session.id}: not a Minutama user`)
+    return
+  }
 
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
   const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
