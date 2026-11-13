@@ -13,7 +13,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 const INVOKE_CHANNELS = new Set([
   'recording:start', 'recording:stop', 'recording:pause', 'recording:resume', 'recording:status',
   'recording:report',
-  'notes:create', 'notes:appendSegment', 'notes:saveUserNotes', 'notes:setStatus', 'notes:saveEnhanced',
+  'notes:create', 'notes:appendSegment', 'notes:replaceTranscript', 'notes:saveUserNotes', 'notes:setStatus', 'notes:saveEnhanced',
   'meetings:getAll', 'meetings:getOne', 'meetings:delete', 'meetings:search',
   'meetings:updateTitle', 'meetings:renameSpeakers',
   'ai:generateSummary', 'ai:regenerateSummary', 'ai:generatePeriodReport',

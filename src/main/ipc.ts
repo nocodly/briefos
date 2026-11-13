@@ -96,9 +96,12 @@ export function emitRecordingTick(durationMs: number): void {
   }
 }
 
-// Exports (except clipboard) require BYOK or Pro — trial users add their own key first.
+// Exports (except clipboard) are part of Pro. Legacy BYOK users keep access
+// until BYOK is removed from the app.
 function requireProOrByok(): void {
-  if (!isProOrByok()) throw new Error('Exports require your own API key. Go to Settings → Plan and switch to Free + Own Keys.')
+  if (!isProOrByok()) {
+    throw new Error('PDF, Notion, Slack and email exports are part of Minutama Pro. Copy to clipboard is free.')
+  }
 }
 
 // Prompt for a PDF save location; returns null if the user cancels.
@@ -156,6 +159,16 @@ export function registerIpcHandlers(): void {
         endMs: p.endMs,
         text: p.text
       })
+      return { ok: true }
+    }
+  )
+  handle(
+    'notes:replaceTranscript',
+    async (
+      _e,
+      p: { meetingId: string; segments: { speaker: string; startMs: number; endMs: number; text: string }[] }
+    ) => {
+      getDatabase().replaceTranscript(p.meetingId, p.segments)
       return { ok: true }
     }
   )

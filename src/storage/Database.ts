@@ -122,6 +122,16 @@ export class BriefOSDatabase {
     this.saveTranscriptSegments(meetingId, [seg])
   }
 
+  /** Replace a meeting's whole transcript (+ search index) atomically. */
+  replaceTranscript(meetingId: string, segments: TranscriptSegment[]): void {
+    const tx = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM transcripts WHERE meeting_id = ?').run(meetingId)
+      this.db.prepare('DELETE FROM transcript_fts WHERE meeting_id = ?').run(meetingId)
+      this.saveTranscriptSegments(meetingId, segments)
+    })
+    tx()
+  }
+
   saveUserNotes(meetingId: string, notes: string): void {
     this.db
       .prepare('UPDATE meetings SET user_notes = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')

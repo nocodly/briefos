@@ -79,7 +79,6 @@ function timeline(): number {
 // ─── Live resources ─────────────────────────────────────────────────────────
 let recorders: { me?: ChannelRecorder; them?: ChannelRecorder } = {}
 let streams: MediaStream[] = []
-const lastText: Record<'me' | 'them', string> = { me: '', them: '' }
 
 function report(): void {
   const { status, meetingId } = get()
@@ -135,26 +134,90 @@ function pump(): void {
   }
 }
 
+// ─── Transcript de-duplication ─────────────────────────────────────────────
+// With speakers (no headphones) the microphone also hears the other side, so
+// the same words arrive on both channels. The system channel is the clean
+// source for "them": a mic segment that mostly repeats an overlapping system
+// segment is dropped. Also guards against a chunk repeating the previous one.
+const DUP_WINDOW_MS = 25_000
+const CROSS_DUP = 0.6
+const SELF_DUP = 0.9
+
+function wordSet(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 1)
+  )
+}
+
+function similarity(a: string, b: string): number {
+  const A = wordSet(a)
+  const B = wordSet(b)
+  if (!A.size || !B.size) return 0
+  let common = 0
+  A.forEach((w) => {
+    if (B.has(w)) common++
+  })
+  return common / Math.min(A.size, B.size)
+}
+
+function near(a: LiveSegment, b: LiveSegment): boolean {
+  return Math.abs(a.startMs - b.startMs) <= DUP_WINDOW_MS
+}
+
+/** Add a segment unless it duplicates existing text. Returns false if dropped. */
+function addSegment(seg: LiveSegment): boolean {
+  const current = get().segments
+  const sameChannelDup = current.some(
+    (s) => s.speaker === seg.speaker && near(s, seg) && similarity(s.text, seg.text) >= SELF_DUP
+  )
+  if (sameChannelDup) {
+    console.log(`[session] drop repeated ${seg.speaker} chunk @${seg.startMs}`)
+    return false
+  }
+  if (seg.speaker === 'me') {
+    const echo = current.some(
+      (s) => s.speaker === 'them' && near(s, seg) && similarity(s.text, seg.text) >= CROSS_DUP
+    )
+    if (echo) {
+      console.log(`[session] drop mic echo of system audio @${seg.startMs}`)
+      return false
+    }
+    set({ segments: [...current, seg].sort((a, b) => a.startMs - b.startMs) })
+    return true
+  }
+  // System segment: remove mic segments that were just an echo of it.
+  const kept = current.filter(
+    (s) => !(s.speaker === 'me' && near(s, seg) && similarity(s.text, seg.text) >= CROSS_DUP)
+  )
+  if (kept.length !== current.length) console.log(`[session] removed mic echo @${seg.startMs}`)
+  set({ segments: [...kept, seg].sort((a, b) => a.startMs - b.startMs) })
+  return true
+}
+
 async function runJob(job: Job): Promise<void> {
   const { serverId, meetingId } = get()
   if (!serverId || !meetingId) return
   try {
+    // No "prompt" with previous text: gpt-4o-*-transcribe tends to echo it
+    // back, which duplicated whole chunks in testing.
     const text = await transcribeChunk({
       meetingId: serverId,
       channel: job.channel,
       blob: job.chunk.blob,
-      durationSec: job.chunk.durationMs / 1000,
-      prompt: lastText[job.channel]
+      durationSec: job.chunk.durationMs / 1000
     })
     if (!text.trim()) return
-    lastText[job.channel] = text
     const seg: LiveSegment = {
       speaker: job.channel,
       startMs: Math.round(job.chunk.startMs),
       endMs: Math.round(job.chunk.startMs + job.chunk.durationMs),
       text: text.trim()
     }
-    set((s) => ({ segments: [...s.segments, seg].sort((a, b) => a.startMs - b.startMs) }))
+    if (!addSegment(seg)) return
     await invoke('notes:appendSegment', {
       meetingId,
       speaker: seg.speaker === 'me' ? 'Me' : 'Them',
@@ -190,16 +253,30 @@ async function getMic(): Promise<MediaStream> {
   })
 }
 
-/** System audio via Electron loopback (see setDisplayMediaRequestHandler). */
-async function getSystemAudio(): Promise<MediaStream | null> {
+/**
+ * System audio via Electron loopback (see setDisplayMediaRequestHandler).
+ * Returns the audio-only stream to record plus the full capture stream, which
+ * must stay alive: on Windows the loopback audio belongs to the screen
+ * capture session, and stopping the video track ended/silenced the audio in
+ * testing. The video runs at 1 fps / tiny size and is never recorded.
+ */
+async function getSystemAudio(): Promise<{ audio: MediaStream; capture: MediaStream } | null> {
   try {
-    const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
-    display.getVideoTracks().forEach((t) => {
-      t.stop()
-      display.removeTrack(t)
+    const capture = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 1, width: 320, height: 180 },
+      audio: true
     })
-    if (display.getAudioTracks().length === 0) return null
-    return display
+    const tracks = capture.getAudioTracks()
+    if (tracks.length === 0) {
+      console.warn('[session] loopback returned no audio track')
+      capture.getTracks().forEach((t) => t.stop())
+      return null
+    }
+    const t = tracks[0]
+    console.log('[session] loopback audio track', t.label, t.readyState, JSON.stringify(t.getSettings()))
+    t.addEventListener('ended', () => console.warn('[session] loopback audio track ended'))
+    t.addEventListener('mute', () => console.warn('[session] loopback audio track muted'))
+    return { audio: new MediaStream(tracks), capture }
   } catch (err) {
     console.warn('[session] system audio unavailable', err)
     return null
@@ -230,8 +307,9 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     const server = await startMeeting()
 
     const mic = await getMic()
-    const system = await getSystemAudio()
-    streams = system ? [mic, system] : [mic]
+    const sys = await getSystemAudio()
+    const system = sys?.audio ?? null
+    streams = sys ? [mic, sys.capture, sys.audio] : [mic]
 
     const meetingId = await invoke<string>('notes:create', {
       serverId: server.meetingId,
@@ -241,8 +319,6 @@ export async function startMeeting_(templateId?: string): Promise<void> {
 
     activeBaseMs = 0
     activeSince = performance.now()
-    lastText.me = ''
-    lastText.them = ''
 
     recorders = {
       me: new ChannelRecorder(mic, CHUNK_MS, timeline, (c) => enqueue('me', c)),
@@ -320,6 +396,19 @@ export async function stopMeeting(): Promise<void> {
   }
 
   await waitForDrain()
+  // Persist the de-duplicated transcript (live appends may include echoes
+  // that were removed later).
+  if (meetingId) {
+    await invoke('notes:replaceTranscript', {
+      meetingId,
+      segments: get().segments.map((sg) => ({
+        speaker: sg.speaker === 'me' ? 'Me' : 'Them',
+        startMs: sg.startMs,
+        endMs: sg.endMs,
+        text: sg.text
+      }))
+    }).catch((err) => console.error('[session] replaceTranscript failed', err))
+  }
   await enhanceCurrent()
 }
 
