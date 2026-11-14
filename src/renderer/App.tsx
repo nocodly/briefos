@@ -3,6 +3,10 @@ import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
 import PeriodReport from './PeriodReport'
 import Settings from './Settings'
+import Tasks from './Tasks'
+import AgentPage from './AgentPage'
+import Integrations from './Integrations'
+import ImportPage from './ImportPage'
 import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
@@ -13,7 +17,17 @@ import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
 import { buildAgentPrompt, initAgentEvents, SendToAgentModal, useAgentRuns, type AgentId } from './components/Agent'
 
-export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
+export type Page =
+  | 'dashboard'
+  | 'live'
+  | 'meeting'
+  | 'tasks'
+  | 'period'
+  | 'agent'
+  | 'integrations'
+  | 'import'
+  | 'settings'
+  | 'onboarding'
 
 export interface NavigateFn {
   (page: Page, meetingId?: string | null): void
@@ -215,7 +229,11 @@ export default function App() {
         {page === 'dashboard' && <Dashboard navigate={navigate} />}
         {page === 'live' && <LiveMeeting navigate={(p, id) => navigate(p, id)} />}
         {page === 'meeting' && <MeetingView id={activeMeetingId} navigate={navigate} />}
+        {page === 'tasks' && <Tasks navigate={navigate} />}
         {page === 'period' && <PeriodReport />}
+        {page === 'agent' && <AgentPage />}
+        {page === 'integrations' && <Integrations navigate={navigate} />}
+        {page === 'import' && <ImportPage navigate={navigate} />}
         {page === 'settings' && <Settings navigate={navigate} />}
       </main>
       {isProcessing && <Processing step={processingStep} />}
@@ -279,18 +297,20 @@ function Sidebar({
           <i className="ti ti-microphone text-[16px]" />
           New meeting
         </button>
+        <NavGroup label="Workspace" />
         <NavItem
-          icon="layout-dashboard"
-          label="Dashboard"
+          icon="layout-list"
+          label="Meetings"
           active={page === 'dashboard' || page === 'meeting'}
           onClick={() => navigate('dashboard')}
         />
-        <NavItem
-          icon="chart-bar"
-          label="Period Reports"
-          active={page === 'period'}
-          onClick={() => navigate('period')}
-        />
+        <NavItem icon="checklist" label="Tasks" active={page === 'tasks'} onClick={() => navigate('tasks')} />
+        <NavItem icon="chart-bar" label="Period Reports" active={page === 'period'} onClick={() => navigate('period')} />
+
+        <NavGroup label="Agent" />
+        <NavItem icon="sparkles" label="Agent" active={page === 'agent'} onClick={() => navigate('agent')} />
+        <NavItem icon="plug-connected" label="Integrations" active={page === 'integrations'} onClick={() => navigate('integrations')} />
+        <NavItem icon="file-import" label="Import" active={page === 'import'} onClick={() => navigate('import')} />
       </nav>
 
       <div className="p-2 border-t border-border-soft space-y-0.5">
@@ -308,6 +328,10 @@ function Sidebar({
       </div>
     </aside>
   )
+}
+
+function NavGroup({ label }: { label: string }) {
+  return <div className="px-2.5 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-[.14em] text-text-4">{label}</div>
 }
 
 // ── Global update toast (shown on every page) ──────────────────────────────

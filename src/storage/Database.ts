@@ -102,6 +102,69 @@ export class BriefOSDatabase {
     add('enhanced_notes', 'TEXT') //       AI notes (markdown)
     add('template_id', "TEXT DEFAULT 'general'")
     add('status', "TEXT DEFAULT 'done'") // recording | processing | done
+    // Done/undone state for action items (Tasks page). task_key = item text.
+    this.db.exec(
+      `CREATE TABLE IF NOT EXISTS task_status (
+         meeting_id TEXT NOT NULL,
+         task_key   TEXT NOT NULL,
+         done       INTEGER NOT NULL DEFAULT 0,
+         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+         PRIMARY KEY (meeting_id, task_key)
+       )`
+    )
+  }
+
+  // ─── TASKS (action items across all meetings) ─────────────────────────
+
+  getAllTasks(): {
+    meetingId: string
+    meetingTitle: string
+    startedAt: string
+    task: string
+    person: string
+    deadline: string | null
+    done: boolean
+  }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT m.id, m.title, m.started_at, s.action_items
+           FROM meetings m JOIN summaries s ON s.meeting_id = m.id
+          ORDER BY m.started_at DESC`
+      )
+      .all() as { id: string; title: string; started_at: string; action_items: string | null }[]
+    const done = new Map(
+      (this.db.prepare('SELECT meeting_id, task_key, done FROM task_status').all() as {
+        meeting_id: string
+        task_key: string
+        done: number
+      }[]).map((r) => [`${r.meeting_id}::${r.task_key}`, r.done === 1])
+    )
+    const out: ReturnType<BriefOSDatabase['getAllTasks']> = []
+    for (const r of rows) {
+      const items = parse<ActionItem[]>(r.action_items, [])
+      for (const a of items) {
+        if (!a?.task) continue
+        out.push({
+          meetingId: r.id,
+          meetingTitle: r.title,
+          startedAt: r.started_at,
+          task: a.task,
+          person: a.person ?? '',
+          deadline: a.deadline ?? null,
+          done: done.get(`${r.id}::${a.task}`) ?? false
+        })
+      }
+    }
+    return out
+  }
+
+  setTaskDone(meetingId: string, task: string, done: boolean): void {
+    this.db
+      .prepare(
+        `INSERT INTO task_status (meeting_id, task_key, done, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+         ON CONFLICT(meeting_id, task_key) DO UPDATE SET done = excluded.done, updated_at = CURRENT_TIMESTAMP`
+      )
+      .run(meetingId, task, done ? 1 : 0)
   }
 
   // ─── NOTEPAD (Minutama) ────────────────────────────────────────────────
@@ -176,7 +239,7 @@ export class BriefOSDatabase {
           `UPDATE meetings SET title = ?, enhanced_notes = ?, template_id = ?, status = 'done',
              updated_at = CURRENT_TIMESTAMP WHERE id = ?`
         )
-        .run(input.title || 'Untitled meeting', input.notesMarkdown, input.templateId, meetingId)
+        .run(this.titleFor(meetingId, input.title), input.notesMarkdown, input.templateId, meetingId)
       // Keep the summaries row in sync so Period Reports + exports still work.
       const firstLine = input.notesMarkdown
         .split('\n')
@@ -190,6 +253,18 @@ export class BriefOSDatabase {
     })
     tx()
     console.log('[db] saved enhanced notes for', meetingId)
+  }
+
+  /** Generic AI titles ("Meeting notes") become "Meeting · 14 Nov, 13:05". */
+  private titleFor(meetingId: string, title: string | undefined): string {
+    const t = (title ?? '').trim()
+    if (t && !/^(meeting( notes)?|notes|untitled( meeting)?|summary|нотатки( зустрічі)?|зустріч)$/i.test(t)) return t
+    const row = this.db.prepare('SELECT started_at FROM meetings WHERE id = ?').get(meetingId) as
+      | { started_at: string }
+      | undefined
+    const d = row ? new Date(row.started_at) : new Date()
+    const when = d.toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+    return `Meeting · ${when}`
   }
 
   // ─── MEETINGS ──────────────────────────────────────────────────────────

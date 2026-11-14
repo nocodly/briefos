@@ -70,20 +70,16 @@ const DEFAULTS: SettingsState = {
   meetingLanguage: ''
 }
 
-export default function Settings({ navigate }: { navigate: NavigateFn }) {
+/** Load + save app settings (shared by Settings, Agent and Integrations pages). */
+export function useAppSettings() {
   const [s, setS] = useState<SettingsState>(DEFAULTS)
   const [saved, setSaved] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [usage, setUsage] = useState<UsageInfo | null>(null)
-  const [email, setEmail] = useState('')
-  const updater = useUpdater()
 
   useEffect(() => {
     invoke<Partial<SettingsState>>('settings:getAll')
       .then((all) => setS({ ...DEFAULTS, ...(all || {}) }))
       .catch((err) => setError((err as Error).message))
-    getUsage().then(setUsage).catch(() => {})
-    supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''))
   }, [])
 
   const set = useCallback(async <K extends keyof SettingsState>(key: K, value: SettingsState[K]) => {
@@ -95,6 +91,22 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
     } catch (err) {
       setError((err as Error).message)
     }
+  }, [])
+
+  return { s, set, saved, error }
+}
+
+export default function Settings({ navigate }: { navigate: NavigateFn }) {
+  const { s, set, saved, error: settingsError } = useAppSettings()
+  const [upgradeError, setError] = useState('')
+  const error = settingsError || upgradeError
+  const [usage, setUsage] = useState<UsageInfo | null>(null)
+  const [email, setEmail] = useState('')
+  const updater = useUpdater()
+
+  useEffect(() => {
+    getUsage().then(setUsage).catch(() => {})
+    supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''))
   }, [])
 
   const upgrade = async () => {
@@ -175,24 +187,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
             </p>
           </div>
           <Toggle label="Launch at startup" value={s.launchAtStartup} onSave={(v) => set('launchAtStartup', v)} />
-          <Toggle label="Offer to take notes when a call starts" value={s.detectCalls} onSave={(v) => set('detectCalls', v)} />
-          <Toggle label="Live reply hints when someone asks you a question" value={s.replyHints} onSave={(v) => set('replyHints', v)} />
           <p className="text-[11px] text-text-3">Tip: use headphones for the cleanest "You / Them" separation.</p>
-        </Panel>
-
-        <Panel title="AI agents" icon="robot" desc="Hand tasks from your meetings to Claude Code or Codex on this computer — with your own account and tools.">
-          <AgentsSettings
-            provider={s.agentProvider}
-            autonomy={s.agentAutonomy}
-            onProvider={(v) => set('agentProvider', v)}
-            onAutonomy={(v) => set('agentAutonomy', v)}
-          />
-        </Panel>
-
-        <Panel title="Integrations" icon="plug" desc={isPro ? 'Send notes to your tools.' : 'Available on Pro.'}>
-          <Password label="Notion integration token" value={s.notionToken} saved={saved === 'notionToken'} onSave={(v) => set('notionToken', v)} placeholder="secret_…" />
-          <Text label="Notion parent page ID" value={s.notionParentPageId} saved={saved === 'notionParentPageId'} onSave={(v) => set('notionParentPageId', v)} placeholder="32-char page id" mono />
-          <Text label="Slack webhook URL" value={s.slackWebhookUrl} saved={saved === 'slackWebhookUrl'} onSave={(v) => set('slackWebhookUrl', v)} placeholder="https://hooks.slack.com/…" mono />
         </Panel>
 
         <Panel title="Data" icon="database" desc="Notes and transcripts are stored on this computer. Audio is never kept.">
@@ -206,7 +201,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 // ── Update Banner ────────────────────────────────────────────────────────────
 
 // ── AI agents panel ─────────────────────────────────────────────────────────
-function AgentsSettings({
+export function AgentsSettings({
   provider,
   autonomy,
   onProvider,
@@ -416,7 +411,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
   return null
 }
 
-function Panel({
+export function Panel({
   title,
   icon,
   desc,
@@ -459,7 +454,7 @@ function Label({ children, saved }: { children: React.ReactNode; saved?: boolean
 const inputCls =
   'w-full text-[12px] bg-bg border border-border rounded-lg px-3 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:outline-none transition-all'
 
-function Text({
+export function Text({
   label,
   value,
   onSave,
@@ -491,7 +486,7 @@ function Text({
   )
 }
 
-function Password(props: {
+export function Password(props: {
   label: string
   value: string
   onSave: (v: string) => void
@@ -526,7 +521,7 @@ function Password(props: {
   )
 }
 
-function NumberField({
+export function NumberField({
   label,
   value,
   onSave,
@@ -560,7 +555,7 @@ function NumberField({
   )
 }
 
-function Toggle({
+export function Toggle({
   label,
   value,
   onSave

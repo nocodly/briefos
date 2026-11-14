@@ -1,4 +1,4 @@
-import { app, BrowserWindow, desktopCapturer, globalShortcut, shell, screen } from 'electron'
+import { app, BrowserWindow, desktopCapturer, globalShortcut, nativeTheme, shell, screen } from 'electron'
 import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
 import { createTray, updateTrayState } from './tray'
@@ -272,6 +272,8 @@ if (!gotLock) {
     const devDeepLink = process.argv.find(isAuthLink)
     if (devDeepLink) setTimeout(() => handleDeepLink(devDeepLink), 1500)
 
+    // Dark window frame/title bar to match the dark UI.
+    nativeTheme.themeSource = 'dark'
     mainWindow = createMainWindow()
 
     // Tray owns the Start/Stop menu; pass a callback so it can reflect state.

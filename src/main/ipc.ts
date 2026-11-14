@@ -368,6 +368,29 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
 
+  // --- Tasks (action items across meetings) ---------------------------------
+  handle('tasks:getAll', async () => getDatabase().getAllTasks())
+  handle('tasks:setDone', async (_e, p: { meetingId: string; task: string; done: boolean }) => {
+    getDatabase().setTaskDone(String(p.meetingId), String(p.task), Boolean(p.done))
+    return { ok: true }
+  })
+
+  // --- Import: open a transcript file (.vtt / .srt / .txt) ------------------
+  handle('import:pickTranscript', async () => {
+    const win = getMainWindow()
+    const opts = {
+      properties: ['openFile'] as 'openFile'[],
+      filters: [{ name: 'Transcripts', extensions: ['vtt', 'srt', 'txt', 'md'] }]
+    }
+    const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
+    if (res.canceled || !res.filePaths[0]) return null
+    const file = res.filePaths[0]
+    const { readFile, stat } = await import('node:fs/promises')
+    if ((await stat(file)).size > 5 * 1024 * 1024) throw new Error('This file is too large (max 5 MB).')
+    const { basename } = await import('node:path')
+    return { name: basename(file), text: await readFile(file, 'utf8') }
+  })
+
   // --- Capsule (floating call prompt / recording widget) --------------------
   handle('capsule:get', async () => getCapsule())
   handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun') => {
