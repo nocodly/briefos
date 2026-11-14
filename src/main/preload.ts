@@ -21,7 +21,7 @@ const INVOKE_CHANNELS = new Set([
   'export:email', 'export:clipboard',
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
-  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task',
+  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit',
   'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',
   'updater:check', 'updater:install'
 ])

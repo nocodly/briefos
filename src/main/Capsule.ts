@@ -35,12 +35,13 @@ let hintTimer: NodeJS.Timeout | null = null
 
 const MARGIN = 16
 
-function sizeFor(s: CapsuleState): { width: number; height: number } {
-  if (s.mode === 'prompt') return { width: 352, height: 96 }
-  const ended = s.callEnded ? 34 : 0
-  if (!s.expanded) return { width: 292, height: 76 + ended }
-  return { width: 372, height: (s.hint ? 318 : 214) + ended }
+/** Width per mode; height comes from the rendered content (capsule:fit). */
+function widthFor(s: CapsuleState): number {
+  if (s.mode === 'prompt') return 360
+  return s.expanded ? 380 : 300
 }
+const MIN_HEIGHT = 80
+let contentHeight = MIN_HEIGHT
 
 function apply(): void {
   if (state.mode === 'hidden') {
@@ -48,13 +49,22 @@ function apply(): void {
     return
   }
   const win = createOverlayWindow()
-  const { width, height } = sizeFor(state)
+  const width = widthFor(state)
+  const height = Math.max(MIN_HEIGHT, contentHeight)
   // Keep the capsule pinned to the right edge where the user left it vertically.
   const { workArea } = screen.getDisplayMatching(win.getBounds())
   const prev = win.getBounds()
   const y = Math.min(Math.max(prev.y, workArea.y + MARGIN), workArea.y + workArea.height - height - MARGIN)
   win.setBounds({ x: workArea.x + workArea.width - width - MARGIN, y, width, height })
   win.webContents.send('capsule:state', state)
+}
+
+/** The capsule renderer reports its content height; resize the window to fit. */
+export function fitCapsule(height: number): void {
+  const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 560))
+  if (Math.abs(h - contentHeight) < 2) return
+  contentHeight = h
+  if (state.mode !== 'hidden') apply()
 }
 
 export function getCapsule(): CapsuleState {

@@ -18,7 +18,7 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
-import { capsuleDismiss, clearHint, getCapsule, showHint, toggleCapsuleExpanded, type ReplyHint } from './Capsule'
+import { capsuleDismiss, clearHint, fitCapsule, getCapsule, showHint, toggleCapsuleExpanded, type ReplyHint } from './Capsule'
 import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
 
 // =============================================================================
@@ -386,6 +386,10 @@ export function registerIpcHandlers(): void {
     } else {
       sendToRenderer('agent:saveTask', { text })
     }
+    return { ok: true }
+  })
+  handle('capsule:fit', async (_e, height: number) => {
+    if (typeof height === 'number' && Number.isFinite(height)) fitCapsule(height)
     return { ok: true }
   })
   handle('capsule:hint', async (_e, hint: ReplyHint) => {

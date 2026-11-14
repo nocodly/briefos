@@ -84,7 +84,7 @@ export default function Overlay() {
   if (cap.mode === 'prompt') {
     return (
       <Shell>
-        <div className="flex h-full items-center gap-3 px-4" style={drag}>
+        <div className="flex h-[84px] items-center gap-3 px-4" style={drag}>
           <div className="relative flex-shrink-0">
             <LogoMark size={42} />
             <span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-green ring-[3px] ring-[#121317] animate-pulse-dot" />
@@ -113,7 +113,7 @@ export default function Overlay() {
 
   return (
     <Shell>
-      <div className="flex h-full flex-col">
+      <div className="flex flex-col">
         {/* Bar */}
         <div className="flex h-[68px] flex-shrink-0 items-center gap-3 px-3.5" style={drag}>
           <button onClick={() => act('open')} style={noDrag} title="Open notes" className="flex-shrink-0 transition-transform duration-200 hover:scale-105">
@@ -183,7 +183,7 @@ function AgentPanel({ hint, onClearHint }: { hint: ReplyHint | null; onClearHint
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-2 border-t border-white/[.07] px-3 pb-3 pt-2.5 animate-fade-up" style={noDrag}>
+    <div className="flex flex-col gap-2 border-t border-white/[.07] px-3 pb-3 pt-2.5" style={noDrag}>
       <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.12em] text-white/40">
         <i className="ti ti-sparkles text-[12px] text-accent" /> Agent
       </div>
@@ -205,7 +205,7 @@ function AgentPanel({ hint, onClearHint }: { hint: ReplyHint | null; onClearHint
         </div>
       )}
 
-      <div className="mt-auto flex items-center gap-1.5 rounded-[14px] border border-white/10 bg-white/[.05] p-1.5 pl-3 transition-colors focus-within:border-accent/50">
+      <div className="flex items-center gap-1.5 rounded-[14px] border border-white/10 bg-white/[.05] p-1.5 pl-3 transition-colors focus-within:border-accent/50">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -249,13 +249,25 @@ function IconButton({ icon, title, onClick }: { icon: string; title: string; onC
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  // Solid fill (no backdrop-filter): transparent windows on Windows render a
-  // grey box behind blurred layers.
+  // The window is sized to this content: measure it and report the height so
+  // nothing is ever cut off. Solid fill and no outer shadow — on Windows,
+  // blur or a shadow clipped by the transparent window shows as a grey box.
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const report = () => invoke('capsule:fit', Math.ceil(el.getBoundingClientRect().height) + 8).catch(() => {})
+    const ro = new ResizeObserver(report)
+    ro.observe(el)
+    report()
+    return () => ro.disconnect()
+  }, [])
+
   return (
-    <div className="h-screen w-screen select-none p-1.5">
-      <div className="relative h-full w-full overflow-hidden rounded-[24px] border border-white/[.09] bg-[#121317] shadow-[0_10px_30px_-12px_rgba(0,0,0,.7)]">
+    <div className="w-screen select-none p-1">
+      <div ref={ref} className="relative w-full overflow-hidden rounded-[24px] border border-white/[.09] bg-[#121317]">
         <div className="pointer-events-none absolute -left-12 -top-16 h-36 w-36 rounded-full bg-accent/30 blur-3xl" />
-        <div className="relative h-full">{children}</div>
+        <div className="relative">{children}</div>
       </div>
     </div>
   )

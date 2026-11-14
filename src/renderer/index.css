@@ -114,6 +114,17 @@
   }
 }
 
+/* Used by inline styles (capsule waves) — declared here so it is never purged. */
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 /* Overlay window is transparent + frameless; let the widget define its bg. */
 body.overlay {
   background: transparent;
