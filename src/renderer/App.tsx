@@ -11,7 +11,7 @@ import { addTaskToNotes, handleRecordingCommand, startMeetingSession, useMeeting
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
-import { initAgentEvents, SendToAgentModal } from './components/Agent'
+import { buildAgentPrompt, initAgentEvents, SendToAgentModal, useAgentRuns, type AgentId } from './components/Agent'
 
 export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
 
@@ -142,6 +142,25 @@ export default function App() {
   useEffect(() => {
     const unsubs = [
       subscribe('agent:saveTask', ({ text }: { text: string }) => addTaskToNotes(text)),
+      // Started from the capsule: add the meeting context and run it there.
+      subscribe('agent:runFromCapsule', async ({ text }: { text: string }) => {
+        const st = useMeetingSession.getState()
+        const prompt = buildAgentPrompt(text, {
+          title: st.enhanced?.title ?? 'Current meeting',
+          date: new Date().toLocaleDateString(),
+          notes: st.enhanced?.notesMarkdown ?? st.userNotes,
+          transcript: st.segments.map((g) => ({ speaker: g.speaker === 'me' ? 'Me' : 'Them', text: g.text }))
+        })
+        try {
+          const agent = await invoke<AgentId>('settings:get', 'agentProvider').catch(() => 'claude' as AgentId)
+          const { runId } = await invoke<{ runId: string }>('agent:run', { prompt, agent, fromCapsule: true })
+          useAgentRuns.setState(({ runs }) => ({
+            runs: [{ runId, agent, task: text, status: 'running' as const, output: '', startedAt: Date.now() }, ...runs].slice(0, 20)
+          }))
+        } catch (err) {
+          console.warn('[agent] capsule run failed', (err as Error).message)
+        }
+      }),
       subscribe('agent:compose', ({ text }: { text: string }) => {
         setPage('live')
         setAgentTask(text)

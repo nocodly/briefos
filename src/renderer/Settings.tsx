@@ -4,6 +4,7 @@ import { invoke } from './lib/ipc'
 import { supabase, STRIPE_PRO_LINK } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
+import { MEETING_LANGUAGES } from './recording/meetingSession'
 
 // ── Updater hook ─────────────────────────────────────────────────────────────
 type UpdaterState = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'none' | 'error'
@@ -52,6 +53,7 @@ interface SettingsState {
   replyHints: boolean
   agentProvider: AgentId
   agentAutonomy: 'safe' | 'full'
+  meetingLanguage: string
 }
 
 const DEFAULTS: SettingsState = {
@@ -64,7 +66,8 @@ const DEFAULTS: SettingsState = {
   detectCalls: true,
   replyHints: true,
   agentProvider: 'claude',
-  agentAutonomy: 'safe'
+  agentAutonomy: 'safe',
+  meetingLanguage: ''
 }
 
 export default function Settings({ navigate }: { navigate: NavigateFn }) {
@@ -154,6 +157,23 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">
           <Text label="Start / stop hotkey" value={s.hotkeyRecord} saved={saved === 'hotkeyRecord'} onSave={(v) => set('hotkeyRecord', v)} placeholder="CmdOrCtrl+Shift+B" mono />
+          <div>
+            <label className="block text-[12px] font-medium text-text mb-1.5">Meeting language</label>
+            <select
+              value={s.meetingLanguage}
+              onChange={(e) => set('meetingLanguage', e.target.value)}
+              className="w-full rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[13px] text-text focus:border-accent focus:outline-none"
+            >
+              {MEETING_LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-text-3">
+              Used for the transcript and the AI notes. Choose your language if “Auto” picks the wrong one.
+            </p>
+          </div>
           <Toggle label="Launch at startup" value={s.launchAtStartup} onSave={(v) => set('launchAtStartup', v)} />
           <Toggle label="Offer to take notes when a call starts" value={s.detectCalls} onSave={(v) => set('detectCalls', v)} />
           <Toggle label="Live reply hints when someone asks you a question" value={s.replyHints} onSave={(v) => set('replyHints', v)} />

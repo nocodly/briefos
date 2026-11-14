@@ -4,6 +4,7 @@ import Markdown from './components/Markdown'
 import { AgentRuns, SendToAgentModal } from './components/Agent'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
+import { notesLanguageName } from './recording/meetingSession'
 
 // =============================================================================
 // MeetingView — the Meeting Brief page. Loads a meeting (summary + transcript)
@@ -113,6 +114,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
       // Minutama (they carry a server meeting id).
       if (!meeting.server_id) throw new Error('This older meeting cannot be regenerated.')
       const templateId = meeting.template_id || 'general'
+      const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
       const result = await enhanceNotes({
         meetingId: meeting.server_id,
         templateId,
@@ -121,7 +123,8 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
           speaker: r.speaker === 'Me' ? 'me' : 'them',
           startMs: r.start_ms,
           text: r.text
-        }))
+        })),
+        language: notesLanguageName(lang)
       })
       await invoke('notes:saveEnhanced', { meetingId: meeting.id, templateId, ...result })
       await load()

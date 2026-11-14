@@ -28,19 +28,37 @@ export interface CapsuleState {
   hint: ReplyHint | null
   /** Recording capsule shows the agent panel (hints + task box). */
   expanded: boolean
+  /** Latest agent task started from the capsule (Claude Code / Codex). */
+  agentRun: CapsuleAgentRun | null
 }
 
-let state: CapsuleState = { mode: 'hidden', app: null, callEnded: false, hint: null, expanded: true }
+export interface CapsuleAgentRun {
+  runId: string | null
+  task: string
+  agent: string
+  status: 'starting' | 'running' | 'done' | 'failed'
+  /** Last line(s) of output, trimmed — enough to see what is happening. */
+  tail: string
+}
+
+let state: CapsuleState = {
+  mode: 'hidden',
+  app: null,
+  callEnded: false,
+  hint: null,
+  expanded: true,
+  agentRun: null
+}
 let hintTimer: NodeJS.Timeout | null = null
 
 const MARGIN = 16
 
 /** Width per mode; height comes from the rendered content (capsule:fit). */
 function widthFor(s: CapsuleState): number {
-  if (s.mode === 'prompt') return 360
-  return s.expanded ? 380 : 300
+  if (s.mode === 'prompt') return 316
+  return s.expanded ? 330 : 252
 }
-const MIN_HEIGHT = 80
+const MIN_HEIGHT = 64
 let contentHeight = MIN_HEIGHT
 
 function apply(): void {
@@ -51,10 +69,10 @@ function apply(): void {
   const win = createOverlayWindow()
   const width = widthFor(state)
   const height = Math.max(MIN_HEIGHT, contentHeight)
-  // Keep the capsule pinned to the right edge where the user left it vertically.
-  const { workArea } = screen.getDisplayMatching(win.getBounds())
-  const prev = win.getBounds()
-  const y = Math.min(Math.max(prev.y, workArea.y + MARGIN), workArea.y + workArea.height - height - MARGIN)
+  // Fixed spot: right edge of the primary display, a fifth of the way down.
+  // (Not draggable — dragging a transparent window made it wobble.)
+  const { workArea } = screen.getPrimaryDisplay()
+  const y = Math.min(workArea.y + Math.round(workArea.height * 0.2), workArea.y + workArea.height - height - MARGIN)
   win.setBounds({ x: workArea.x + workArea.width - width - MARGIN, y, width, height })
   win.webContents.send('capsule:state', state)
 }
@@ -83,6 +101,16 @@ export function showHint(hint: ReplyHint): void {
   if (hintTimer) clearTimeout(hintTimer)
   hintTimer = setTimeout(() => setCapsule({ hint: null }), 60_000)
   setCapsule({ hint, expanded: true })
+}
+
+/** Track the agent task started from the capsule. */
+export function setCapsuleAgentRun(patch: Partial<CapsuleAgentRun> | null): void {
+  if (patch === null) {
+    setCapsule({ agentRun: null })
+    return
+  }
+  const base: CapsuleAgentRun = state.agentRun ?? { runId: null, task: '', agent: '', status: 'starting', tail: '' }
+  setCapsule({ agentRun: { ...base, ...patch }, expanded: true })
 }
 
 export function toggleCapsuleExpanded(): void {

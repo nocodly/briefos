@@ -33,7 +33,7 @@ const PUSH_CHANNELS = new Set([
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
   'hotkey:toggleRecording', 'auth:deeplink',
-  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask'
+  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask', 'agent:runFromCapsule'
 ])
 
 type Listener = (data: any) => void

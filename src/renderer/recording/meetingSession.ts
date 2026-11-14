@@ -220,6 +220,7 @@ async function runJob(job: Job): Promise<void> {
     // back, which duplicated whole chunks in testing.
     const text = await transcribeChunk({
       meetingId: serverId,
+      language: meetingLanguage || undefined,
       channel: job.channel,
       blob: job.chunk.blob,
       durationSec: job.chunk.durationMs / 1000
@@ -315,6 +316,30 @@ function looksLikeQuestion(text: string): boolean {
 }
 
 let hintsEnabled = true
+/** ISO code chosen in Settings ('' = detect automatically). */
+let meetingLanguage = ''
+
+/** ISO code → language name for the notes prompt. */
+export const MEETING_LANGUAGES: { code: string; name: string }[] = [
+  { code: '', name: 'Auto — same as the conversation' },
+  { code: 'uk', name: 'Українська' },
+  { code: 'en', name: 'English' },
+  { code: 'de', name: 'Deutsch' },
+  { code: 'ru', name: 'Русский' },
+  { code: 'pl', name: 'Polski' },
+  { code: 'es', name: 'Español' },
+  { code: 'fr', name: 'Français' },
+  { code: 'it', name: 'Italiano' },
+  { code: 'pt', name: 'Português' }
+]
+/** Settings value → language name for /enhance-notes (undefined = auto-detect). */
+export function notesLanguageName(code: string | null | undefined): string | undefined {
+  return code ? LANGUAGE_NAMES[code] : undefined
+}
+const LANGUAGE_NAMES: Record<string, string> = {
+  uk: 'Ukrainian', en: 'English', de: 'German', ru: 'Russian', pl: 'Polish',
+  es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese'
+}
 let hintTimer: ReturnType<typeof setTimeout> | null = null
 let hintInFlight = false
 let lastHintAt = 0
@@ -379,6 +404,7 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     templateId: templateId ?? s.templateId
   })
   hintsEnabled = await invoke<boolean>('settings:get', 'replyHints').then((v) => v !== false).catch(() => true)
+  meetingLanguage = await invoke<string>('settings:get', 'meetingLanguage').then((v) => v || '').catch(() => '')
   lastHintAt = 0
   console.log('[session] starting')
 
@@ -498,11 +524,13 @@ export async function enhanceCurrent(templateId?: string): Promise<void> {
   const tpl = templateId ?? get().templateId
   set({ status: 'enhancing', templateId: tpl })
   try {
+    const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
     const result = await enhanceNotes({
       meetingId: serverId,
       templateId: tpl,
       userNotes,
-      transcript: segments.map(({ speaker, startMs, text }) => ({ speaker, startMs, text }))
+      transcript: segments.map(({ speaker, startMs, text }) => ({ speaker, startMs, text })),
+      language: notesLanguageName(lang)
     })
     await invoke('notes:saveEnhanced', { meetingId, templateId: tpl, ...result })
     set({ enhanced: result, status: 'idle' })

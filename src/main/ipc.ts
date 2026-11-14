@@ -18,7 +18,16 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
-import { capsuleDismiss, clearHint, fitCapsule, getCapsule, showHint, toggleCapsuleExpanded, type ReplyHint } from './Capsule'
+import {
+  capsuleDismiss,
+  clearHint,
+  fitCapsule,
+  getCapsule,
+  setCapsuleAgentRun,
+  showHint,
+  toggleCapsuleExpanded,
+  type ReplyHint
+} from './Capsule'
 import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
 
 // =============================================================================
@@ -361,8 +370,13 @@ export function registerIpcHandlers(): void {
 
   // --- Capsule (floating call prompt / recording widget) --------------------
   handle('capsule:get', async () => getCapsule())
-  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle') => {
+  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun') => {
     if (action === 'toggle') toggleCapsuleExpanded()
+    else if (action === 'clearRun') setCapsuleAgentRun(null)
+    else if (action === 'cancelRun') {
+      const run = getCapsule().agentRun
+      if (run?.runId) cancelAgentRun(run.runId)
+    }
     else if (action === 'start') sendRecordingCommand('start')
     else if (action === 'dismiss') capsuleDismiss()
     else if (action === 'clearHint') clearHint()
@@ -379,10 +393,11 @@ export function registerIpcHandlers(): void {
     const text = String(payload?.text ?? '').trim().slice(0, 2000)
     if (!text) throw new Error('Empty task')
     if (payload.send) {
-      const win = getMainWindow()
-      win?.show()
-      win?.focus()
-      sendToRenderer('agent:compose', { text })
+      // Runs right from the capsule: the main renderer adds the meeting
+      // context and calls agent:run (fromCapsule) — progress shows in the capsule.
+      const agent = getSetting('agentProvider') === 'codex' ? 'Codex' : 'Claude Code'
+      setCapsuleAgentRun({ runId: null, task: text, agent, status: 'starting', tail: '' })
+      sendToRenderer('agent:runFromCapsule', { text })
     } else {
       sendToRenderer('agent:saveTask', { text })
     }
@@ -400,20 +415,43 @@ export function registerIpcHandlers(): void {
 
   // --- Coding agents (Claude Code / Codex on this computer) -----------------
   handle('agent:detect', async () => ({ agents: await detectAgents(), workdir: agentWorkdir() }))
-  handle('agent:run', async (_e, payload: { prompt: string; agent?: AgentId }) => {
+  handle('agent:run', async (_e, payload: { prompt: string; agent?: AgentId; fromCapsule?: boolean }) => {
     const prompt = String(payload?.prompt ?? '').trim()
     if (!prompt) throw new Error('Empty task')
     if (prompt.length > 60_000) throw new Error('Task is too long')
     const agent = payload.agent === 'codex' ? 'codex' : payload.agent === 'claude' ? 'claude' : undefined
-    const runId = await startAgentRun(
-      prompt,
-      {
-        onOutput: (id, chunk) => sendToRenderer('agent:output', { runId: id, chunk }),
-        onDone: (id, result) => sendToRenderer('agent:done', { runId: id, ...result })
-      },
-      agent
-    )
-    return { runId }
+    const toCapsule = Boolean(payload.fromCapsule)
+    let tail = ''
+    let lastPush = 0
+    try {
+      const runId = await startAgentRun(
+        prompt,
+        {
+          onOutput: (id, chunk) => {
+            sendToRenderer('agent:output', { runId: id, chunk })
+            if (!toCapsule) return
+            tail = (tail + chunk).replace(/\s+/g, ' ').slice(-220)
+            if (Date.now() - lastPush > 700) {
+              lastPush = Date.now()
+              setCapsuleAgentRun({ runId: id, status: 'running', tail: tail.trim() })
+            }
+          },
+          onDone: (id, result) => {
+            sendToRenderer('agent:done', { runId: id, ...result })
+            if (toCapsule) {
+              const out = result.output.replace(/\s+/g, ' ').trim().slice(-220)
+              setCapsuleAgentRun({ runId: id, status: result.ok ? 'done' : 'failed', tail: out })
+            }
+          }
+        },
+        agent
+      )
+      if (toCapsule) setCapsuleAgentRun({ runId, status: 'running' })
+      return { runId }
+    } catch (err) {
+      if (toCapsule) setCapsuleAgentRun({ status: 'failed', tail: (err as Error).message })
+      throw err
+    }
   })
   handle('agent:cancel', async (_e, runId: string) => cancelAgentRun(String(runId)))
   handle('agent:chooseWorkdir', async () => {

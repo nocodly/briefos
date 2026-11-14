@@ -42,6 +42,8 @@ export interface AppSettings {
   agentAutonomy: 'safe' | 'full'
   /** Working folder the agent runs in (empty = Documents/Minutama). */
   agentWorkdir: string
+  /** Meeting language ISO code for transcription + notes ('' = auto-detect). */
+  meetingLanguage: string
 }
 
 const DEFAULTS: AppSettings = {
@@ -71,7 +73,8 @@ const DEFAULTS: AppSettings = {
   replyHints: true,
   agentProvider: 'claude',
   agentAutonomy: 'safe',
-  agentWorkdir: ''
+  agentWorkdir: '',
+  meetingLanguage: ''
 }
 
 // encryptionKey obfuscates the on-disk JSON (electron-store uses AES-256-CBC).

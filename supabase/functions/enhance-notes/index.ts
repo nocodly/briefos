@@ -53,8 +53,12 @@ function systemPrompt(sections: string[], language?: string): string {
     '- "Me" is the user (microphone). "Them" is everyone else on the call (system audio).',
     '- Be concise and concrete: names, numbers, dates, commitments. No filler, no generic advice.',
     '- Never invent facts that are not in the notes or transcript. If something is unclear, omit it.',
-    `- Output language: ${language ? language : 'the main language spoken in the transcript'}.`,
-    `- Use these sections as markdown "##" headings, in this order: ${sections.join(', ')}.`,
+    language
+      ? `- LANGUAGE: write EVERYTHING (title, headings, bullets, action items, decisions) in ${language}.`
+      : '- LANGUAGE: first detect the main language of the TRANSCRIPT (and the user’s notes). Write EVERYTHING —' +
+        ' title, section headings, bullets, action items, decisions — in that language. Never default to English' +
+        ' unless the conversation was in English. If several languages were spoken, use the one spoken most.',
+    `- Use these sections as markdown "##" headings, in this order (translate the heading names into the output language): ${sections.join(', ')}.`,
     '- If a section has no real content, OMIT the heading entirely. Never write "None", "N/A" or "None noted".',
     '- Use short bullet points under each heading.',
     '',
