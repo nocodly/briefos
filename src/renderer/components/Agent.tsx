@@ -174,7 +174,7 @@ export function SendToAgentModal({
                   disabled={!a.installed}
                   onClick={() => setAgent(a.id)}
                   className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all disabled:opacity-40 ${
-                    agent === a.id ? 'border-accent bg-accent-soft/70' : 'border-border bg-white/60 hover:bg-white'
+                    agent === a.id ? 'border-accent bg-accent-soft/70' : 'border-border bg-white/[.06] hover:bg-white/[.1]'
                   }`}
                 >
                   <div className="text-[13px] font-semibold">{a.name}</div>
@@ -188,7 +188,7 @@ export function SendToAgentModal({
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={9}
-              className="mt-1.5 w-full rounded-xl border border-border bg-white/70 px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-text focus:border-accent focus:outline-none"
+              className="mt-1.5 w-full rounded-xl border border-border bg-white/[.06] px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-text focus:border-accent focus:outline-none"
             />
           </>
         )}
@@ -196,7 +196,7 @@ export function SendToAgentModal({
         {error && <div className="mt-3 text-[12px] text-red">{error}</div>}
 
         <div className="mt-5 flex items-center justify-end gap-2">
-          <button onClick={onClose} className="rounded-xl px-4 py-2 text-[13px] text-text-2 hover:bg-white/60">
+          <button onClick={onClose} className="rounded-xl px-4 py-2 text-[13px] text-text-2 hover:bg-white/[.07]">
             Cancel
           </button>
           <button
@@ -224,7 +224,7 @@ export function AgentRuns({ compact = false }: { compact?: boolean }) {
       {runs.map((r) => {
         const expanded = open === r.runId || (!compact && r.status === 'running')
         return (
-          <div key={r.runId} className="rounded-card border border-border-soft bg-white/60">
+          <div key={r.runId} className="rounded-card border border-border-soft bg-white/[.06]">
             <button
               onClick={() => setOpen(open === r.runId ? null : r.runId)}
               className="w-full flex items-center gap-2 px-3 py-2 text-left"

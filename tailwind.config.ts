@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss'
 
-// Minutama Agent design system — glass + tangerine, matching minutama.com.
+// Minutama Agent design system — dark glass + tangerine.
 // Never hardcode colors in components; reference these tokens.
 //
 // Surfaces are translucent CSS variables (see index.css) so panels read as
@@ -11,33 +11,33 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Glass surfaces (translucent, no opacity modifiers)
+        // Glass surfaces (translucent, no opacity modifiers) — see index.css
         bg: 'var(--glass-bg)', // inputs, inset areas
         surface: 'var(--glass-surface)', // cards, panels
         'bg-2': 'var(--glass-bg-2)', // subtle fills, tabs
         border: 'var(--glass-border)',
         'border-soft': 'var(--glass-border-soft)',
 
-        // Solid
-        paper: '#FBFAF7',
-        sand: '#F3F0E9',
-        ink: '#15171C', // headings, dark panels
+        // Solid (dark theme). Hex so opacity modifiers keep working.
+        paper: '#0B0C0F', // app background
+        sand: '#1C1D22',
+        ink: '#17181D', // dark panels
         accent: '#FF6A3D', // tangerine
-        'accent-ink': '#C9441B', // hover / text on light
-        'accent-soft': '#FFEDE5', // hover / selected
+        'accent-ink': '#FF8F6B', // accent text / hover on dark
+        'accent-soft': '#2A1811', // selected / highlight fill
         'accent-pale': '#FFC9B3',
-        text: '#15171C',
-        'text-2': '#4A4F5C',
-        'text-3': '#858A96',
-        'text-4': '#B4B8C1',
-        green: '#16A34A',
-        'green-soft': '#E8F7EE',
-        amber: '#D97706',
-        'amber-soft': '#FFF7E6',
-        red: '#E5484D', // recording
-        'red-soft': '#FDEDEE',
-        purple: '#7C3AED',
-        'purple-soft': '#F1EAFE'
+        text: '#F3F1EC',
+        'text-2': '#B4B1AB',
+        'text-3': '#807D78',
+        'text-4': '#595751',
+        green: '#22C55E',
+        'green-soft': '#0F2418',
+        amber: '#F5A524',
+        'amber-soft': '#2A200C',
+        red: '#F2555A', // recording
+        'red-soft': '#2C1316',
+        purple: '#A78BFA',
+        'purple-soft': '#1F1733'
       },
       fontFamily: {
         display: ['"Bricolage Grotesque"', 'Inter', 'sans-serif'],
@@ -50,8 +50,8 @@ export default {
         modal: '26px'
       },
       boxShadow: {
-        glass: '0 1px 0 rgba(255,255,255,.7) inset, 0 8px 30px -12px rgba(21,23,28,.18)',
-        'glass-lg': '0 1px 0 rgba(255,255,255,.8) inset, 0 24px 60px -20px rgba(21,23,28,.28)'
+        glass: '0 1px 0 rgba(255,255,255,.05) inset, 0 12px 40px -18px rgba(0,0,0,.65)',
+        'glass-lg': '0 1px 0 rgba(255,255,255,.07) inset, 0 30px 80px -24px rgba(0,0,0,.8)'
       },
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',

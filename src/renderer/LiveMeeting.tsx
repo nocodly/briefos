@@ -103,7 +103,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
         >
           <i className="ti ti-arrow-left text-[18px]" />
         </button>
-        <h1 className="font-display font-bold text-[16px] text-ink flex-1 truncate">
+        <h1 className="font-display font-bold text-[16px] text-text flex-1 truncate">
           {s.enhanced?.title ?? (live ? 'Meeting in progress' : 'New meeting')}
         </h1>
 
@@ -245,7 +245,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
                 key={id}
                 onClick={() => setSide(id)}
                 className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition-all ${
-                  side === id ? 'bg-white/85 text-text shadow-[0_1px_2px_rgba(21,23,28,.06)]' : 'text-text-3 hover:text-text'
+                  side === id ? 'bg-white/[.06] text-text' : 'text-text-3 hover:text-text'
                 }`}
               >
                 <i className={`ti ti-${icon} text-[14px] ${side === id ? 'text-accent' : ''}`} /> {label}
@@ -332,7 +332,7 @@ function AgentSide({
   return (
     <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
       {/* Task box */}
-      <div className="rounded-card border border-border-soft bg-white/70 p-2.5">
+      <div className="rounded-card border border-border-soft bg-white/[.06] p-2.5">
         <textarea
           value={task}
           onChange={(e) => {
@@ -353,7 +353,7 @@ function AgentSide({
               setSaved(true)
             }}
             disabled={!task.trim()}
-            className="rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text disabled:opacity-40"
+            className="rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text disabled:opacity-40"
             title="Add to your notes as an action item"
           >
             <i className="ti ti-checkbox text-[13px]" /> Save task

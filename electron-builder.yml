@@ -22,6 +22,9 @@ asarUnpack:
 
 # Bundle prompt markdown + tray icons alongside the app.
 extraResources:
+  # Call detector helper (Windows Core Audio capture sessions).
+  - from: resources/mic-sessions.ps1
+    to: mic-sessions.ps1
   - from: src/ai/prompts
     to: prompts
     filter:

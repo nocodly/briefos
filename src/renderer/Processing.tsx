@@ -50,7 +50,7 @@ export default function Processing({ step }: { step: string }) {
     <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm z-50 flex items-center justify-center font-body">
       <div className="glass-strong rounded-modal p-9 w-[420px] animate-fade-up">
         <div className="w-14 h-14 border-[3px] border-accent-pale border-t-accent rounded-full animate-spin-slow mx-auto mb-5" />
-        <h2 className="font-display font-bold text-[20px] text-ink text-center mb-1">
+        <h2 className="font-display font-bold text-[20px] text-text text-center mb-1">
           Analyzing your meeting
         </h2>
         <p className="text-[12px] text-text-3 text-center mb-6 min-h-[18px]">

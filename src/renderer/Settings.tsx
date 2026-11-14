@@ -111,7 +111,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
   return (
     <div className="min-h-screen bg-bg font-body text-text">
       <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5 flex items-center justify-between">
-        <h1 className="font-display font-extrabold text-[24px] text-ink">Settings</h1>
+        <h1 className="font-display font-extrabold text-[24px] text-text">Settings</h1>
         <button
           onClick={() => navigate('dashboard')}
           className="text-text-3 hover:text-text-2 hover:bg-bg-2 rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all"
@@ -130,7 +130,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
         <Panel title="Plan" icon="crown" desc={email ? `Signed in as ${email}` : 'Your Minutama plan.'}>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="font-display font-bold text-[16px] text-ink">
+              <div className="font-display font-bold text-[16px] text-text">
                 {isPro ? 'Pro' : 'Free'}
               </div>
               <div className="text-[12px] text-text-3 mt-0.5">
@@ -227,7 +227,7 @@ function AgentsSettings({
           return (
             <div
               key={id}
-              className={`rounded-xl border p-3.5 transition-all ${selected ? 'border-accent bg-accent-soft/60' : 'border-border bg-white/60'}`}
+              className={`rounded-xl border p-3.5 transition-all ${selected ? 'border-accent bg-accent-soft/60' : 'border-border bg-white/[.06]'}`}
             >
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-[13px] flex-1">{AGENT_NAMES[id]}</span>
@@ -245,14 +245,14 @@ function AgentsSettings({
                   <button
                     onClick={() => onProvider(id)}
                     disabled={selected}
-                    className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold ${selected ? 'bg-white/80 text-accent-ink' : 'btn-accent'}`}
+                    className={`rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold ${selected ? 'bg-white/[.06] text-accent-ink' : 'btn-accent'}`}
                   >
                     {selected ? 'Default agent' : 'Use this agent'}
                   </button>
                 ) : (
                   <button
                     onClick={() => window.open(INSTALL[id], '_blank')}
-                    className="rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text"
+                    className="rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text"
                   >
                     Install {AGENT_NAMES[id]} <i className="ti ti-external-link text-[12px]" />
                   </button>
@@ -277,7 +277,7 @@ function AgentsSettings({
         </button>
       </div>
 
-      <div className="rounded-xl border border-border bg-white/60 p-3">
+      <div className="rounded-xl border border-border bg-white/[.06] p-3">
         <div className="text-[12px] font-medium text-text mb-2">What the agent may do</div>
         {([
           ['safe', 'Ask first (recommended)', 'Reads and drafts. Anything else follows the permissions you set in Claude Code / Codex.'],
@@ -341,7 +341,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
     return (
       <div className="bg-accent-soft border border-accent/20 rounded-lg px-4 py-3 space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-[12px] font-semibold text-ink">
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-text">
             <i className="ti ti-download text-[15px] text-accent" />
             Update available{version ? ` — v${version}` : ''}
           </div>

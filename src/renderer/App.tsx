@@ -7,11 +7,11 @@ import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
 import LiveMeeting from './LiveMeeting'
-import { handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
+import { addTaskToNotes, handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
-import { initAgentEvents } from './components/Agent'
+import { initAgentEvents, SendToAgentModal } from './components/Agent'
 
 export type Page = 'dashboard' | 'live' | 'meeting' | 'period' | 'settings' | 'onboarding'
 
@@ -29,6 +29,7 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [processingStep, setProcessingStep] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [agentTask, setAgentTask] = useState<string | null>(null)
 
   const navigate = useCallback<NavigateFn>((p, id = null) => {
     setPage(p)
@@ -39,6 +40,12 @@ export default function App() {
   // On every launch: check if there's a Supabase session, then decide where to route.
   useEffect(() => {
     const boot = async () => {
+      // Dev-only design preview (vite dev server, ?preview): skip sign-in so the
+      // screens can be checked in a browser. Stripped from production builds.
+      if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('preview')) {
+        setStage('app')
+        return
+      }
       try {
         const { data: { session } } = await supabase.auth.getSession()
 
@@ -131,6 +138,18 @@ export default function App() {
   // Coding-agent output streams in from main for the whole app lifetime.
   useEffect(() => initAgentEvents(), [])
 
+  // Tasks typed into the floating capsule.
+  useEffect(() => {
+    const unsubs = [
+      subscribe('agent:saveTask', ({ text }: { text: string }) => addTaskToNotes(text)),
+      subscribe('agent:compose', ({ text }: { text: string }) => {
+        setPage('live')
+        setAgentTask(text)
+      })
+    ]
+    return () => unsubs.forEach((u) => u())
+  }, [])
+
   // Tray / overlay / hotkey commands are relayed by main; the session lives here.
   useEffect(() => {
     const unsub = subscribe('recording:command', (cmd) => {
@@ -190,6 +209,21 @@ export default function App() {
         </div>
       )}
       <UpdateToast />
+      {agentTask !== null && (
+        <SendToAgentModal
+          task={agentTask}
+          context={(() => {
+            const st = useMeetingSession.getState()
+            return {
+              title: st.enhanced?.title ?? 'Current meeting',
+              date: new Date().toLocaleDateString(),
+              notes: st.enhanced?.notesMarkdown ?? st.userNotes,
+              transcript: st.segments.map((g) => ({ speaker: g.speaker === 'me' ? 'Me' : 'Them', text: g.text }))
+            }
+          })()}
+          onClose={() => setAgentTask(null)}
+        />
+      )}
     </div>
   )
 }
@@ -347,8 +381,8 @@ function NavItem({
       onClick={onClick}
       className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-[13px] mb-0.5 transition-all ${
         active
-          ? 'bg-white/85 text-text font-semibold shadow-[0_1px_2px_rgba(21,23,28,.06)]'
-          : 'text-text-2 hover:bg-white/50 hover:text-text'
+          ? 'bg-white/[.08] text-text font-semibold'
+          : 'text-text-2 hover:bg-white/[.07] hover:text-text'
       }`}
     >
       <i className={`ti ti-${icon} text-[16px] w-[18px] text-center ${active ? 'text-accent' : ''}`} />

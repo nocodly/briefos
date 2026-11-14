@@ -67,7 +67,7 @@ function Welcome() {
   ]
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[26px] text-ink mb-2">Welcome to Minutama</h1>
+      <h1 className="font-display font-extrabold text-[26px] text-text mb-2">Welcome to Minutama</h1>
       <p className="text-[14px] text-text-2 mb-6">AI notes for every meeting.</p>
       <div className="space-y-4">
         {points.map((p) => (
@@ -120,7 +120,7 @@ function MicStep() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px] text-ink mb-2">Allow your microphone</h1>
+      <h1 className="font-display font-extrabold text-[24px] text-text mb-2">Allow your microphone</h1>
       <p className="text-[14px] text-text-2 mb-6">
         Minutama records your voice and your computer&apos;s audio only while you take notes. Audio is never stored.
       </p>

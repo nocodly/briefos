@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { invoke, subscribe } from './lib/ipc'
 import { LogoMark } from './components/Logo'
 
 // =============================================================================
 // Capsule — the floating, always-on-top Minutama widget (transparent frameless
-// window, pinned to the right edge). The main process owns its state
+// window pinned to the right edge). The main process owns its state
 // (src/main/Capsule.ts) and resizes the window per mode:
 //
-//   prompt     a call app took the mic → "Call on Zoom · Start notes?"
-//   recording  logo + live waves + timer, pause / stop, open notes
-//              + optional reply hint ("They asked … → you could say …")
-//              + optional "Call ended — stop notes?"
+//   prompt     a call app took the mic → "Call on Zoom · Take notes?"
+//   recording  logo + timer + waves + pause/stop, and the agent panel:
+//              live reply hint ("They asked … → you could say …") and a task
+//              box ("Tell your agent…" → save to notes / send to agent).
+//              Collapsible to the compact bar.
 // =============================================================================
 
 interface ReplyHint {
@@ -23,6 +24,7 @@ interface CapsuleState {
   app: string | null
   callEnded: boolean
   hint: ReplyHint | null
+  expanded: boolean
 }
 
 const drag = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
@@ -37,8 +39,16 @@ function formatClock(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
+type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle'
+
 export default function Overlay() {
-  const [cap, setCap] = useState<CapsuleState>({ mode: 'hidden', app: null, callEnded: false, hint: null })
+  const [cap, setCap] = useState<CapsuleState>({
+    mode: 'hidden',
+    app: null,
+    callEnded: false,
+    hint: null,
+    expanded: true
+  })
   const [durationMs, setDurationMs] = useState(0)
   const [paused, setPaused] = useState(false)
 
@@ -59,7 +69,7 @@ export default function Overlay() {
     return () => unsubs.forEach((u) => u())
   }, [])
 
-  const act = (a: 'start' | 'dismiss' | 'open' | 'clearHint') => invoke('capsule:action', a).catch(console.error)
+  const act = (a: Action) => invoke('capsule:action', a).catch(console.error)
 
   const togglePause = async () => {
     try {
@@ -74,31 +84,25 @@ export default function Overlay() {
   if (cap.mode === 'prompt') {
     return (
       <Shell>
-        <div className="flex items-center gap-3 px-3.5 h-full" style={drag}>
+        <div className="flex h-full items-center gap-3 px-4" style={drag}>
           <div className="relative flex-shrink-0">
-            <LogoMark size={40} />
-            <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full bg-green ring-2 ring-[#15171C] animate-pulse-dot" />
+            <LogoMark size={42} />
+            <span className="absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-green ring-[3px] ring-[#121317] animate-pulse-dot" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-white leading-tight">
+            <div className="truncate text-[13.5px] font-semibold leading-tight text-white">
               Call on {cap.app ?? 'your computer'}
             </div>
-            <div className="text-[11.5px] text-white/55 mt-0.5">Take notes with Minutama?</div>
+            <div className="mt-0.5 text-[12px] text-white/50">Take notes with Minutama?</div>
           </div>
           <div className="flex items-center gap-1.5" style={noDrag}>
             <button
               onClick={() => act('start')}
-              className="btn-accent h-9 rounded-full px-3.5 text-[12.5px] font-semibold flex items-center gap-1.5 active:scale-95 transition-all"
+              className="btn-accent flex h-9 items-center gap-1.5 rounded-full px-4 text-[12.5px] font-semibold transition-all duration-200 active:scale-95"
             >
-              <i className="ti ti-player-record-filled text-[13px]" /> Start
+              <i className="ti ti-player-record-filled text-[12px]" /> Start
             </button>
-            <button
-              onClick={() => act('dismiss')}
-              title="Not now"
-              className="h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 flex items-center justify-center transition-all"
-            >
-              <i className="ti ti-x text-[15px]" />
-            </button>
+            <IconButton icon="x" title="Not now" onClick={() => act('dismiss')} />
           </div>
         </div>
       </Shell>
@@ -110,72 +114,147 @@ export default function Overlay() {
   return (
     <Shell>
       <div className="flex h-full flex-col">
-        {/* Main row */}
-        <div className="flex items-center gap-2.5 px-3 h-[68px] flex-shrink-0" style={drag}>
-          <button onClick={() => act('open')} style={noDrag} title="Open notes" className="flex-shrink-0">
-            <LogoMark size={36} />
+        {/* Bar */}
+        <div className="flex h-[68px] flex-shrink-0 items-center gap-3 px-3.5" style={drag}>
+          <button onClick={() => act('open')} style={noDrag} title="Open notes" className="flex-shrink-0 transition-transform duration-200 hover:scale-105">
+            <LogoMark size={38} />
           </button>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <span className={`h-2 w-2 rounded-full ${paused ? 'bg-amber' : 'bg-red animate-pulse-dot'}`} />
-              <span className="font-mono text-white text-[17px] leading-none tracking-tight">{formatClock(durationMs)}</span>
+              <span className="font-mono text-[17px] leading-none tracking-tight text-white">{formatClock(durationMs)}</span>
             </div>
-            <div className="mt-1.5">
+            <div className="mt-2">
               <AudioWave active={!paused} />
             </div>
           </div>
           <div className="flex items-center gap-1.5" style={noDrag}>
-            <button
-              onClick={togglePause}
-              title={paused ? 'Resume' : 'Pause'}
-              className="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all active:scale-95"
-            >
-              <i className={`ti ti-${paused ? 'player-play' : 'player-pause'} text-[16px]`} />
-            </button>
+            <IconButton icon={paused ? 'player-play' : 'player-pause'} title={paused ? 'Resume' : 'Pause'} onClick={togglePause} />
             <button
               onClick={stop}
               title="Stop and write notes"
-              className="w-9 h-9 rounded-full bg-red hover:bg-red/85 text-white flex items-center justify-center transition-all active:scale-95"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-red text-white transition-all duration-200 hover:bg-red/85 active:scale-95"
             >
-              <i className="ti ti-player-stop-filled text-[15px]" />
+              <i className="ti ti-player-stop-filled text-[14px]" />
             </button>
+            <IconButton
+              icon={cap.expanded ? 'chevron-up' : 'sparkles'}
+              title={cap.expanded ? 'Hide agent' : 'Show agent'}
+              onClick={() => act('toggle')}
+            />
           </div>
         </div>
 
-        {/* Call ended nudge */}
-        {cap.callEnded && !cap.hint && (
-          <div className="mx-3 -mt-1 mb-2 flex items-center gap-2 text-[11.5px] text-white/70" style={noDrag}>
+        {cap.callEnded && (
+          <div className="mx-3.5 mb-2 flex h-[26px] items-center gap-2 text-[11.5px] text-white/65" style={noDrag}>
             <i className="ti ti-phone-off text-[13px] text-accent-pale" />
             <span className="flex-1">Call ended — stop and write notes?</span>
-            <button onClick={stop} className="font-semibold text-accent-pale hover:text-white">
+            <button onClick={stop} className="font-semibold text-accent-pale transition-colors hover:text-white">
               Stop
             </button>
           </div>
         )}
 
-        {/* Reply hint */}
-        {cap.hint && (
-          <div className="mx-2.5 mb-2.5 flex-1 rounded-[14px] bg-white/[.07] border border-white/10 p-3 animate-fade-up" style={noDrag}>
-            <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.1em] text-accent-pale">
-              <i className="ti ti-bulb text-[13px]" /> They asked
-              <button onClick={() => act('clearHint')} className="ml-auto text-white/40 hover:text-white" title="Hide">
-                <i className="ti ti-x text-[13px]" />
-              </button>
-            </div>
-            <div className="mt-1 text-[12px] text-white/60 line-clamp-1">{cap.hint.question}</div>
-            <div className="mt-2 text-[13.5px] leading-snug text-white line-clamp-4">“{cap.hint.answer}”</div>
-          </div>
-        )}
+        {cap.expanded && <AgentPanel hint={cap.hint} onClearHint={() => act('clearHint')} />}
       </div>
     </Shell>
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+// ─── Agent panel: reply hint + task box ─────────────────────────────────────
+
+function AgentPanel({ hint, onClearHint }: { hint: ReplyHint | null; onClearHint: () => void }) {
+  const [text, setText] = useState('')
+  const [flash, setFlash] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const submit = async (send: boolean) => {
+    const t = text.trim()
+    if (!t) return
+    try {
+      await invoke('capsule:task', { text: t, send })
+      setText('')
+      setFlash(send ? 'Opened in Minutama — review and send' : 'Saved to your notes ✓')
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(() => setFlash(null), 2500)
+    } catch (err) {
+      setFlash((err as Error).message)
+    }
+  }
+
   return (
-    <div className="h-screen w-screen p-1 select-none">
-      <div className="h-full w-full rounded-[22px] bg-[#15171C]/90 border border-white/10 shadow-[0_12px_40px_-12px_rgba(0,0,0,.6)] backdrop-blur-xl overflow-hidden relative">
-        <div className="pointer-events-none absolute -left-10 -top-12 h-28 w-28 rounded-full bg-accent/35 blur-2xl" />
+    <div className="flex flex-1 flex-col gap-2 border-t border-white/[.07] px-3 pb-3 pt-2.5 animate-fade-up" style={noDrag}>
+      <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.12em] text-white/40">
+        <i className="ti ti-sparkles text-[12px] text-accent" /> Agent
+      </div>
+
+      {hint ? (
+        <div className="rounded-[14px] border border-accent/25 bg-accent/[.08] p-3">
+          <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.1em] text-accent-pale">
+            <i className="ti ti-bulb text-[13px]" /> They asked
+            <button onClick={onClearHint} className="ml-auto text-white/35 transition-colors hover:text-white" title="Hide">
+              <i className="ti ti-x text-[13px]" />
+            </button>
+          </div>
+          <div className="mt-1 line-clamp-1 text-[12px] text-white/55">{hint.question}</div>
+          <div className="mt-2 line-clamp-4 text-[13.5px] leading-snug text-white">“{hint.answer}”</div>
+        </div>
+      ) : (
+        <div className="rounded-[14px] border border-white/[.06] bg-white/[.03] px-3 py-2.5 text-[11.5px] leading-snug text-white/40">
+          <i className="ti ti-ear text-[13px] text-white/50" /> Listening. When someone asks you something, a suggested answer appears here.
+        </div>
+      )}
+
+      <div className="mt-auto flex items-center gap-1.5 rounded-[14px] border border-white/10 bg-white/[.05] p-1.5 pl-3 transition-colors focus-within:border-accent/50">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void submit(e.ctrlKey || e.metaKey)
+          }}
+          placeholder={flash ?? 'Tell your agent… e.g. “send Anna the deck”'}
+          className="min-w-0 flex-1 bg-transparent text-[12.5px] text-white outline-none placeholder:text-white/35"
+        />
+        <button
+          onClick={() => void submit(false)}
+          disabled={!text.trim()}
+          title="Save as a task in your notes (Enter)"
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-white/60 transition-all hover:bg-white/10 hover:text-white disabled:opacity-30"
+        >
+          <i className="ti ti-checkbox text-[15px]" />
+        </button>
+        <button
+          onClick={() => void submit(true)}
+          disabled={!text.trim()}
+          title="Send to Claude Code / Codex (Ctrl+Enter)"
+          className="btn-accent flex h-7 items-center gap-1 rounded-lg px-2 text-[11.5px] font-semibold transition-all disabled:opacity-30"
+        >
+          <i className="ti ti-send text-[13px]" /> Agent
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function IconButton({ icon, title, onClick }: { icon: string; title: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[.08] text-white/80 transition-all duration-200 hover:bg-white/[.16] hover:text-white active:scale-95"
+    >
+      <i className={`ti ti-${icon} text-[15px]`} />
+    </button>
+  )
+}
+
+function Shell({ children }: { children: React.ReactNode }) {
+  // Solid fill (no backdrop-filter): transparent windows on Windows render a
+  // grey box behind blurred layers.
+  return (
+    <div className="h-screen w-screen select-none p-1.5">
+      <div className="relative h-full w-full overflow-hidden rounded-[24px] border border-white/[.09] bg-[#121317] shadow-[0_10px_30px_-12px_rgba(0,0,0,.7)]">
+        <div className="pointer-events-none absolute -left-12 -top-16 h-36 w-36 rounded-full bg-accent/30 blur-3xl" />
         <div className="relative h-full">{children}</div>
       </div>
     </div>
@@ -183,9 +262,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function AudioWave({ active }: { active: boolean }) {
-  const bars = [6, 12, 9, 16, 11, 7, 13, 8]
+  const bars = [6, 12, 9, 16, 11, 7, 13, 8, 10]
   return (
-    <div className="flex items-end gap-[3px] h-4">
+    <div className="flex h-4 items-end gap-[3px]">
       {bars.map((h, i) => (
         <div
           key={i}

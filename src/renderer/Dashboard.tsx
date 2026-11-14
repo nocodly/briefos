@@ -119,7 +119,7 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
       <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="font-display font-extrabold text-[24px] text-ink">Meetings</h1>
+            <h1 className="font-display font-extrabold text-[24px] text-text">Meetings</h1>
             <p className="text-[12px] text-text-3 mt-0.5">
               {meetings.length} {meetings.length === 1 ? 'meeting' : 'meetings'}
               {searching ? ' · search results' : ''}
@@ -205,7 +205,7 @@ function MeetingCard({
       <div className="flex items-center gap-4 p-[18px]">
         <button onClick={onOpen} className="flex-1 text-left min-w-0">
           <div className="flex items-center gap-2.5 mb-1">
-            <span className="font-display font-bold text-[15px] text-ink truncate">
+            <span className="font-display font-bold text-[15px] text-text truncate">
               {meeting.title}
             </span>
             <span
@@ -266,7 +266,7 @@ function EmptyState({ searching, onStart }: { searching: boolean; onStart: () =>
       <div className="w-14 h-14 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-4">
         <i className="ti ti-microphone-2 text-[28px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[17px] text-ink mb-1">No meetings yet</h3>
+      <h3 className="font-display font-bold text-[17px] text-text mb-1">No meetings yet</h3>
       <p className="text-[13px] text-text-3 mb-6 max-w-[320px] mx-auto">
         Join any call, press{' '}
         <kbd className="font-mono text-[11px] bg-bg-2 border border-border rounded px-1.5 py-0.5">

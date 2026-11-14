@@ -9,12 +9,13 @@
 
 @layer base {
   :root {
-    /* Frosted-glass surfaces over the warm backdrop below. */
-    --glass-bg: rgba(255, 255, 255, 0.55);
-    --glass-surface: rgba(255, 255, 255, 0.68);
-    --glass-bg-2: rgba(255, 255, 255, 0.42);
-    --glass-border: rgba(21, 23, 28, 0.09);
-    --glass-border-soft: rgba(21, 23, 28, 0.055);
+    /* Dark frosted-glass surfaces over the warm-glow backdrop below. */
+    color-scheme: dark;
+    --glass-bg: rgba(255, 255, 255, 0.045);
+    --glass-surface: rgba(255, 255, 255, 0.05);
+    --glass-bg-2: rgba(255, 255, 255, 0.035);
+    --glass-border: rgba(255, 255, 255, 0.09);
+    --glass-border-soft: rgba(255, 255, 255, 0.06);
   }
 
   html,
@@ -30,12 +31,12 @@
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
     background-color: theme('colors.paper');
-    /* Warm, soft blobs give the glass panels something to frost. */
+    /* Deep night backdrop with soft tangerine glows behind the glass. */
     background-image:
-      radial-gradient(900px 600px at 8% -10%, rgba(255, 106, 61, 0.22), transparent 60%),
-      radial-gradient(700px 520px at 105% 15%, rgba(255, 176, 120, 0.25), transparent 60%),
-      radial-gradient(800px 600px at 60% 115%, rgba(255, 140, 90, 0.16), transparent 60%),
-      linear-gradient(180deg, #FBFAF7 0%, #F6F1EA 100%);
+      radial-gradient(900px 620px at 0% -12%, rgba(255, 106, 61, 0.20), transparent 62%),
+      radial-gradient(760px 560px at 108% 8%, rgba(255, 150, 95, 0.10), transparent 60%),
+      radial-gradient(900px 640px at 55% 120%, rgba(255, 106, 61, 0.09), transparent 62%),
+      linear-gradient(180deg, #0D0E12 0%, #0A0B0E 100%);
     background-attachment: fixed;
   }
 
@@ -49,7 +50,23 @@
   }
 
   ::selection {
-    background: rgba(255, 106, 61, 0.22);
+    background: rgba(255, 106, 61, 0.35);
+  }
+
+  /* Smooth, consistent motion everywhere (like minutama.com). */
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+    transition-duration: 200ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  option {
+    background: #17181d;
+    color: #f3f1ec;
   }
 
   ::-webkit-scrollbar {
@@ -57,34 +74,35 @@
     height: 10px;
   }
   ::-webkit-scrollbar-thumb {
-    background: rgba(21, 23, 28, 0.14);
+    background: rgba(255, 255, 255, 0.12);
     border-radius: 999px;
     border: 3px solid transparent;
     background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(21, 23, 28, 0.28);
+    background-color: rgba(255, 255, 255, 0.22);
   }
 }
 
 @layer components {
   /* Frosted panel. Use for sidebars, cards and floating bars. */
   .glass {
-    background: rgba(255, 255, 255, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.75);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.03));
+    border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: theme('boxShadow.glass');
-    backdrop-filter: blur(22px) saturate(170%);
+    backdrop-filter: blur(24px) saturate(150%);
   }
   .glass-strong {
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: linear-gradient(180deg, rgba(30, 31, 37, 0.92), rgba(22, 23, 28, 0.92));
+    border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: theme('boxShadow.glass-lg');
-    backdrop-filter: blur(28px) saturate(180%);
+    backdrop-filter: blur(28px) saturate(160%);
   }
   .glass-dark {
-    background: rgba(21, 23, 28, 0.78);
+    background: linear-gradient(135deg, rgba(255, 106, 61, 0.14), rgba(255, 255, 255, 0.03) 55%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(22px) saturate(160%);
+    box-shadow: theme('boxShadow.glass');
+    backdrop-filter: blur(24px) saturate(150%);
   }
   .btn-accent {
     background: linear-gradient(180deg, #FF7A50 0%, #FF6A3D 55%, #F25A2C 100%);

@@ -42,7 +42,7 @@ function createMainWindow(): BrowserWindow {
     height: 800,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#FBFAF7',
+    backgroundColor: '#0B0C0F',
     titleBarStyle: 'hiddenInset',
     autoHideMenuBar: true,
     show: false, // shown on ready-to-show to avoid white flash

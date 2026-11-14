@@ -494,7 +494,7 @@ function AgentActions({ items, onSend }: { items: ActionItem[]; onSend: (task: s
               </div>
               <button
                 onClick={() => onSend(a.task)}
-                className="flex-shrink-0 rounded-lg border border-border bg-white/80 px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
+                className="flex-shrink-0 rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
               >
                 <i className="ti ti-send text-[13px]" /> Send to agent
               </button>
@@ -516,7 +516,7 @@ function AgentActions({ items, onSend }: { items: ActionItem[]; onSend: (task: s
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
           placeholder="Or ask anything… “Draft a follow-up email to the client”"
-          className="flex-1 rounded-xl border border-border bg-white/70 px-3 py-2 text-[13px] placeholder:text-text-4 focus:border-accent focus:outline-none"
+          className="flex-1 rounded-xl border border-border bg-white/[.06] px-3 py-2 text-[13px] placeholder:text-text-4 focus:border-accent focus:outline-none"
         />
         <button disabled={!custom.trim()} className="btn-accent rounded-xl px-3.5 text-[12.5px] font-semibold disabled:opacity-40">
           Send
@@ -591,7 +591,7 @@ function NoSummary({ onGenerate, busy }: { onGenerate: () => void; busy: boolean
       <div className="w-12 h-12 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-3">
         <i className="ti ti-sparkles text-[24px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[16px] text-ink mb-1">No summary yet</h3>
+      <h3 className="font-display font-bold text-[16px] text-text mb-1">No summary yet</h3>
       <p className="text-[12px] text-text-3 mb-5">Generate an AI brief from this meeting's transcript.</p>
       <button
         onClick={onGenerate}

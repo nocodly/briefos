@@ -68,7 +68,7 @@ export default function SpeakerMapper({ meetingId, speakers, onComplete }: Speak
           <div className="w-11 h-11 rounded-panel bg-accent-soft flex items-center justify-center mb-3">
             <i className="ti ti-users text-[22px] text-accent" />
           </div>
-          <h2 className="font-display font-bold text-[20px] text-ink mb-1">
+          <h2 className="font-display font-bold text-[20px] text-text mb-1">
             Who was on the call?
           </h2>
           <p className="text-[12px] text-text-3">

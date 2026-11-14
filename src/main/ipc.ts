@@ -18,7 +18,7 @@ import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
 import { exportByEmail } from '@output/EmailSender'
 import { buildMeetingMarkdown } from '@output/markdown'
-import { capsuleDismiss, clearHint, getCapsule, showHint, type ReplyHint } from './Capsule'
+import { capsuleDismiss, clearHint, getCapsule, showHint, toggleCapsuleExpanded, type ReplyHint } from './Capsule'
 import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
 
 // =============================================================================
@@ -361,14 +361,30 @@ export function registerIpcHandlers(): void {
 
   // --- Capsule (floating call prompt / recording widget) --------------------
   handle('capsule:get', async () => getCapsule())
-  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint') => {
-    if (action === 'start') sendRecordingCommand('start')
+  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle') => {
+    if (action === 'toggle') toggleCapsuleExpanded()
+    else if (action === 'start') sendRecordingCommand('start')
     else if (action === 'dismiss') capsuleDismiss()
     else if (action === 'clearHint') clearHint()
     else if (action === 'open') {
       const win = getMainWindow()
       win?.show()
       win?.focus()
+    }
+    return { ok: true }
+  })
+  // Task typed into the capsule: save it to the notes, or open the
+  // "send to agent" confirmation in the main window.
+  handle('capsule:task', async (_e, payload: { text: string; send: boolean }) => {
+    const text = String(payload?.text ?? '').trim().slice(0, 2000)
+    if (!text) throw new Error('Empty task')
+    if (payload.send) {
+      const win = getMainWindow()
+      win?.show()
+      win?.focus()
+      sendToRenderer('agent:compose', { text })
+    } else {
+      sendToRenderer('agent:saveTask', { text })
     }
     return { ok: true }
   })

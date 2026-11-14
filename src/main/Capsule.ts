@@ -26,18 +26,20 @@ export interface CapsuleState {
   /** The call app released the mic while we are still recording. */
   callEnded: boolean
   hint: ReplyHint | null
+  /** Recording capsule shows the agent panel (hints + task box). */
+  expanded: boolean
 }
 
-let state: CapsuleState = { mode: 'hidden', app: null, callEnded: false, hint: null }
+let state: CapsuleState = { mode: 'hidden', app: null, callEnded: false, hint: null, expanded: true }
 let hintTimer: NodeJS.Timeout | null = null
 
 const MARGIN = 16
 
 function sizeFor(s: CapsuleState): { width: number; height: number } {
-  if (s.mode === 'prompt') return { width: 340, height: 92 }
-  if (s.hint) return { width: 360, height: 214 }
-  if (s.callEnded) return { width: 340, height: 92 }
-  return { width: 272, height: 68 }
+  if (s.mode === 'prompt') return { width: 352, height: 96 }
+  const ended = s.callEnded ? 34 : 0
+  if (!s.expanded) return { width: 292, height: 76 + ended }
+  return { width: 372, height: (s.hint ? 318 : 214) + ended }
 }
 
 function apply(): void {
@@ -65,12 +67,16 @@ export function setCapsule(patch: Partial<CapsuleState>): void {
   apply()
 }
 
-/** Show a live reply hint for ~45 s (replaced by newer hints). */
+/** Show a live reply hint for ~60 s (replaced by newer hints). */
 export function showHint(hint: ReplyHint): void {
   if (state.mode !== 'recording') return
   if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => setCapsule({ hint: null }), 45_000)
-  setCapsule({ hint })
+  hintTimer = setTimeout(() => setCapsule({ hint: null }), 60_000)
+  setCapsule({ hint, expanded: true })
+}
+
+export function toggleCapsuleExpanded(): void {
+  setCapsule({ expanded: !state.expanded })
 }
 
 export function clearHint(): void {
@@ -106,7 +112,7 @@ export function capsuleOnCallEnd(): void {
 }
 
 export function capsuleOnRecordingStart(): void {
-  setCapsule({ mode: 'recording', callEnded: false, hint: null })
+  setCapsule({ mode: 'recording', callEnded: false, hint: null, expanded: true })
 }
 
 export function capsuleOnRecordingStop(): void {

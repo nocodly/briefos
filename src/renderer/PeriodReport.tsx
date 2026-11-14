@@ -267,7 +267,7 @@ function EmptyState({
       <div className="w-14 h-14 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-4">
         <i className="ti ti-chart-histogram text-[28px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[18px] text-ink mb-1">
+      <h3 className="font-display font-bold text-[18px] text-text mb-1">
         Analyze {period.toLowerCase()}
       </h3>
       <p className="text-[13px] text-text-3 mb-1 max-w-[420px] mx-auto">

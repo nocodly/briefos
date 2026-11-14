@@ -1,101 +1,91 @@
-import { execFile } from 'node:child_process'
-import { basename } from 'node:path'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { join } from 'node:path'
+import { app } from 'electron'
 
 // =============================================================================
 // CallDetector — notices when a call app starts using the microphone.
 //
-// Windows records every app's microphone use under
-//   HKCU\…\CapabilityAccessManager\ConsentStore\microphone[\NonPackaged]\<app>
-// and while an app holds the mic its LastUsedTimeStop is 0. We poll that key
-// (cheap: one `reg query` every few seconds) and report which known call app —
-// or browser, for Meet/Teams-web/etc. — is currently on the mic.
-// Only call apps and browsers count, so dictation or voice notes in other apps
-// don't trigger the "Start notes?" prompt. Our own process is ignored.
+// A small PowerShell helper (resources/mic-sessions.ps1) asks Windows Core Audio
+// every 2 s which processes have an ACTIVE capture session and prints
+// "MIC zoom,chrome". (The privacy registry used before stopped updating on
+// newer Windows builds.) Only known call apps and browsers count, so dictation
+// or voice notes elsewhere don't trigger the "Take notes?" prompt. Our own
+// process is ignored. The helper only reads session state — it never opens or
+// records the microphone.
 // =============================================================================
 
-const ROOT = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone'
-const POLL_MS = 3000
-
-/** exe name (lower-case) or packaged-app family prefix → display name. */
+/** process name (lower-case, no .exe) → display name. */
 const CALL_APPS: [RegExp, string][] = [
-  [/^zoom\.exe$|^zoom/, 'Zoom'],
-  [/^ms-teams\.exe$|^teams\.exe$|^msteams|^microsoft\.teams/, 'Microsoft Teams'],
-  [/^slack\.exe$|slack/, 'Slack'],
-  [/^telegram\.exe$|telegram/, 'Telegram'],
-  [/^discord\.exe$|discord/, 'Discord'],
+  [/^zoom/, 'Zoom'],
+  [/^ms-teams$|^teams$|^msteams/, 'Microsoft Teams'],
+  [/^slack$/, 'Slack'],
+  [/^telegram$/, 'Telegram'],
+  [/^discord/, 'Discord'],
   [/whatsapp/, 'WhatsApp'],
-  [/^skype|skype/, 'Skype'],
-  [/^ciscocollabhost\.exe$|^webex|^atmgr\.exe$/, 'Webex'],
-  [/^viber\.exe$|viber/, 'Viber'],
-  [/^signal\.exe$|signal/, 'Signal'],
-  [/^ringcentral|ringcentral/, 'RingCentral'],
-  [/^goto\.exe$|^g2m/, 'GoTo Meeting'],
-  [/^lark\.exe$|^feishu/, 'Lark'],
+  [/^skype|^lync/, 'Skype'],
+  [/^ciscocollabhost$|^webex|^atmgr$|^ciscowebex/, 'Webex'],
+  [/^viber$/, 'Viber'],
+  [/^signal$/, 'Signal'],
+  [/^ringcentral/, 'RingCentral'],
+  [/^goto$|^g2m/, 'GoTo Meeting'],
+  [/^lark$|^feishu/, 'Lark'],
   [/^jitsi/, 'Jitsi Meet'],
   [/^facetime/, 'FaceTime'],
-  [/^chrome\.exe$/, 'Chrome'],
-  [/^msedge\.exe$/, 'Microsoft Edge'],
-  [/^firefox\.exe$/, 'Firefox'],
-  [/^brave\.exe$/, 'Brave'],
-  [/^opera\.exe$|^opera_gx/, 'Opera'],
-  [/^arc\.exe$|thebrowsercompany/, 'Arc'],
-  [/^vivaldi\.exe$/, 'Vivaldi']
+  [/^chrome$/, 'Chrome'],
+  [/^msedge$/, 'Microsoft Edge'],
+  [/^firefox$/, 'Firefox'],
+  [/^brave$/, 'Brave'],
+  [/^opera|^opera_gx/, 'Opera'],
+  [/^arc$/, 'Arc'],
+  [/^vivaldi$/, 'Vivaldi'],
+  [/^yandex|^browser$/, 'Yandex Browser']
 ]
+const BROWSERS = new Set(['Chrome', 'Microsoft Edge', 'Firefox', 'Brave', 'Opera', 'Arc', 'Vivaldi', 'Yandex Browser'])
+const SELF = new Set(['minutama', 'electron'])
 
-function appNameFor(keyName: string): string | null {
-  // NonPackaged keys are full paths with '#' instead of '\'; packaged ones are
-  // "<Publisher>.<Name>_<hash>".
-  const leaf = keyName.includes('#') ? basename(keyName.replace(/#/g, '\\')) : keyName
-  const id = leaf.toLowerCase()
+export function appNameFor(processName: string): string | null {
+  const id = processName.trim().toLowerCase().replace(/\.exe$/, '')
+  if (!id || SELF.has(id)) return null
   for (const [re, name] of CALL_APPS) if (re.test(id)) return name
   return null
 }
 
-/** Parse `reg query /s` output → app keys whose LastUsedTimeStop is 0 (mic in use). */
-export function parseActiveMicApps(output: string, selfExe: string): string[] {
-  const active: string[] = []
-  const self = selfExe.toLowerCase().replace(/\\/g, '#')
-  let key = ''
-  for (const raw of output.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.startsWith('HKEY_')) {
-      key = line
-      continue
-    }
-    const m = /^LastUsedTimeStop\s+REG_QWORD\s+0x([0-9a-f]+)$/i.exec(line)
-    if (!m || Number.parseInt(m[1], 16) !== 0) continue
-    const leaf = key.split('\\').pop() ?? ''
-    const lower = leaf.toLowerCase()
-    if (lower === self || lower.endsWith('#minutama.exe') || lower.endsWith('#electron.exe')) continue
-    active.push(leaf)
-  }
-  return active
+/** "MIC zoom,chrome" → preferred call app name (dedicated app over a browser). */
+export function pickCallApp(line: string): string | null {
+  if (!line.startsWith('MIC')) return null
+  const apps = line
+    .slice(3)
+    .split(',')
+    .map(appNameFor)
+    .filter((n): n is string => Boolean(n))
+  if (apps.length === 0) return null
+  return apps.find((a) => !BROWSERS.has(a)) ?? apps[0]
 }
 
-function queryRegistry(): Promise<string> {
-  return new Promise((resolve) => {
-    execFile('reg', ['query', ROOT, '/s'], { windowsHide: true, maxBuffer: 4 * 1024 * 1024 }, (err, stdout) =>
-      resolve(err ? '' : stdout)
-    )
-  })
+function helperPath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'mic-sessions.ps1')
+    : join(app.getAppPath(), 'resources', 'mic-sessions.ps1')
 }
 
 export interface CallDetectorEvents {
-  /** A call app took the mic (name is the friendly app name). */
+  /** A call app took the mic (friendly app name). */
   onCallStart: (app: string) => void
   /** No call app holds the mic any more. */
   onCallEnd: () => void
 }
 
-let timer: NodeJS.Timeout | null = null
+let child: ChildProcess | null = null
+let stopped = false
 let currentApp: string | null = null
-let missedPolls = 0
+let missed = 0
+let restarts = 0
 
 export function startCallDetector(events: CallDetectorEvents, isEnabled: () => boolean): void {
-  if (process.platform !== 'win32' || timer) return
-  console.log('[calls] detector started')
+  if (process.platform !== 'win32' || child) return
+  stopped = false
 
-  const tick = async () => {
+  const handleLine = (line: string) => {
     if (!isEnabled()) {
       if (currentApp) {
         currentApp = null
@@ -103,40 +93,60 @@ export function startCallDetector(events: CallDetectorEvents, isEnabled: () => b
       }
       return
     }
-    const out = await queryRegistry()
-    if (!out) return
-    const apps = parseActiveMicApps(out, process.execPath)
-      .map(appNameFor)
-      .filter((n): n is string => Boolean(n))
-
-    if (apps.length > 0) {
-      missedPolls = 0
-      // Prefer a dedicated call app over a browser when both hold the mic.
-      const browsers = new Set(['Chrome', 'Microsoft Edge', 'Firefox', 'Brave', 'Opera', 'Arc', 'Vivaldi'])
-      const app = apps.find((a) => !browsers.has(a)) ?? apps[0]
-      if (app !== currentApp) {
-        console.log('[calls] mic in use by', app)
-        currentApp = app
-        events.onCallStart(app)
+    const found = pickCallApp(line.trim())
+    if (found) {
+      missed = 0
+      if (found !== currentApp) {
+        console.log('[calls] mic in use by', found)
+        currentApp = found
+        events.onCallStart(found)
       }
     } else if (currentApp) {
-      // Apps briefly release the mic when switching devices; wait 2 polls.
-      missedPolls += 1
-      if (missedPolls >= 2) {
+      // Apps briefly release the mic when switching devices; wait ~4 s.
+      missed += 1
+      if (missed >= 2) {
         console.log('[calls] call ended', currentApp)
         currentApp = null
-        missedPolls = 0
+        missed = 0
         events.onCallEnd()
       }
     }
   }
 
-  timer = setInterval(() => void tick(), POLL_MS)
-  void tick()
+  const launch = () => {
+    console.log('[calls] detector starting', helperPath())
+    const proc = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', helperPath()],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
+    )
+    child = proc
+    let buf = ''
+    proc.stdout?.on('data', (d: Buffer) => {
+      buf += d.toString('utf8')
+      let i: number
+      while ((i = buf.indexOf('\n')) >= 0) {
+        handleLine(buf.slice(0, i))
+        buf = buf.slice(i + 1)
+      }
+    })
+    proc.stderr?.on('data', (d: Buffer) => console.warn('[calls] helper:', d.toString('utf8').slice(0, 300)))
+    proc.on('exit', (code) => {
+      child = null
+      if (stopped) return
+      restarts += 1
+      console.warn('[calls] helper exited', code, '— restart', restarts)
+      if (restarts <= 5) setTimeout(launch, 5000 * restarts)
+    })
+  }
+
+  launch()
+  app.on('will-quit', stopCallDetector)
 }
 
 export function stopCallDetector(): void {
-  if (timer) clearInterval(timer)
-  timer = null
+  stopped = true
+  child?.kill()
+  child = null
   currentApp = null
 }

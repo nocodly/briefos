@@ -34,7 +34,7 @@ function Desk({ children, label }: { children: React.ReactNode; label: string })
         <span className="h-2 w-2 rounded-full bg-[#22C55E]" /> {label}
       </div>
       <div className="absolute inset-x-4 bottom-4 top-14 rounded-lg border border-white/70 bg-white/45" />
-      <div className="absolute right-4 top-1/2 w-[290px] max-w-[calc(100%-2rem)] -translate-y-1/2">{children}</div>
+      <div className="absolute right-4 top-1/2 w-[330px] max-w-[calc(100%-2rem)] -translate-y-1/2">{children}</div>
     </div>
   )
 }
@@ -50,7 +50,7 @@ export function CallCapsuleDemo() {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold leading-tight">Call on Zoom</div>
-            <div className="mt-0.5 text-[11.5px] text-white/55">Take notes with Minutama?</div>
+            <div className="mt-0.5 whitespace-nowrap text-[11.5px] text-white/55">Take notes with Minutama?</div>
           </div>
           <span className="rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold">Start</span>
         </div>

@@ -125,7 +125,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
   }
 
   const inputCls =
-    'w-full text-[13px] bg-white/70 border border-border rounded-xl px-3.5 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:ring-4 focus:ring-accent/15 focus:outline-none transition-all'
+    'w-full text-[13px] bg-white/[.06] border border-border rounded-xl px-3.5 py-2.5 text-text placeholder:text-text-4 focus:border-accent focus:ring-4 focus:ring-accent/15 focus:outline-none transition-all'
 
   return (
     <div className="min-h-screen flex font-body text-text p-3 gap-3">
@@ -193,7 +193,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
                 key={t}
                 onClick={() => { setTab(t); setError('') }}
                 className={`flex-1 py-2 rounded-lg text-[12px] font-semibold transition-all ${
-                  tab === t ? 'bg-white shadow-[0_1px_3px_rgba(21,23,28,.1)] text-text' : 'text-text-3 hover:text-text-2'
+                  tab === t ? 'bg-white/[.1] text-text' : 'text-text-3 hover:text-text-2'
                 }`}
               >
                 {t === 'register' ? 'Create account' : 'Sign in'}
@@ -204,7 +204,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
           <button
             onClick={handleGoogle}
             disabled={googleLoading || loading}
-            className="w-full flex items-center justify-center gap-2.5 border border-border hover:border-accent/40 bg-white/80 hover:bg-white rounded-xl py-2.5 text-[13px] font-medium text-text transition-all mb-5 disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-2.5 border border-border hover:border-accent/40 bg-white/[.06] hover:bg-white/[.1] rounded-xl py-2.5 text-[13px] font-medium text-text transition-all mb-5 disabled:opacity-60"
           >
             {googleLoading ? <i className="ti ti-loader-2 animate-spin-slow text-[16px] text-accent" /> : <GoogleIcon />}
             {googleLoading ? 'Finish signing in in your browser…' : 'Continue with Google'}
