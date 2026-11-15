@@ -39,8 +39,14 @@ export default function Terms() {
           notes kept for {PLANS.free.historyDays} days.
         </li>
         <li>
-          Pro: {PLANS.pro.price} per month, billed in advance through Stripe, renews automatically until cancelled.
-          Fair use: up to {PLANS.pro.monthlyHours} hours of recording per month.
+          Pro: {PLANS.pro.price} per month with {PLANS.pro.monthlyHours} hours of meetings; Pro Max:{' '}
+          {PLANS.max.price} per month with {PLANS.max.monthlyHours} hours. Billed in advance through Stripe, renews
+          automatically until cancelled. Unused hours do not carry over.
+        </li>
+        <li>
+          Extra hours: {PLANS.topup.hours} hours for {PLANS.topup.price}, a one-time purchase valid until the end of the
+          calendar month (UTC). When your hours are used up, a meeting already in progress continues to the end; new
+          meetings need more hours or a higher plan.
         </li>
         <li>You can cancel anytime; Pro stays active until the end of the paid period. Payments are not refunded except where required by law.</li>
         <li>We may change prices with at least 30 days&apos; notice by email; changes apply from your next billing period.</li>

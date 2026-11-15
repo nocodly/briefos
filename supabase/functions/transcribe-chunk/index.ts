@@ -55,7 +55,7 @@ serve(async (req) => {
     p_seconds: seconds,
     // Two channels per meeting → double the per-meeting cap in channel-seconds.
     p_meeting_cap: auth.limits.maxMeetingMinutes * 60 * 2,
-    p_month_cap: auth.limits.monthlyMinutes === null ? null : auth.limits.monthlyMinutes * 60 * 2
+    p_month_cap: null // monthly hours are enforced at meeting-start only
   })
   if (error) throw new Error(`try_add_seconds failed: ${error.message}`)
 

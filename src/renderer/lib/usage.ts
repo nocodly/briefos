@@ -4,21 +4,36 @@ import { supabase } from './supabaseClient'
 // Read-only view of the user's plan + this month's usage. The numbers come
 // from the server tables (profiles, usage) via RLS — the server is the one that
 // enforces them; this is only for display.
-// Keep FREE_MEETINGS_PER_MONTH in sync with supabase/functions/_shared/plans.ts.
+// Keep in sync with supabase/functions/_shared/plans.ts.
 // =============================================================================
 
 export const FREE_MEETINGS_PER_MONTH = 10
+export const INCLUDED_HOURS = { pro: 25, max: 100 } as const
+export const TOPUP_HOURS = 10
+
+export type Tier = 'free' | 'pro' | 'max'
 
 export interface UsageInfo {
-  tier: 'free' | 'pro'
+  tier: Tier
   meetingsUsed: number
-  /** null = unlimited (Pro). */
+  /** null = no meeting-count limit (Pro / Max). */
   meetingsLimit: number | null
+  /** Hours of calls recorded this month (Pro / Max). */
+  hoursUsed: number
+  /** Included + topped-up hours this month (null on Free). */
+  hoursLimit: number | null
+  /** Extra hours bought this month. */
+  bonusHours: number
 }
 
 function monthStart(): string {
   const now = new Date()
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
+}
+
+export function tierOf(plan: string | null | undefined): Tier {
+  if (plan === 'max' || plan === 'enterprise') return 'max'
+  return plan === 'pro' ? 'pro' : 'free'
 }
 
 export async function getUsage(): Promise<UsageInfo | null> {
@@ -29,14 +44,24 @@ export async function getUsage(): Promise<UsageInfo | null> {
 
   const [{ data: profile }, { data: usage }] = await Promise.all([
     supabase.from('profiles').select('plan').eq('id', user.id).maybeSingle(),
-    supabase.from('usage').select('meetings').eq('user_id', user.id).eq('period', monthStart()).maybeSingle()
+    supabase
+      .from('usage')
+      .select('meetings, seconds, bonus_seconds')
+      .eq('user_id', user.id)
+      .eq('period', monthStart())
+      .maybeSingle()
   ])
 
-  const plan = (profile?.plan as string | undefined) ?? 'trial'
-  const tier = plan === 'pro' || plan === 'enterprise' ? 'pro' : 'free'
+  const tier = tierOf(profile?.plan as string | undefined)
+  // usage.seconds counts both audio channels (mic + computer) → ÷ 2 per hour.
+  const hoursUsed = ((usage?.seconds as number | undefined) ?? 0) / 7200
+  const bonusHours = ((usage?.bonus_seconds as number | undefined) ?? 0) / 7200
   return {
     tier,
     meetingsUsed: (usage?.meetings as number | undefined) ?? 0,
-    meetingsLimit: tier === 'pro' ? null : FREE_MEETINGS_PER_MONTH
+    meetingsLimit: tier === 'free' ? FREE_MEETINGS_PER_MONTH : null,
+    hoursUsed,
+    hoursLimit: tier === 'free' ? null : INCLUDED_HOURS[tier] + bonusHours,
+    bonusHours
   }
 }

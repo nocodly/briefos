@@ -102,6 +102,10 @@ const FAQ = [
     a: 'Minutama is available for Windows 10 and 11 today. The Mac app is in the works — join the waitlist and we’ll email you once.'
   },
   {
+    q: 'What happens when my hours run out?',
+    a: 'A meeting in progress always finishes. For new meetings you can add 10 hours for $6 (valid until the month ends) or move to Pro Max with 100 hours. Hours reset every month.'
+  },
+  {
     q: 'Can I cancel Pro anytime?',
     a: 'Yes. Cancel anytime — you keep Pro until the end of the period you paid for, then move to Free. No questions asked.'
   }
@@ -349,26 +353,26 @@ export default function Home() {
               <p className="eyebrow">Pricing</p>
               <h2 className="h-section mt-3">Start free. Upgrade when it clicks.</h2>
             </div>
-            <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
-              <div className="rounded-xl2 border border-line bg-white p-8">
+            <div className="mx-auto mt-12 grid max-w-5xl gap-5 md:grid-cols-3">
+              {/* Free */}
+              <div className="rounded-xl2 border border-line bg-white p-7">
                 <div className="font-display text-[22px] font-bold">Free</div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-display text-[44px] font-extrabold">{PLANS.free.price}</span>
+                  <span className="font-display text-[42px] font-extrabold">{PLANS.free.price}</span>
                   <span className="text-ink-3">forever</span>
                 </div>
                 <p className="mt-1 text-[14px] text-ink-3">For trying it on your real calls.</p>
                 <Link href="/download" className="btn-ghost mt-6 w-full">
                   Download free
                 </Link>
-                <ul className="mt-6 space-y-2.5 text-[15px] text-ink-2">
+                <ul className="mt-6 space-y-2.5 text-[14.5px] text-ink-2">
                   {[
                     `${PLANS.free.meetingsPerMonth} meetings every month`,
                     `Up to ${PLANS.free.maxMeetingMinutes} minutes per meeting`,
                     'AI notes, decisions and next steps',
                     'Live transcript, all languages',
-                    '3 note templates',
-                    `Notes kept for ${PLANS.free.historyDays} days`,
-                    'Copy to clipboard'
+                    'Call capsule + 5 reply hints per call',
+                    `Notes kept for ${PLANS.free.historyDays} days`
                   ].map((t) => (
                     <li key={t} className="flex gap-2">
                       <Check /> {t}
@@ -377,28 +381,54 @@ export default function Home() {
                 </ul>
               </div>
 
-              <div className="relative rounded-xl2 border-2 border-ink bg-white p-8">
+              {/* Pro */}
+              <div className="relative rounded-xl2 border-2 border-ink bg-white p-7">
                 <span className="absolute -top-3 right-6 rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-white">
                   Most popular
                 </span>
                 <div className="font-display text-[22px] font-bold">Pro</div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-display text-[44px] font-extrabold">{PLANS.pro.price}</span>
+                  <span className="font-display text-[42px] font-extrabold">{PLANS.pro.price}</span>
                   <span className="text-ink-3">/ month</span>
                 </div>
-                <p className="mt-1 text-[14px] text-ink-3">For people who live in meetings.</p>
+                <p className="mt-1 text-[14px] text-ink-3">For people with meetings every day.</p>
                 <Link href="/download" className="btn-primary mt-6 w-full">
                   Get started, upgrade in the app
                 </Link>
-                <ul className="mt-6 space-y-2.5 text-[15px] text-ink-2">
+                <ul className="mt-6 space-y-2.5 text-[14.5px] text-ink-2">
                   {[
-                    'Unlimited meetings',
-                    `Up to ${PLANS.pro.maxMeetingMinutes / 60} hours per meeting`,
-                    'Notes kept forever',
-                    'All templates',
-                    'Period Reports (week · month · quarter)',
-                    'Export to PDF, Notion and Slack',
-                    'Everything in Free'
+                    `${PLANS.pro.monthlyHours} hours of meetings a month`,
+                    'Unlimited meetings, up to 4 h each',
+                    'Stronger AI for notes and the agent',
+                    'Reply hints, send tasks to Claude Code / Codex',
+                    'All templates · Period Reports',
+                    'Share as PDF, Notion, Slack',
+                    'Notes kept forever'
+                  ].map((t) => (
+                    <li key={t} className="flex gap-2">
+                      <Check /> {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Pro Max */}
+              <div className="rounded-xl2 border border-line bg-white p-7">
+                <div className="font-display text-[22px] font-bold">Pro Max</div>
+                <div className="mt-2 flex items-baseline gap-1">
+                  <span className="font-display text-[42px] font-extrabold">{PLANS.max.price}</span>
+                  <span className="text-ink-3">/ month</span>
+                </div>
+                <p className="mt-1 text-[14px] text-ink-3">For people who live in calls.</p>
+                <Link href="/download" className="btn-ghost mt-6 w-full">
+                  Get started, upgrade in the app
+                </Link>
+                <ul className="mt-6 space-y-2.5 text-[14.5px] text-ink-2">
+                  {[
+                    `${PLANS.max.monthlyHours} hours of meetings a month`,
+                    'Meetings up to 5 h each',
+                    'More reply hints per call',
+                    'Everything in Pro'
                   ].map((t) => (
                     <li key={t} className="flex gap-2">
                       <Check /> {t}
@@ -407,9 +437,9 @@ export default function Home() {
                 </ul>
               </div>
             </div>
-            <p className="mt-6 text-center text-[13px] text-ink-3">
-              Prices in USD. Taxes may apply. Fair use: up to {PLANS.pro.monthlyHours} hours of recording per
-              month on Pro.
+            <p className="mx-auto mt-6 max-w-2xl text-center text-[13px] text-ink-3">
+              Need more in a busy month? Add {PLANS.topup.hours} hours for {PLANS.topup.price} any time — they last until
+              the month ends. A meeting in progress is never cut off. Prices in USD, incl. VAT where applicable.
             </p>
           </div>
         </section>

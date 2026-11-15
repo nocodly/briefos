@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Markdown from './components/Markdown'
 import { AgentRuns, SendToAgentModal } from './components/Agent'
 import ShareMenu from './components/ShareMenu'
+import { openCheckout, PRICES } from './lib/billing'
 import { TEMPLATE_OPTIONS } from './lib/api'
 import {
   activeDurationMs,
@@ -186,6 +187,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
         >
           <i className={`ti ${s.upgradeNeeded ? 'ti-crown' : 'ti-alert-circle'} text-[16px]`} />
           <span className="flex-1">{s.error}</span>
+          {s.upgradeNeeded && <LimitActions error={s.error ?? ''} />}
           <button onClick={clearError} className="opacity-60 hover:opacity-100">
             <i className="ti ti-x text-[14px]" />
           </button>
@@ -400,5 +402,29 @@ function AgentSide({
 
       <AgentRuns compact />
     </div>
+  )
+}
+
+// Buttons on the "limit reached" banner: hours → top-up (+ Pro Max for Pro),
+// meeting count (Free) → upgrade to Pro.
+function LimitActions({ error }: { error: string }) {
+  const hours = /hour/i.test(error)
+  const isMax = /wait for the next month/i.test(error)
+  return (
+    <span className="flex gap-1.5">
+      {hours && (
+        <button onClick={() => void openCheckout('topup').catch(() => {})} className="btn-accent rounded-lg px-2.5 py-1 text-[12px] font-semibold">
+          +10 h · {PRICES.topup}
+        </button>
+      )}
+      {!isMax && (
+        <button
+          onClick={() => void openCheckout(hours ? 'max' : 'pro').catch(() => {})}
+          className="rounded-lg border border-amber/40 px-2.5 py-1 text-[12px] font-semibold hover:bg-amber/10"
+        >
+          {hours ? `Pro Max · ${PRICES.max}` : `Upgrade · ${PRICES.pro}`}
+        </button>
+      )}
+    </span>
   )
 }

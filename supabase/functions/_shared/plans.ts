@@ -4,7 +4,7 @@
 // Legacy plan names map onto the two public tiers: trial/byok → free.
 // =============================================================================
 
-export type Tier = 'free' | 'pro'
+export type Tier = 'free' | 'pro' | 'max'
 
 export interface PlanLimits {
   tier: Tier
@@ -12,7 +12,7 @@ export interface PlanLimits {
   meetingsPerMonth: number | null
   /** Max recorded minutes in one meeting. */
   maxMeetingMinutes: number
-  /** Fair-use recorded minutes per month (null = unlimited). */
+  /** Included recording minutes per month (null = no hours limit). Top-ups add to it. */
   monthlyMinutes: number | null
   /** Notes older than this are hidden in the app (null = forever). */
   historyDays: number | null
@@ -39,7 +39,16 @@ export const LIMITS: Record<Tier, PlanLimits> = {
     tier: 'pro',
     meetingsPerMonth: null,
     maxMeetingMinutes: 240,
-    monthlyMinutes: 40 * 60,
+    monthlyMinutes: 25 * 60,
+    historyDays: null,
+    templates: ALL_TEMPLATES,
+    proFeatures: true
+  },
+  max: {
+    tier: 'max',
+    meetingsPerMonth: null,
+    maxMeetingMinutes: 300,
+    monthlyMinutes: 100 * 60,
     historyDays: null,
     templates: ALL_TEMPLATES,
     proFeatures: true
@@ -47,8 +56,12 @@ export const LIMITS: Record<Tier, PlanLimits> = {
 }
 
 export function tierFor(plan: string | null | undefined): Tier {
-  return plan === 'pro' || plan === 'enterprise' ? 'pro' : 'free'
+  if (plan === 'max' || plan === 'enterprise') return 'max'
+  return plan === 'pro' ? 'pro' : 'free'
 }
+
+/** Hours sold in one top-up pack. */
+export const TOPUP_HOURS = 10
 
 export function limitsFor(plan: string | null | undefined): PlanLimits {
   return LIMITS[tierFor(plan)]

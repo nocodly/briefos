@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
-import { supabase, STRIPE_PRO_LINK } from './lib/supabaseClient'
+import { supabase } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
+import { openCheckout, PRICES, type Checkout } from './lib/billing'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
 import { MEETING_LANGUAGES } from './recording/meetingSession'
 
@@ -109,19 +110,8 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
     supabase.auth.getUser().then(({ data: { user } }) => setEmail(user?.email ?? ''))
   }, [])
 
-  const upgrade = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!STRIPE_PRO_LINK || !user) {
-      setError('Upgrade is not available right now. Please try again later.')
-      return
-    }
-    const url = new URL(STRIPE_PRO_LINK)
-    url.searchParams.set('client_reference_id', user.id)
-    if (user.email) url.searchParams.set('prefilled_email', user.email)
-    window.open(url.toString(), '_blank')
-  }
 
-  const isPro = usage?.tier === 'pro'
+
 
   return (
     <div className="min-h-screen bg-bg font-body text-text">
@@ -143,28 +133,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
         <UpdateBanner updater={updater} />
 
         <Panel title="Plan" icon="crown" desc={email ? `Signed in as ${email}` : 'Your Minutama plan.'}>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <div className="font-display font-bold text-[16px] text-text">
-                {isPro ? 'Pro' : 'Free'}
-              </div>
-              <div className="text-[12px] text-text-3 mt-0.5">
-                {usage === null
-                  ? 'Loading usage…'
-                  : isPro
-                    ? 'Unlimited meetings, all templates, exports and history.'
-                    : `${usage.meetingsUsed} of ${usage.meetingsLimit} meetings used this month · notes kept 30 days`}
-              </div>
-            </div>
-            {!isPro && (
-              <button
-                onClick={upgrade}
-                className="btn-accent rounded-lg px-4 py-2 text-[13px] font-semibold flex items-center gap-1.5 transition-all"
-              >
-                <i className="ti ti-crown text-[15px]" /> Upgrade — $12/mo
-              </button>
-            )}
-          </div>
+          <PlanCard usage={usage} onError={setError} />
         </Panel>
 
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">
@@ -201,6 +170,82 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 // ── Update Banner ────────────────────────────────────────────────────────────
 
 // ── AI agents panel ─────────────────────────────────────────────────────────
+// ── Plan & hours ────────────────────────────────────────────────────────────
+function PlanCard({ usage, onError }: { usage: UsageInfo | null; onError: (m: string) => void }) {
+  const go = (kind: Checkout) => openCheckout(kind).catch((e) => onError((e as Error).message))
+  if (!usage) return <div className="text-[12px] text-text-3">Loading usage…</div>
+
+  const name = usage.tier === 'max' ? 'Pro Max' : usage.tier === 'pro' ? 'Pro' : 'Free'
+  const limited = usage.hoursLimit !== null
+  const pct = limited ? Math.min(1, usage.hoursUsed / Math.max(usage.hoursLimit!, 0.01)) : 0
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="font-display text-[18px] font-bold text-text">{name}</div>
+          <div className="mt-0.5 text-[12px] text-text-3">
+            {usage.tier === 'free'
+              ? `${usage.meetingsUsed} of ${usage.meetingsLimit} meetings used this month · notes kept 30 days`
+              : usage.tier === 'max'
+                ? '100 hours a month, everything in Pro'
+                : '25 hours a month, all templates, exports, reply hints and agent'}
+          </div>
+        </div>
+      </div>
+
+      {limited && (
+        <div>
+          <div className="mb-1.5 flex justify-between text-[11.5px] text-text-2">
+            <span>
+              {usage.hoursUsed.toFixed(1)} of {usage.hoursLimit!.toFixed(0)} h used this month
+              {usage.bonusHours > 0 ? ` (incl. +${usage.bonusHours.toFixed(0)} h added)` : ''}
+            </span>
+            <span className={pct >= 0.8 ? 'text-amber' : 'text-text-3'}>{Math.round(pct * 100)}%</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[.06]">
+            <div
+              className={`h-full rounded-full ${pct >= 1 ? 'bg-red' : pct >= 0.8 ? 'bg-amber' : 'bg-accent'}`}
+              style={{ width: `${pct * 100}%` }}
+            />
+          </div>
+          {pct >= 0.8 && (
+            <p className="mt-1.5 text-[11.5px] text-amber">
+              {pct >= 1
+                ? 'Hours used up — meetings in progress always finish; add hours to start new ones.'
+                : 'Running low — add 10 hours any time, they last until the end of the month.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        {usage.tier === 'free' && (
+          <button onClick={() => void go('pro')} className="btn-accent rounded-xl px-4 py-2 text-[13px] font-semibold">
+            <i className="ti ti-crown text-[15px]" /> Upgrade to Pro — {PRICES.pro}
+          </button>
+        )}
+        {usage.tier !== 'max' && (
+          <button
+            onClick={() => void go('max')}
+            className={`${usage.tier === 'free' ? 'border border-border bg-white/[.06] text-text' : 'btn-accent'} rounded-xl px-4 py-2 text-[13px] font-semibold`}
+          >
+            Pro Max — {PRICES.max} · 100 h
+          </button>
+        )}
+        {limited && (
+          <button
+            onClick={() => void go('topup')}
+            className="rounded-xl border border-border bg-white/[.06] px-4 py-2 text-[13px] font-semibold text-text hover:border-accent/50"
+          >
+            <i className="ti ti-plus text-[14px]" /> Add 10 hours — {PRICES.topup}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function AgentsSettings({
   provider,
   autonomy,

@@ -21,7 +21,7 @@ export interface AppSettings {
   launchAtStartup: boolean
   hotkeyRecord: string
   retentionDays: number
-  plan: 'trial' | 'byok' | 'pro' | 'enterprise'
+  plan: 'trial' | 'byok' | 'pro' | 'max' | 'enterprise'
   licenseKey: string
   notionToken: string
   notionParentPageId: string
@@ -111,7 +111,7 @@ export function isPro(): boolean {
 /** Full feature access: BYOK users get all features since they pay for their own API. */
 export function isProOrByok(): boolean {
   const plan = store.get('plan')
-  return plan === 'pro' || plan === 'enterprise' || plan === 'byok'
+  return plan === 'pro' || plan === 'max' || plan === 'enterprise' || plan === 'byok'
 }
 
 /** User brings their own API keys (byok or pro/enterprise with override). */

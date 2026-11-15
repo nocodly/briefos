@@ -16,7 +16,7 @@ import { ApiError, adminClient, authenticate, json, requireEnv, serve } from '..
 const MODEL = Deno.env.get('HINTS_MODEL') ?? 'gpt-4o-mini'
 const MAX_LINES = 40
 const MAX_CHARS = 8_000
-const CAP = { free: 5, pro: 60 } as const
+const CAP = { free: 5, pro: 60, max: 120 } as const
 
 interface Line {
   speaker: 'me' | 'them'

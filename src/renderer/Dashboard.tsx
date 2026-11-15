@@ -294,14 +294,23 @@ function Centered({ icon, text, spin }: { icon: string; text: string; spin?: boo
 }
 
 function UsageBadge({ usage }: { usage: UsageInfo }) {
-  if (usage.meetingsLimit === null) {
+  if (usage.hoursLimit !== null) {
+    const left = Math.max(0, usage.hoursLimit - usage.hoursUsed)
+    const pct = usage.hoursLimit > 0 ? usage.hoursUsed / usage.hoursLimit : 1
+    const tone =
+      pct >= 1
+        ? 'bg-red-soft text-red border-red/20'
+        : pct >= 0.8
+          ? 'bg-amber-soft text-amber border-amber/20'
+          : 'bg-green-soft text-green border-green/20'
     return (
-      <div className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border bg-green-soft text-green border-green/20">
-        <i className="ti ti-crown text-[13px]" /> Pro · unlimited meetings
+      <div className={`flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-full border ${tone}`}>
+        <i className="ti ti-crown text-[13px]" />
+        {usage.tier === 'max' ? 'Pro Max' : 'Pro'} · {left < 10 ? left.toFixed(1) : Math.round(left)} h left this month
       </div>
     )
   }
-  const left = Math.max(0, usage.meetingsLimit - usage.meetingsUsed)
+  const left = Math.max(0, (usage.meetingsLimit ?? 0) - usage.meetingsUsed)
   const tone =
     left === 0
       ? 'bg-red-soft text-red border-red/20'

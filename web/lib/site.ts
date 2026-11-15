@@ -24,9 +24,19 @@ export const PLANS = {
   },
   pro: {
     name: 'Pro',
-    price: '$12',
-    monthlyHours: 40,
+    price: '$19',
+    monthlyHours: 25,
     maxMeetingMinutes: 240
+  },
+  max: {
+    name: 'Pro Max',
+    price: '$39',
+    monthlyHours: 100,
+    maxMeetingMinutes: 300
+  },
+  topup: {
+    hours: 10,
+    price: '$6'
   }
 } as const
 

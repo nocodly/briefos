@@ -4,7 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2?target=deno
 // =============================================================================
 // Stripe webhook — the ONLY place that grants or removes a paid plan.
 // Handles the full subscription lifecycle:
-//   checkout.session.completed      → link Stripe customer to user, plan = pro
+//   checkout.session.completed      → subscription: link customer, plan = pro|max
+//                                     one-time top-up: +10 recording hours
+//   (prices carry metadata.minutama_plan = 'pro' | 'max' | 'topup';
+//    a price without it — the legacy $12 Pro — counts as 'pro')
 //   customer.subscription.updated   → sync plan from subscription status
 //   customer.subscription.deleted   → plan = trial
 //   invoice.payment_failed          → record status (Stripe retries; access
@@ -26,9 +29,18 @@ const supabase = createClient(
 // Stripe retries the card (grace period); anything else falls back to free.
 const PAID_STATUSES = new Set<Stripe.Subscription.Status>(['active', 'trialing', 'past_due'])
 
-function planFor(status: Stripe.Subscription.Status): 'pro' | 'trial' {
-  return PAID_STATUSES.has(status) ? 'pro' : 'trial'
+type PaidPlan = 'pro' | 'max'
+
+function planOfSubscription(sub: Stripe.Subscription): PaidPlan {
+  const meta = sub.items?.data?.[0]?.price?.metadata?.minutama_plan
+  return meta === 'max' ? 'max' : 'pro'
 }
+
+function planFor(sub: Stripe.Subscription): PaidPlan | 'trial' {
+  return PAID_STATUSES.has(sub.status) ? planOfSubscription(sub) : 'trial'
+}
+
+const TOPUP_HOURS = 10
 
 // Since API 2025-03-31 ("basil") current_period_end lives on subscription
 // items, not on the subscription. Event payloads use the endpoint's API version
@@ -68,6 +80,13 @@ async function isOurUser(userId: string): Promise<boolean> {
   return Boolean(data)
 }
 
+async function alreadyHandled(eventKey: string): Promise<boolean> {
+  const { error } = await supabase.from('stripe_events').insert({ id: eventKey })
+  if (!error) return false
+  if (error.code === '23505') return true // duplicate → processed before
+  throw new Error(`stripe_events insert failed: ${error.message}`)
+}
+
 async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   const userId = session.client_reference_id
   if (!userId || !(await isOurUser(userId))) {
@@ -76,15 +95,47 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
   }
 
   const customerId = typeof session.customer === 'string' ? session.customer : session.customer?.id
-  const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
 
+  // One-time purchase → recording-hours top-up.
+  if (session.mode === 'payment') {
+    if (session.payment_status !== 'paid') return
+    const items = await stripe.checkout.sessions.listLineItems(session.id, { expand: ['data.price'] })
+    const packs = items.data
+      .filter((li) => (li.price as Stripe.Price | null)?.metadata?.minutama_plan === 'topup')
+      .reduce((n, li) => n + (li.quantity ?? 1), 0)
+    if (packs === 0) {
+      console.log(`[stripe-webhook] checkout ${session.id}: no Minutama top-up items`)
+      return
+    }
+    if (await alreadyHandled(`topup:${session.id}`)) return
+    const { error } = await supabase.rpc('add_bonus_hours', { p_user: userId, p_hours: packs * TOPUP_HOURS })
+    if (error) throw new Error(`add_bonus_hours failed: ${error.message}`)
+    if (customerId) await updateBy('id', userId, { stripe_customer_id: customerId })
+    console.log(`[stripe-webhook] top-up for ${userId}: +${packs * TOPUP_HOURS} h`)
+    return
+  }
+
+  const subId = typeof session.subscription === 'string' ? session.subscription : session.subscription?.id
   const fields: Record<string, unknown> = { plan: 'pro', stripe_customer_id: customerId ?? null }
   if (subId) {
     const sub = await stripe.subscriptions.retrieve(subId)
     fields.stripe_subscription_id = sub.id
     fields.subscription_status = sub.status
     fields.current_period_end = periodEnd(sub)
-    fields.plan = planFor(sub.status)
+    fields.plan = planFor(sub)
+
+    // Switching Pro ↔ Max through a new checkout: end the previous
+    // subscription so the user is never billed twice.
+    const { data: prev } = await supabase.from('profiles').select('stripe_subscription_id').eq('id', userId).maybeSingle()
+    const oldId = prev?.stripe_subscription_id as string | null | undefined
+    if (oldId && oldId !== sub.id) {
+      try {
+        await stripe.subscriptions.cancel(oldId, { prorate: true })
+        console.log(`[stripe-webhook] canceled previous subscription ${oldId}`)
+      } catch (err) {
+        console.warn(`[stripe-webhook] could not cancel ${oldId}:`, (err as Error).message)
+      }
+    }
   }
   await updateBy('id', userId, fields)
   console.log(`[stripe-webhook] checkout completed for user ${userId} → ${fields.plan}`)
@@ -92,7 +143,18 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
 
 async function handleSubscriptionChange(sub: Stripe.Subscription, deleted: boolean) {
   const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id
-  const plan = deleted ? 'trial' : planFor(sub.status)
+  // Ignore events of a subscription that is no longer the user's current one
+  // (e.g. the old Pro after moving to Max).
+  const { data: prof } = await supabase
+    .from('profiles')
+    .select('stripe_subscription_id')
+    .eq('stripe_customer_id', customerId)
+    .maybeSingle()
+  if (prof?.stripe_subscription_id && prof.stripe_subscription_id !== sub.id) {
+    console.log(`[stripe-webhook] ignoring ${sub.id}: not the current subscription`)
+    return
+  }
+  const plan = deleted ? 'trial' : planFor(sub)
   await updateBy('stripe_customer_id', customerId, {
     plan,
     stripe_subscription_id: sub.id,

@@ -10,7 +10,7 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 })
 
-export type PlanType = 'trial' | 'byok' | 'pro' | 'enterprise'
+export type PlanType = 'trial' | 'byok' | 'pro' | 'max' | 'enterprise'
 
 export interface Profile {
   id: string
