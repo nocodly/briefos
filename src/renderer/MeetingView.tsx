@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import Markdown from './components/Markdown'
+import ShareMenu from './components/ShareMenu'
 import { AgentRuns, SendToAgentModal } from './components/Agent'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
@@ -249,12 +250,12 @@ function Hero({
 
   return (
     <div className="glass-dark mx-6 mt-4 rounded-panel px-8 py-7 text-white">
-      <button
-        onClick={onBack}
-        className="text-white/50 hover:text-white text-[12px] flex items-center gap-1 mb-3 transition-all"
-      >
-        <i className="ti ti-arrow-left text-[14px]" /> Dashboard
-      </button>
+      <div className="mb-3 flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-1 text-[12px] text-white/50 transition-all hover:text-white">
+          <i className="ti ti-arrow-left text-[14px]" /> Meetings
+        </button>
+        <ShareMenu meetingId={meeting.id} />
+      </div>
 
       {editing ? (
         <input

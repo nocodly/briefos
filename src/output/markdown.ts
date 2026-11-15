@@ -12,6 +12,18 @@ function fmtDuration(seconds: number): string {
 }
 
 export function buildMeetingMarkdown(meeting: Record<string, any>): string {
+  // Minutama meetings: the AI notes already are the brief.
+  if (typeof meeting.enhanced_notes === 'string' && meeting.enhanced_notes.trim()) {
+    const when = new Date(meeting.started_at).toLocaleString()
+    return `# ${meeting.title || 'Meeting notes'}
+
+*${when} · ${fmtDuration(meeting.duration_s ?? 0)}*
+
+${meeting.enhanced_notes.trim()}
+
+_Notes by Minutama · minutama.com_
+`
+  }
   const s = (meeting.summary ?? {}) as Record<string, any>
   const lines: string[] = []
 

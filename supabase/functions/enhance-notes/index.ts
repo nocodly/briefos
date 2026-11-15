@@ -58,7 +58,9 @@ function systemPrompt(sections: string[], language?: string): string {
       : '- LANGUAGE: first detect the main language of the TRANSCRIPT (and the user’s notes). Write EVERYTHING —' +
         ' title, section headings, bullets, action items, decisions — in that language. Never default to English' +
         ' unless the conversation was in English. If several languages were spoken, use the one spoken most.',
-    `- Use these sections as markdown "##" headings, in this order (translate the heading names into the output language): ${sections.join(', ')}.`,
+    `- Use these sections as markdown "##" headings, in this order: ${sections.join(', ')}.`,
+    '- The section headings MUST be translated into the output language too — e.g. for Ukrainian write',
+    '  "## Підсумок", "## Ключові моменти", "## Рішення", "## Задачі", never "## Summary" or "## Action items".',
     '- If a section has no real content, OMIT the heading entirely. Never write "None", "N/A" or "None noted".',
     '- Use short bullet points under each heading.',
     '',

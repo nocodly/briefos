@@ -18,11 +18,11 @@ const INVOKE_CHANNELS = new Set([
   'meetings:updateTitle', 'meetings:renameSpeakers',
   'ai:generatePeriodReport',
   'export:pdf', 'export:periodReportPdf', 'export:notion', 'export:slack',
-  'export:email', 'export:clipboard',
+  'export:email', 'export:clipboard', 'export:emailDraft',
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
   'tasks:getAll', 'tasks:setDone', 'import:pickTranscript',
-  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit',
+  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice',
   'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',
   'updater:check', 'updater:install'
 ])
@@ -34,7 +34,7 @@ const PUSH_CHANNELS = new Set([
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
   'hotkey:toggleRecording', 'auth:deeplink',
-  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask', 'agent:runFromCapsule'
+  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask', 'agent:runFromCapsule', 'capsule:quick'
 ])
 
 type Listener = (data: any) => void

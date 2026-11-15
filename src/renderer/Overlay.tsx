@@ -4,7 +4,7 @@ import { LogoMark } from './components/Logo'
 
 // =============================================================================
 // Capsule — the floating, always-on-top Minutama widget, fixed at the right
-// edge of the screen (not draggable). The main process owns its state
+// edge of the screen; drag it anywhere — it remembers the spot. The main process owns its state
 // (src/main/Capsule.ts); the window height follows this content (capsule:fit).
 //
 //   prompt     a call app took the mic → "Call on Zoom · Take notes?"
@@ -35,9 +35,20 @@ interface CapsuleState {
   hint: ReplyHint | null
   expanded: boolean
   agentRun: AgentRun | null
+  notice: string | null
 }
 
 type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun'
+
+// Drag the capsule by its body; anything clickable opts out.
+const drag = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
+const noDrag = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
+
+const QUICK_TASKS = {
+  all: 'Do the follow-up for this meeting: go through every action item, decision and promise made so far and complete what you can with your tools. Then list what you did and what still needs me.',
+  calendar:
+    'Find every date, time and deadline agreed in this meeting so far. Add each one to my calendar if you have a calendar tool; otherwise create a file minutama-events.ics in the working folder with all of them. Then list them.'
+}
 
 function formatClock(ms: number): string {
   const total = Math.floor(ms / 1000)
@@ -57,7 +68,8 @@ export default function Overlay() {
     callEnded: false,
     hint: null,
     expanded: true,
-    agentRun: null
+    agentRun: null,
+    notice: null
   })
   const [durationMs, setDurationMs] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -92,7 +104,7 @@ export default function Overlay() {
   if (cap.mode === 'prompt') {
     return (
       <Shell>
-        <div className="flex h-[66px] items-center gap-2.5 px-3">
+        <div className="flex h-[66px] items-center gap-2.5 px-3" style={drag}>
           <div className="relative flex-shrink-0">
             <LogoMark size={34} />
             <span className="absolute -right-1 -top-1 h-3 w-3 animate-pulse-dot rounded-full bg-green ring-[3px] ring-[#121317]" />
@@ -103,6 +115,7 @@ export default function Overlay() {
           </div>
           <button
             onClick={() => act('start')}
+            style={noDrag}
             className="btn-accent flex h-8 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-semibold active:scale-95"
           >
             <i className="ti ti-player-record-filled text-[11px]" /> Start
@@ -118,8 +131,8 @@ export default function Overlay() {
   return (
     <Shell>
       {/* Bar */}
-      <div className="flex h-[56px] items-center gap-2.5 px-2.5">
-        <button onClick={() => act('open')} title="Open notes" className="flex-shrink-0 hover:scale-105">
+      <div className="flex h-[56px] items-center gap-2.5 px-2.5" style={drag}>
+        <button onClick={() => act('open')} title="Open notes" style={noDrag} className="flex-shrink-0 hover:scale-105">
           <LogoMark size={32} />
         </button>
         <div className="min-w-0 flex-1">
@@ -135,6 +148,7 @@ export default function Overlay() {
         <button
           onClick={stop}
           title="Stop and write notes"
+          style={noDrag}
           className="flex h-8 w-8 items-center justify-center rounded-full bg-red text-white hover:bg-red/85 active:scale-95"
         >
           <i className="ti ti-player-stop-filled text-[13px]" />
@@ -147,7 +161,7 @@ export default function Overlay() {
       </div>
 
       {cap.callEnded && (
-        <div className="mx-3 mb-2 flex items-center gap-2 text-[11px] text-white/65">
+        <div className="mx-3 mb-2 flex items-center gap-2 text-[11px] text-white/65" style={noDrag}>
           <i className="ti ti-phone-off text-[12px] text-accent-pale" />
           <span className="flex-1">Call ended — stop and write notes?</span>
           <button onClick={stop} className="font-semibold text-accent-pale hover:text-white">
@@ -156,14 +170,14 @@ export default function Overlay() {
         </div>
       )}
 
-      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} />}
+      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} />}
     </Shell>
   )
 }
 
 // ─── Agent panel ────────────────────────────────────────────────────────────
 
-function AgentPanel({ hint, run }: { hint: ReplyHint | null; run: AgentRun | null }) {
+function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentRun | null; notice: string | null }) {
   const [text, setText] = useState('')
   const [confirm, setConfirm] = useState<string | null>(null)
   const [agentName, setAgentName] = useState('Claude Code')
@@ -196,7 +210,7 @@ function AgentPanel({ hint, run }: { hint: ReplyHint | null; run: AgentRun | nul
   }
 
   return (
-    <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2">
+    <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
       {hint ? (
         <div className="rounded-[12px] border border-accent/25 bg-accent/[.08] px-2.5 py-2">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
@@ -212,7 +226,7 @@ function AgentPanel({ hint, run }: { hint: ReplyHint | null; run: AgentRun | nul
         !run &&
         !confirm && (
           <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/40">
-            <i className="ti ti-sparkles text-[12px] text-accent" /> Listening for questions…
+            <i className="ti ti-sparkles text-[12px] text-accent" /> {notice ?? 'Listening for questions…'}
           </div>
         )
       )}
@@ -275,7 +289,26 @@ function AgentPanel({ hint, run }: { hint: ReplyHint | null; run: AgentRun | nul
           </button>
         </div>
       )}
+
+      {confirm === null && !text && (
+        <div className="flex flex-wrap gap-1.5">
+          <Chip icon="help-circle" label="Last question" onClick={() => void invoke('capsule:quick', 'lastQuestion')} />
+          <Chip icon="send" label={`All to ${agentName.split(' ')[0]}`} onClick={() => setConfirm(QUICK_TASKS.all)} />
+          <Chip icon="calendar-plus" label="Dates → calendar" onClick={() => setConfirm(QUICK_TASKS.calendar)} />
+        </div>
+      )}
     </div>
+  )
+}
+
+function Chip({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1 text-[11px] text-white/70 hover:border-accent/50 hover:bg-accent/10 hover:text-white"
+    >
+      <i className={`ti ti-${icon} text-[12px] text-accent`} /> {label}
+    </button>
   )
 }
 
@@ -322,6 +355,7 @@ function IconButton({ icon, title, onClick }: { icon: string; title: string; onC
     <button
       onClick={onClick}
       title={title}
+      style={noDrag}
       className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-white/[.08] text-white/80 hover:bg-white/[.16] hover:text-white active:scale-95"
     >
       <i className={`ti ti-${icon} text-[14px]`} />

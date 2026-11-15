@@ -1,4 +1,4 @@
-import { screen } from 'electron'
+import { screen, type BrowserWindow } from 'electron'
 import { createOverlayWindow, closeOverlayWindow, getOverlayWindow } from './index'
 
 // =============================================================================
@@ -30,6 +30,8 @@ export interface CapsuleState {
   expanded: boolean
   /** Latest agent task started from the capsule (Claude Code / Codex). */
   agentRun: CapsuleAgentRun | null
+  /** Short status line shown for a few seconds (e.g. "No question yet"). */
+  notice: string | null
 }
 
 export interface CapsuleAgentRun {
@@ -47,7 +49,8 @@ let state: CapsuleState = {
   callEnded: false,
   hint: null,
   expanded: true,
-  agentRun: null
+  agentRun: null,
+  notice: null
 }
 let hintTimer: NodeJS.Timeout | null = null
 
@@ -61,19 +64,42 @@ function widthFor(s: CapsuleState): number {
 const MIN_HEIGHT = 64
 let contentHeight = MIN_HEIGHT
 
+/** Where the user dragged the capsule: its right edge + top (null = default). */
+let userSpot: { right: number; y: number } | null = null
+const tracked = new WeakSet<BrowserWindow>()
+
 function apply(): void {
   if (state.mode === 'hidden') {
     closeOverlayWindow()
     return
   }
   const win = createOverlayWindow()
+  if (!tracked.has(win)) {
+    tracked.add(win)
+    // Remember the spot after a drag; keep the right edge as the anchor so the
+    // capsule grows to the left when it widens.
+    win.on('moved', () => {
+      const b = win.getBounds()
+      userSpot = { right: b.x + b.width, y: b.y }
+    })
+  }
   const width = widthFor(state)
   const height = Math.max(MIN_HEIGHT, contentHeight)
-  // Fixed spot: right edge of the primary display, a fifth of the way down.
-  // (Not draggable — dragging a transparent window made it wobble.)
-  const { workArea } = screen.getPrimaryDisplay()
-  const y = Math.min(workArea.y + Math.round(workArea.height * 0.2), workArea.y + workArea.height - height - MARGIN)
-  win.setBounds({ x: workArea.x + workArea.width - width - MARGIN, y, width, height })
+  const display = userSpot
+    ? screen.getDisplayNearestPoint({ x: userSpot.right - 10, y: userSpot.y + 10 })
+    : screen.getPrimaryDisplay()
+  const wa = display.workArea
+  const right = userSpot ? userSpot.right : wa.x + wa.width - MARGIN
+  const top = userSpot ? userSpot.y : wa.y + Math.round(wa.height * 0.2)
+  const x = Math.min(Math.max(right - width, wa.x), wa.x + wa.width - width)
+  const y = Math.min(Math.max(top, wa.y), wa.y + wa.height - height)
+  // Lock the size: on Windows a transparent frameless window can creep in size
+  // while it is dragged (DPI rounding) — fixed min = max prevents that.
+  win.setMinimumSize(1, 1)
+  win.setMaximumSize(4000, 4000)
+  win.setBounds({ x, y, width, height })
+  win.setMinimumSize(width, height)
+  win.setMaximumSize(width, height)
   win.webContents.send('capsule:state', state)
 }
 
@@ -111,6 +137,13 @@ export function setCapsuleAgentRun(patch: Partial<CapsuleAgentRun> | null): void
   }
   const base: CapsuleAgentRun = state.agentRun ?? { runId: null, task: '', agent: '', status: 'starting', tail: '' }
   setCapsule({ agentRun: { ...base, ...patch }, expanded: true })
+}
+
+let noticeTimer: NodeJS.Timeout | null = null
+export function capsuleNotice(text: string): void {
+  if (noticeTimer) clearTimeout(noticeTimer)
+  noticeTimer = setTimeout(() => setCapsule({ notice: null }), 4000)
+  setCapsule({ notice: text })
 }
 
 export function toggleCapsuleExpanded(): void {

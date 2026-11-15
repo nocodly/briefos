@@ -352,10 +352,26 @@ function scheduleHint(): void {
   hintTimer = setTimeout(() => void requestHint(), HINT_DEBOUNCE_MS)
 }
 
-async function requestHint(): Promise<void> {
+/**
+ * "What was the last question?" from the capsule: show the latest hint again,
+ * or ask the server right now. Returns false when there is nothing to show.
+ */
+export async function hintNow(): Promise<boolean> {
+  const latest = get().hints[0]
+  if (latest && Date.now() - latest.at < 5 * 60_000) {
+    await invoke('capsule:hint', { id: latest.id, question: latest.question, answer: latest.answer }).catch(() => {})
+    return true
+  }
+  if (!get().segments.some((sg) => sg.speaker === 'them')) return false
+  const before = get().hints.length
+  await requestHint(true)
+  return get().hints.length > before
+}
+
+async function requestHint(force = false): Promise<void> {
   const { serverId, segments, userNotes, status } = get()
   if (!serverId || (status !== 'recording' && status !== 'paused')) return
-  if (hintInFlight || Date.now() - lastHintAt < HINT_MIN_GAP_MS) return
+  if (hintInFlight || (!force && Date.now() - lastHintAt < HINT_MIN_GAP_MS)) return
   hintInFlight = true
   lastHintAt = Date.now()
   try {

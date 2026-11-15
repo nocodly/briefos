@@ -11,7 +11,7 @@ import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
 import LiveMeeting from './LiveMeeting'
-import { addTaskToNotes, handleRecordingCommand, startMeetingSession, useMeetingSession } from './recording/meetingSession'
+import { addTaskToNotes, handleRecordingCommand, hintNow, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
@@ -156,6 +156,11 @@ export default function App() {
   useEffect(() => {
     const unsubs = [
       subscribe('agent:saveTask', ({ text }: { text: string }) => addTaskToNotes(text)),
+      subscribe('capsule:quick', async ({ kind }: { kind: string }) => {
+        if (kind !== 'lastQuestion') return
+        const shown = await hintNow().catch(() => false)
+        if (!shown) await invoke('capsule:notice', 'No question from the other side yet').catch(() => {})
+      }),
       // Started from the capsule: add the meeting context and run it there.
       subscribe('agent:runFromCapsule', async ({ text }: { text: string }) => {
         const st = useMeetingSession.getState()

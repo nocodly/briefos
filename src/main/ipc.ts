@@ -12,7 +12,7 @@ import {
   type RecordingReport
 } from './RecordingRelay'
 import { PeriodReportEngine } from '@ai/PeriodReportEngine'
-import { exportMeetingPdf } from '@output/PDFRenderer'
+import { exportNotesPdf, pdfFileName } from '@output/NotesPDF'
 import { exportPeriodReportPdf } from '@output/PeriodReportPDF'
 import { exportToNotion } from '@output/NotionExporter'
 import { exportToSlack } from '@output/SlackNotifier'
@@ -21,6 +21,7 @@ import { buildMeetingMarkdown } from '@output/markdown'
 import {
   capsuleDismiss,
   clearHint,
+  capsuleNotice,
   fitCapsule,
   getCapsule,
   setCapsuleAgentRun,
@@ -266,14 +267,23 @@ export function registerIpcHandlers(): void {
   })
 
   // --- Export (output/*) ---------------------------------------------------
-  handle('export:pdf', async (_e, payload: { meetingId: string; outputPath?: string }) => {
+  handle('export:pdf', async (_e, payload: { meetingId: string; outputPath?: string; transcript?: boolean }) => {
     requireProOrByok()
     const meeting = getDatabase().getMeeting(payload.meetingId)
-    const safe = String(meeting?.title || 'meeting').replace(/[^\w\-]+/g, '_').slice(0, 60)
-    const target = payload.outputPath ?? (await choosePdfPath(`${safe}.pdf`))
+    const target = payload.outputPath ?? (await choosePdfPath(pdfFileName(String(meeting?.title || 'meeting'))))
     if (!target) return { canceled: true }
-    const path = await exportMeetingPdf(payload.meetingId, target)
+    const path = await exportNotesPdf(payload.meetingId, target, { transcript: Boolean(payload.transcript) })
+    shell.showItemInFolder(path)
     return { path }
+  })
+  // Open the user's mail app with the notes as the message body.
+  handle('export:emailDraft', async (_e, meetingId: string) => {
+    const meeting = getDatabase().getMeeting(String(meetingId))
+    if (!meeting) throw new Error('Meeting not found')
+    const body = buildMeetingMarkdown(meeting).slice(0, 1800)
+    const url = `mailto:?subject=${encodeURIComponent(String(meeting.title || 'Meeting notes'))}&body=${encodeURIComponent(body)}`
+    await shell.openExternal(url)
+    return { ok: true }
   })
   handle('export:periodReportPdf', async (_e, payload: { reportId: string; outputPath?: string }) => {
     requireProOrByok()
@@ -424,6 +434,15 @@ export function registerIpcHandlers(): void {
     } else {
       sendToRenderer('agent:saveTask', { text })
     }
+    return { ok: true }
+  })
+  // Quick actions from the capsule that need the meeting (main renderer).
+  handle('capsule:quick', async (_e, kind: 'lastQuestion') => {
+    if (kind === 'lastQuestion') sendToRenderer('capsule:quick', { kind })
+    return { ok: true }
+  })
+  handle('capsule:notice', async (_e, text: string) => {
+    capsuleNotice(String(text).slice(0, 120))
     return { ok: true }
   })
   handle('capsule:fit', async (_e, height: number) => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from './components/Markdown'
 import { AgentRuns, SendToAgentModal } from './components/Agent'
+import ShareMenu from './components/ShareMenu'
 import { TEMPLATE_OPTIONS } from './lib/api'
 import {
   activeDurationMs,
@@ -24,7 +25,7 @@ import {
 //   After:   AI merges your notes + transcript into enhanced notes.
 // =============================================================================
 
-type NavigateFn = (page: 'dashboard' | 'meeting', id?: string) => void
+type NavigateFn = (page: 'dashboard' | 'meeting' | 'integrations', id?: string) => void
 
 function clock(ms: number): string {
   const t = Math.max(0, Math.floor(ms / 1000))
@@ -106,6 +107,10 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
         <h1 className="font-display font-bold text-[16px] text-text flex-1 truncate">
           {s.enhanced?.title ?? (live ? 'Meeting in progress' : 'New meeting')}
         </h1>
+
+        {s.meetingId && s.enhanced && !live && !busy && (
+          <ShareMenu meetingId={s.meetingId} onOpenIntegrations={() => navigate('integrations')} />
+        )}
 
         <select
           value={s.templateId}
