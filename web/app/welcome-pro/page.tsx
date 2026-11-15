@@ -4,7 +4,7 @@ import { Footer, Nav } from '@/components/Chrome'
 
 // Stripe Payment Link "after payment" redirect target.
 export const metadata: Metadata = {
-  title: 'Welcome to Pro',
+  title: 'Thank you',
   robots: { index: false, follow: false }
 }
 
@@ -17,10 +17,10 @@ export default function WelcomePro() {
           <div className="text-[44px]" aria-hidden="true">
             ✦
           </div>
-          <h1 className="mt-2 font-display text-[44px] font-extrabold tracking-[-0.03em]">You&apos;re on Pro</h1>
+          <h1 className="mt-2 font-display text-[44px] font-extrabold tracking-[-0.03em]">Thank you!</h1>
           <p className="mt-4 text-[17px] text-ink-2">
-            Thank you! Your plan updates in the app within a few seconds — unlimited meetings, all templates, Period
-            Reports and exports are unlocked.
+            Your payment went through. Your new plan or extra hours show up in Minutama within a few seconds — check
+            Settings → Plan.
           </p>
           <p className="mt-2 text-[14px] text-ink-3">
             Don&apos;t see it? Restart Minutama, or write to{' '}
