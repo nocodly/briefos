@@ -7,7 +7,7 @@ import {
   liveSession,
   suggestReply,
   transcribeChunk,
-  translateLine,
+  translateLineStream,
   type EnhancedNotes,
   type StartMeetingResult
 } from '../lib/api'
@@ -406,6 +406,8 @@ let nativeLanguage = ''
 let aboutMe = ''
 /** Language the client speaks (Settings → Agent → "Client speaks"). */
 let clientLanguage = 'en'
+/** Language you speak on calls ('' = same as the client). */
+let myCallLanguage = ''
 
 /** Language name for the cards ('' → the app's / Windows language). */
 export function nativeLanguageName(code: string | null | undefined): string {
@@ -542,7 +544,6 @@ async function requestHint(force: boolean, heardAt: number | null): Promise<void
 const transcribers: { them?: LiveTranscriber; me?: LiveTranscriber } = {}
 const liveStartMs = new Map<string, number>()
 const processedSentences = new Map<string, number>() // itemId → sentences handled
-const translations = new Map<string, string[]>() // itemId → per-sentence translations
 let capsuleTimer: ReturnType<typeof setTimeout> | null = null
 let meLiveOk = false
 /** The client was speaking until this moment: mic text then is their echo. */
@@ -564,7 +565,8 @@ function myLanguageCode(): string {
 /** Fixed language per channel: the meeting language, or client = "Client speaks", you = your language. */
 function channelLanguage(channel: 'me' | 'them'): string {
   if (meetingLanguage) return meetingLanguage
-  return channel === 'them' ? clientLanguage || 'en' : myLanguageCode()
+  // You usually speak the call language too (not your native one).
+  return channel === 'them' ? clientLanguage || 'en' : myCallLanguage || clientLanguage || 'en'
 }
 
 /** Product names, stack and acronyms from "About you" / "About this call" — hints for the recognizer. */
@@ -650,40 +652,57 @@ function pushLiveToCapsule(): void {
   }, 80)
 }
 
-function handleSentences(itemId: string, text: string, final: boolean): void {
+// Translation runs WHILE the client speaks: at every clause boundary (or every
+// few words) the line so far is re-translated and streamed in; the final text
+// gets one last pass. Older in-flight requests for the line are aborted.
+const translateState = new Map<string, { words: number; at: number; ctrl: AbortController | null }>()
+const itemTranslation = new Map<string, string>()
+
+function handleClientText(itemId: string, text: string, final: boolean): void {
+  // Question cards: as soon as a question ends.
   const sentences = sentencesOf(text, final)
   const done = processedSentences.get(itemId) ?? 0
   for (let i = done; i < sentences.length; i++) {
-    const sentence = sentences[i]
-    // A question just ended → card right now (no waiting for the pause).
-    if (/\?$/.test(sentence) || looksLikeQuestion(sentence)) scheduleHint(Date.now())
-    if (needsTranslation(sentence)) void translateSentence(itemId, i, sentence, sentences[i - 1])
+    if (/\?$/.test(sentences[i]) || looksLikeQuestion(sentences[i])) scheduleHint(Date.now())
   }
   processedSentences.set(itemId, Math.max(done, sentences.length))
+
+  if (!needsTranslation(text)) return
+  const words = text.split(/\s+/).filter(Boolean).length
+  const st = translateState.get(itemId) ?? { words: 0, at: 0, ctrl: null }
+  const grown = words - st.words
+  const clause = /[,.;:!?…]$/.test(text.trim())
+  const due = final || (grown >= 2 && clause) || grown >= 5 || (grown >= 1 && Date.now() - st.at > 1200)
+  if (!due || (!final && words < 2)) return
+  st.ctrl?.abort()
+  const ctrl = new AbortController()
+  translateState.set(itemId, { words, at: Date.now(), ctrl })
+  void translateItem(itemId, text, ctrl, final)
 }
 
-async function translateSentence(itemId: string, index: number, sentence: string, previous?: string): Promise<void> {
+async function translateItem(itemId: string, text: string, ctrl: AbortController, final: boolean): Promise<void> {
   const serverId = get().serverId
   if (!serverId) return
-  try {
-    const { translation } = await translateLine({
-      meetingId: serverId,
-      text: sentence,
-      target: nativeLanguageName(nativeLanguage),
-      context: previous
-    })
-    if (!translation) return
-    const list = translations.get(itemId) ?? []
-    list[index] = translation
-    translations.set(itemId, list)
-    const joined = list.filter(Boolean).join(' ')
-    if (get().live.some((l) => l.id === itemId)) upsertLive(itemId, 'them', { translation: joined })
-    // Already a transcript segment? Attach it there too.
+  const prevLine = get()
+    .live.filter((l) => l.speaker === 'them' && l.id !== itemId && l.final)
+    .slice(-1)[0]?.text
+  const apply = (t: string) => {
+    if (ctrl.signal.aborted) return
+    itemTranslation.set(itemId, t)
+    if (get().live.some((l) => l.id === itemId)) upsertLive(itemId, 'them', { translation: t })
     if (get().segments.some((sg) => sg.id === itemId)) {
-      set({ segments: get().segments.map((sg) => (sg.id === itemId ? { ...sg, translation: joined } : sg)) })
+      set({ segments: get().segments.map((sg) => (sg.id === itemId ? { ...sg, translation: t } : sg)) })
     }
+  }
+  try {
+    await translateLineStream(
+      { meetingId: serverId, text, target: nativeLanguageName(nativeLanguage), context: prevLine },
+      apply,
+      ctrl.signal
+    )
+    if (final) translateState.delete(itemId)
   } catch (err) {
-    console.warn('[live] translation failed', (err as Error).message)
+    if ((err as Error).name !== 'AbortError') console.warn('[live] translation failed', (err as Error).message)
   }
 }
 
@@ -700,7 +719,7 @@ function saveLiveSegment(id: string, speaker: 'me' | 'them', text: string): void
     endMs: Math.round(timeline()),
     text,
     id,
-    translation: speaker === 'them' ? (translations.get(id) ?? []).filter(Boolean).join(' ') || null : null
+    translation: speaker === 'them' ? itemTranslation.get(id) ?? null : null
   }
   liveStartMs.delete(id)
   if (!addSegment(seg)) return
@@ -729,7 +748,7 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
         else if (Date.now() < themActiveUntil) return // the client's voice leaking into your mic
         if (!liveStartMs.has(id)) liveStartMs.set(id, Math.max(0, Math.round(timeline() - 1500)))
         upsertLive(id, channel, { text })
-        if (channel === 'them') handleSentences(id, text, false)
+        if (channel === 'them') handleClientText(id, text, false)
       },
       onFinal: (rawId, text) => {
         const id = `${channel}:${rawId}`
@@ -742,7 +761,7 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
         upsertLive(id, channel, { text, final: true })
         if (channel === 'them') {
           recentThem.push({ at: Date.now(), text })
-          handleSentences(id, text, true)
+          handleClientText(id, text, true)
         }
         saveLiveSegment(id, channel, text)
       },
@@ -777,7 +796,9 @@ async function startLive(system: MediaStream | null, mic: MediaStream): Promise<
 function resetLive(): void {
   liveStartMs.clear()
   processedSentences.clear()
-  translations.clear()
+  itemTranslation.clear()
+  translateState.forEach((st) => st.ctrl?.abort())
+  translateState.clear()
   recentThem.length = 0
   themActiveUntil = 0
   meLiveOk = false
@@ -818,6 +839,7 @@ export async function startMeeting_(templateId?: string): Promise<void> {
   nativeLanguage = (await setting<string>('nativeLanguage', '')) || ''
   aboutMe = String((await setting<string>('aboutMe', '')) || '').slice(0, 2000)
   clientLanguage = String((await setting<string>('clientLanguage', 'en')) || 'en')
+  myCallLanguage = String((await setting<string>('myCallLanguage', '')) || '')
   pendingHeardAt = null
   console.log('[session] starting')
 

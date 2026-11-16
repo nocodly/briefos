@@ -1,39 +1,53 @@
-import { ApiError, adminClient, authenticate, json, requireEnv, serve } from '../_shared/http.ts'
+import { ApiError, adminClient, authenticate, corsHeaders, json, requireEnv, serve } from '../_shared/http.ts'
 
 // =============================================================================
-// POST /translate-line   { meetingId, text, target: 'Ukrainian' | 'Spanish' | … }
-// → { translation: string | null }   (null when the line is already in target)
+// POST /translate-line   { meetingId, text, target, context?, stream? }
+// → { translation: string | null }            (default)
+// → text/plain stream of the translation       (stream: true; "-" = no translation needed)
 //
-// Live captions: every sentence the client says is translated into the user's
-// language right away. Small, fast model; one sentence per call.
+// Live captions: the client's words are translated into the user's language
+// while they are still speaking. Streaming + a fast model: the first words of
+// the translation arrive ~0.5 s after the request.
 // =============================================================================
 
-const MODEL = Deno.env.get('TRANSLATE_MODEL') ?? 'gpt-4o-mini'
+const MODEL = Deno.env.get('TRANSLATE_MODEL') ?? 'gpt-4.1-mini'
 
-const owned = new Map<string, string>() // meetingId → userId (per warm instance)
+// Warm-instance caches: skip the auth + ownership round-trips on every line.
+const owned = new Map<string, string>() // meetingId → userId
+const tokens = new Map<string, { userId: string; until: number }>()
+
+async function userIdFor(req: Request): Promise<string> {
+  const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer /, '')
+  const hit = tokens.get(token)
+  if (hit && hit.until > Date.now()) return hit.userId
+  const auth = await authenticate(req)
+  tokens.set(token, { userId: auth.userId, until: Date.now() + 5 * 60_000 })
+  if (tokens.size > 5000) tokens.clear()
+  return auth.userId
+}
 
 serve(async (req) => {
-  const auth = await authenticate(req)
-  let body: { meetingId?: string; text?: string; target?: string; context?: string }
+  const userId = await userIdFor(req)
+  let body: { meetingId?: string; text?: string; target?: string; context?: string; stream?: boolean }
   try {
     body = await req.json()
   } catch {
     throw new ApiError(400, 'bad_request', 'Expected JSON body.')
   }
   const meetingId = String(body.meetingId ?? '')
-  const text = String(body.text ?? '').trim().slice(0, 600)
+  const text = String(body.text ?? '').trim().slice(0, 800)
   const target = String(body.target ?? '').trim().slice(0, 30)
   if (!meetingId || !text || !target) throw new ApiError(400, 'bad_request', 'meetingId, text and target are required.')
 
-  if (owned.get(meetingId) !== auth.userId) {
+  if (owned.get(meetingId) !== userId) {
     const { data } = await adminClient()
       .from('meeting_sessions')
       .select('id')
       .eq('id', meetingId)
-      .eq('user_id', auth.userId)
+      .eq('user_id', userId)
       .maybeSingle()
     if (!data) throw new ApiError(404, 'meeting_not_found', 'This meeting was not found.')
-    owned.set(meetingId, auth.userId)
+    owned.set(meetingId, userId)
   }
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -42,24 +56,67 @@ serve(async (req) => {
     body: JSON.stringify({
       model: MODEL,
       temperature: 0,
-      max_tokens: 300,
+      max_tokens: 400,
+      stream: Boolean(body.stream),
       messages: [
         {
           role: 'system',
           content:
-            `Translate the line from a live business call into ${target}. Natural and precise; keep names, numbers ` +
-            `and technical terms (you may keep the original term in brackets). Output ONLY the translation. ` +
-            `If the line is already in ${target}, output exactly: -`
+            `Translate what the client says on a live business call into ${target}. The text may stop mid-sentence: ` +
+            `translate exactly what is there, don't complete it. Natural and precise; keep names, numbers and ` +
+            `technical terms. Output ONLY the translation. If the text is already in ${target}, output exactly: -`
         },
         ...(body.context ? [{ role: 'user', content: `Previous line (context only): ${String(body.context).slice(0, 300)}` }] : []),
         { role: 'user', content: text }
       ]
     })
   })
-  if (!res.ok) {
+  if (!res.ok || !res.body) {
     console.error('[translate-line] openai error', res.status, (await res.text()).slice(0, 200))
     throw new ApiError(502, 'ai_failed', 'Translation failed.')
   }
-  const out = ((await res.json()) as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content?.trim() ?? ''
-  return json({ translation: !out || out === '-' ? null : out.slice(0, 800) })
+
+  if (!body.stream) {
+    const out = ((await res.json()) as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content?.trim() ?? ''
+    return json({ translation: !out || out === '-' ? null : out.slice(0, 1000) })
+  }
+
+  // Forward only the text deltas as a plain-text stream.
+  const upstream = res.body.getReader()
+  const enc = new TextEncoder()
+  const dec = new TextDecoder()
+  let buf = ''
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      for (;;) {
+        const { value, done } = await upstream.read()
+        if (done) {
+          controller.close()
+          return
+        }
+        buf += dec.decode(value, { stream: true })
+        const lines = buf.split('\n')
+        buf = lines.pop() ?? ''
+        let out = ''
+        for (const line of lines) {
+          if (!line.startsWith('data: ') || line.includes('[DONE]')) continue
+          try {
+            out += JSON.parse(line.slice(6)).choices?.[0]?.delta?.content ?? ''
+          } catch {
+            /* partial line */
+          }
+        }
+        if (out) {
+          controller.enqueue(enc.encode(out))
+          return
+        }
+      }
+    },
+    cancel() {
+      void upstream.cancel()
+    }
+  })
+  return new Response(stream, {
+    headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
+  })
 })

@@ -57,6 +57,7 @@ interface SettingsState {
   meetingLanguage: string
   nativeLanguage: string
   clientLanguage: string
+  myCallLanguage: string
   answerHints: boolean
   aboutMe: string
 }
@@ -75,6 +76,7 @@ const DEFAULTS: SettingsState = {
   meetingLanguage: '',
   nativeLanguage: '',
   clientLanguage: 'en',
+  myCallLanguage: '',
   answerHints: false,
   aboutMe: ''
 }

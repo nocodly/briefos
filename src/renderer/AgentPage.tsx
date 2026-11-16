@@ -53,7 +53,22 @@ export default function AgentPage() {
           <p className="mt-1 text-[11px] text-text-3">Fixed for live captions, so other languages never slip in.</p>
         </div>
         <div>
-          <label className="mb-1.5 block text-[12px] font-medium text-text">Your language (you speak it; translations go into it)</label>
+          <label className="mb-1.5 block text-[12px] font-medium text-text">You speak on calls</label>
+          <select
+            value={s.myCallLanguage}
+            onChange={(e) => set('myCallLanguage', e.target.value)}
+            className="w-full rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[13px] text-text focus:border-accent focus:outline-none"
+          >
+            <option value="">Same as the client</option>
+            {MEETING_LANGUAGES.filter((l) => l.code).map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-[12px] font-medium text-text">Translate the client into</label>
           <select
             value={s.nativeLanguage}
             onChange={(e) => set('nativeLanguage', e.target.value)}

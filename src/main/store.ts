@@ -48,6 +48,8 @@ export interface AppSettings {
   nativeLanguage: string
   /** Language the client speaks — fixed for live transcription of their channel. */
   clientLanguage: string
+  /** Language you speak on calls ('' = same as the client). */
+  myCallLanguage: string
   /** Question cards also suggest what to mention (opt-in). */
   answerHints: boolean
   /** Who the user is: services, stack, rates — background for every call. */
@@ -85,6 +87,7 @@ const DEFAULTS: AppSettings = {
   meetingLanguage: '',
   nativeLanguage: '',
   clientLanguage: 'en',
+  myCallLanguage: '',
   answerHints: false,
   aboutMe: ''
 }

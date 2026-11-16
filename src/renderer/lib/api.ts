@@ -177,3 +177,34 @@ export function liveSession(input: { meetingId: string; languages?: string[]; ke
 export function translateLine(input: { meetingId: string; text: string; target: string; context?: string }): Promise<{ translation: string | null }> {
   return call<{ translation: string | null }>('translate-line', JSON.stringify(input), true)
 }
+
+/**
+ * Streamed translation of a caption line: onText gets the translation so far
+ * as it arrives (~0.5 s to the first words). Resolves to the full text, or
+ * null when the line is already in the target language. Abort with `signal`.
+ */
+export async function translateLineStream(
+  input: { meetingId: string; text: string; target: string; context?: string },
+  onText: (soFar: string) => void,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const res = await fetch(`${BASE}/translate-line`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${await token()}`, apikey: ANON, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...input, stream: true }),
+    signal
+  })
+  if (!res.ok || !res.body) throw new ApiError(res.status, 'translate_failed', 'Translation failed.')
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let text = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    text += dec.decode(value, { stream: true })
+    const t = text.trim()
+    if (t && t !== '-') onText(t)
+  }
+  const out = text.trim()
+  return !out || out === '-' ? null : out
+}
