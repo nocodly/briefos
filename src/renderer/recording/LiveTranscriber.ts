@@ -33,10 +33,8 @@ const MAX_BACKLOG_SAMPLES = RATE * 8
 const PREROLL_SAMPLES = 7_200 // 300 ms
 
 export class LiveTranscriber {
-  private ctx: AudioContext | null = null
-  private source: MediaStreamAudioSourceNode | null = null
-  private node: ScriptProcessorNode | null = null
-  private mute: GainNode | null = null
+  private track: MediaStreamTrack | null = null
+  private reader: ReadableStreamDefaultReader<AudioDataLike> | null = null
   private ws: WebSocket | null = null
   private pending: Int16Array[] = []
   private backlog: Int16Array[] = []
@@ -52,6 +50,10 @@ export class LiveTranscriber {
   private turnStartedAt = 0
   // Items
   private texts = new Map<string, string>()
+  // Resampler state (device rate → 24 kHz)
+  private ratio = 2
+  private srcPos = 0
+  private carry: Float32Array = new Float32Array(0)
   public status: 'connecting' | 'live' | 'failed' | 'stopped' = 'connecting'
 
   constructor(
@@ -61,18 +63,47 @@ export class LiveTranscriber {
   ) {}
 
   async start(): Promise<void> {
-    this.ctx = new AudioContext({ sampleRate: RATE })
-    this.source = this.ctx.createMediaStreamSource(this.stream)
-    // ScriptProcessor (not an AudioWorklet): the app's CSP blocks blob: worklets,
-    // and 2048-sample buffers (~85 ms) are plenty for streaming.
-    this.node = this.ctx.createScriptProcessor(2048, 1, 1)
-    this.mute = this.ctx.createGain()
-    this.mute.gain.value = 0
-    this.node.onaudioprocess = (e) => this.onAudio(e.inputBuffer.getChannelData(0))
-    this.source.connect(this.node)
-    this.node.connect(this.mute)
-    this.mute.connect(this.ctx.destination)
+    // Read raw audio frames straight from the track (MediaStreamTrackProcessor).
+    // An AudioContext + ScriptProcessor on the Windows loopback stream crashed
+    // the renderer in Electron 28 / Chromium 120 (access violation), so no Web
+    // Audio graph here. Frames come at the device rate; we resample to 24 kHz.
+    const Processor = (window as unknown as { MediaStreamTrackProcessor?: TrackProcessorCtor }).MediaStreamTrackProcessor
+    const source = this.stream.getAudioTracks()[0]
+    if (!Processor || !source) {
+      this.setStatus('failed')
+      return
+    }
+    this.track = source.clone()
+    this.reader = new Processor({ track: this.track }).readable.getReader()
+    void this.readLoop()
     await this.connect()
+  }
+
+  private async readLoop(): Promise<void> {
+    const reader = this.reader
+    if (!reader) return
+    let buf = new Float32Array(0)
+    try {
+      for (;;) {
+        const { value, done } = await reader.read()
+        if (done || !value) break
+        try {
+          const n = value.numberOfFrames
+          if (buf.length !== n) buf = new Float32Array(n)
+          try {
+            value.copyTo(buf, { planeIndex: 0, format: 'f32-planar' })
+          } catch {
+            value.copyTo(buf, { planeIndex: 0 })
+          }
+          this.ratio = value.sampleRate / RATE
+        } finally {
+          value.close()
+        }
+        if (!this.stopped) this.onAudio(this.resample(buf))
+      }
+    } catch (err) {
+      if (!this.stopped) console.warn('[live] audio reader stopped', (err as Error).message)
+    }
   }
 
   pause(): void {
@@ -91,10 +122,10 @@ export class LiveTranscriber {
     await new Promise((r) => setTimeout(r, 1200))
     this.ws?.close()
     this.ws = null
-    this.node?.disconnect()
-    this.source?.disconnect()
-    this.mute?.disconnect()
-    await this.ctx?.close().catch(() => {})
+    await this.reader?.cancel().catch(() => {})
+    this.reader = null
+    this.track?.stop()
+    this.track = null
     this.setStatus('stopped')
   }
 
@@ -209,6 +240,33 @@ export class LiveTranscriber {
     }
   }
 
+  /**
+   * Device-rate mono → 24 kHz. Box-average over each output step (a cheap
+   * low-pass that avoids aliasing for 48 → 24 kHz), carrying the fractional
+   * position across buffers.
+   */
+  private resample(input: Float32Array): Float32Array {
+    if (Math.abs(this.ratio - 1) < 1e-6) return input
+    const data = new Float32Array(this.carry.length + input.length)
+    data.set(this.carry, 0)
+    data.set(input, this.carry.length)
+    const r = this.ratio
+    const out: number[] = []
+    let pos = this.srcPos
+    while (pos + r <= data.length) {
+      const start = Math.floor(pos)
+      const end = Math.min(data.length, Math.floor(pos + r))
+      let sum = 0
+      for (let i = start; i < end; i++) sum += data[i]
+      out.push(end > start ? sum / (end - start) : data[start])
+      pos += r
+    }
+    const keepFrom = Math.floor(pos)
+    this.carry = data.slice(keepFrom)
+    this.srcPos = pos - keepFrom
+    return Float32Array.from(out)
+  }
+
   private flush(): void {
     if (!this.pendingSamples) return
     const all = new Int16Array(this.pendingSamples)
@@ -244,6 +302,15 @@ export class LiveTranscriber {
     else this.commitWhenOpen = true
   }
 }
+
+// WebCodecs / insertable-streams types (not in this TS lib version).
+interface AudioDataLike {
+  numberOfFrames: number
+  sampleRate: number
+  copyTo(dest: Float32Array, opts: { planeIndex: number; format?: string }): void
+  close(): void
+}
+type TrackProcessorCtor = new (init: { track: MediaStreamTrack }) => { readable: ReadableStream<AudioDataLike> }
 
 function toBase64(bytes: Uint8Array): string {
   let bin = ''

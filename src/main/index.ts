@@ -6,7 +6,7 @@ import { registerIpcHandlers } from './ipc'
 import { initAutoUpdater } from './updater'
 import { enforceRetention } from '@storage/FileManager'
 import { getSetting } from './store'
-import { sendRecordingCommand } from './RecordingRelay'
+import { reportRecordingState, sendRecordingCommand } from './RecordingRelay'
 import { startCallDetector } from './CallDetector'
 import { capsuleOnCallEnd, capsuleOnCallStart, pushCapsuleState } from './Capsule'
 
@@ -61,6 +61,15 @@ function createMainWindow(): BrowserWindow {
     console.log('[main] main window ready-to-show')
     win.show()
   })
+
+  // Never leave a black window: if the renderer dies, end the recording state
+  // (the capsule and tray follow) and load the UI again.
+  win.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[main] renderer gone', details.reason, details.exitCode)
+    reportRecordingState({ recording: false, paused: false, durationMs: 0, meetingId: null })
+    if (details.reason !== 'clean-exit' && !win.isDestroyed()) setTimeout(() => win.reload(), 500)
+  })
+  win.on('unresponsive', () => console.error('[main] main window unresponsive'))
 
   // Allow the renderer to connect to external APIs (Supabase, OpenAI, Anthropic).
   // Auto-grant microphone permission so Windows shows the OS privacy dialog
