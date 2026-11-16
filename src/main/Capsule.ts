@@ -41,6 +41,14 @@ export interface CapsuleState {
   agentRun: CapsuleAgentRun | null
   /** Short status line shown for a few seconds (e.g. "No question yet"). */
   notice: string | null
+  /** Live captions of the client: last lines with translations. */
+  live: { lines: CapsuleLiveLine[]; status: 'off' | 'connecting' | 'live' | 'failed' }
+}
+
+export interface CapsuleLiveLine {
+  text: string
+  translation: string | null
+  final: boolean
 }
 
 export interface CapsuleAgentRun {
@@ -59,7 +67,8 @@ let state: CapsuleState = {
   hint: null,
   expanded: true,
   agentRun: null,
-  notice: null
+  notice: null,
+  live: { lines: [], status: 'off' }
 }
 let hintTimer: NodeJS.Timeout | null = null
 
@@ -68,7 +77,7 @@ const MARGIN = 16
 /** Width per mode; height comes from the rendered content (capsule:fit). */
 function widthFor(s: CapsuleState): number {
   if (s.mode === 'prompt') return 316
-  return s.expanded ? 330 : 252
+  return s.expanded ? 372 : 252
 }
 const MIN_HEIGHT = 64
 let contentHeight = MIN_HEIGHT
@@ -126,7 +135,10 @@ export function getCapsule(): CapsuleState {
 
 export function setCapsule(patch: Partial<CapsuleState>): void {
   state = { ...state, ...patch }
-  if (state.mode !== 'recording') state.hint = null
+  if (state.mode !== 'recording') {
+    state.hint = null
+    state.live = { lines: [], status: 'off' }
+  }
   apply()
 }
 
@@ -153,6 +165,15 @@ export function capsuleNotice(text: string): void {
   if (noticeTimer) clearTimeout(noticeTimer)
   noticeTimer = setTimeout(() => setCapsule({ notice: null }), 4000)
   setCapsule({ notice: text })
+}
+
+/** Live captions from the main renderer (throttled there). */
+export function setCapsuleLive(live: CapsuleState['live']): void {
+  if (state.mode !== 'recording' && live.lines.length) return
+  state = { ...state, live }
+  const win = getOverlayWindow()
+  // Content-only change: push it without re-applying the window bounds.
+  if (win && !win.isDestroyed()) win.webContents.send('capsule:state', state)
 }
 
 export function toggleCapsuleExpanded(): void {

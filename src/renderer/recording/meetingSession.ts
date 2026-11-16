@@ -4,12 +4,15 @@ import {
   ApiError,
   enhanceNotes,
   startMeeting,
+  liveSession,
   suggestReply,
   transcribeChunk,
+  translateLine,
   type EnhancedNotes,
   type StartMeetingResult
 } from '../lib/api'
 import { ChannelRecorder, type AudioChunk } from './ChannelRecorder'
+import { LiveTranscriber } from './LiveTranscriber'
 import { track } from '../lib/track'
 
 // =============================================================================
@@ -36,6 +39,17 @@ export interface LiveSegment {
   startMs: number
   endMs: number
   text: string
+  /** Live-transcribed client line: its id and translation into the user's language. */
+  id?: string
+  translation?: string | null
+}
+
+/** A line of live captions (the client), with its translation. */
+export interface LiveLine {
+  id: string
+  text: string
+  translation: string | null
+  final: boolean
 }
 
 interface SessionState {
@@ -59,6 +73,9 @@ interface SessionState {
   hintsNote: string | null
   /** What the user pasted about this call: job post, proposal, stack. */
   callContext: string
+  /** Live captions of the client (latest last). */
+  live: LiveLine[]
+  liveStatus: 'off' | 'connecting' | 'live' | 'failed'
 }
 
 /** A question the client asked, with translation and a term explanation. */
@@ -93,7 +110,9 @@ export const useMeetingSession = create<SessionState>(() => ({
   enhanced: null,
   hints: [],
   hintsNote: null,
-  callContext: ''
+  callContext: '',
+  live: [],
+  liveStatus: 'off'
 }))
 
 const set = useMeetingSession.setState
@@ -238,14 +257,18 @@ async function runJob(job: Job): Promise<void> {
   try {
     // No "prompt" with previous text: gpt-4o-*-transcribe tends to echo it
     // back, which duplicated whole chunks in testing.
+    // While live captions run, the client's text comes from them: this chunk
+    // only meters the seconds (no second transcription of the same audio).
+    const countOnly = job.channel === 'them' && get().liveStatus === 'live'
     const text = await transcribeChunk({
       meetingId: serverId,
-      language: meetingLanguage || undefined,
+      language: lockedLanguage(job.channel),
       channel: job.channel,
       blob: job.chunk.blob,
-      durationSec: job.chunk.durationMs / 1000
+      durationSec: job.chunk.durationMs / 1000,
+      countOnly
     })
-    if (!text.trim()) return
+    if (countOnly || !text.trim()) return
     const seg: LiveSegment = {
       speaker: job.channel,
       startMs: Math.round(job.chunk.startMs),
@@ -454,7 +477,10 @@ async function requestHint(force: boolean, heardAt: number | null): Promise<void
   try {
     const res = await suggestReply({
       meetingId: serverId,
-      transcript: segments.slice(-30).map(({ speaker, text }) => ({ speaker, text })),
+      transcript: [
+        ...segments.slice(-30).map(({ speaker, text }) => ({ speaker, text })),
+        ...(livePartial() ? [{ speaker: 'them' as const, text: livePartial() }] : [])
+      ],
       userNotes,
       nativeLanguage: nativeLanguageName(nativeLanguage),
       context: contextForAI(),
@@ -502,6 +528,183 @@ async function requestHint(force: boolean, heardAt: number | null): Promise<void
   }
     if (next !== null) void requestHint(false, next)
   }
+}
+
+// ─── Live captions (client channel) ────────────────────────────────────────
+let live: LiveTranscriber | null = null
+const liveStartMs = new Map<string, number>()
+const processedSentences = new Map<string, number>() // itemId → sentences handled
+const translations = new Map<string, string[]>() // itemId → per-sentence translations
+let capsuleTimer: ReturnType<typeof setTimeout> | null = null
+
+function livePartial(): string {
+  return get()
+    .live.filter((l) => !l.final)
+    .map((l) => l.text)
+    .join(' ')
+}
+
+/** Expected languages for live transcription: the meeting language, or English + yours. */
+function liveLanguages(): string[] {
+  if (meetingLanguage) return [meetingLanguage]
+  const own = (nativeLanguage || navigator.language || 'en').slice(0, 2).toLowerCase()
+  return Array.from(new Set(['en', own === 'fi' ? 'tl' : own]))
+}
+
+/** Product names, stack and acronyms from "About you" / "About this call" — hints for the recognizer. */
+function liveKeywords(): string[] {
+  const text = `${aboutMe}\n${get().callContext}`
+  const found = text.match(/\b(?:[A-Z][A-Za-z0-9]*[A-Z0-9][A-Za-z0-9]*|[A-Z][a-z]+(?:\.[a-z]+)+|[a-z]+\.(?:js|io|ai|ts))\b/g) ?? []
+  return Array.from(new Set(found)).slice(0, 40)
+}
+
+/** Lock the chunk transcription language per channel (stops Ukrainian → Russian slips). */
+function lockedLanguage(channel: 'me' | 'them'): string | undefined {
+  if (meetingLanguage) return meetingLanguage
+  const recent = get()
+    .segments.filter((sg) => sg.speaker === channel)
+    .slice(-6)
+  let uk = 0
+  let ru = 0
+  for (const sg of recent) {
+    if (/[іїєґІЇЄҐ]/.test(sg.text)) uk++
+    else if (/[ыэъёЫЭЪЁ]/.test(sg.text)) ru++
+  }
+  if (uk >= 2 && uk > ru) return 'uk'
+  if (ru >= 2 && ru > uk) return 'ru'
+  return undefined
+}
+
+function sentencesOf(text: string, final: boolean): string[] {
+  const parts = text.split(/(?<=[.!?…])\s+/).map((x) => x.trim()).filter(Boolean)
+  if (!final && parts.length && !/[.!?…]$/.test(parts[parts.length - 1])) parts.pop()
+  return parts
+}
+
+/** Skip the translation call when the line is obviously already in the user's language. */
+function needsTranslation(sentence: string): boolean {
+  const target = (nativeLanguage || navigator.language || 'en').slice(0, 2).toLowerCase()
+  const cyr = /[А-Яа-яІіЇїЄєҐґЁё]/.test(sentence)
+  if ((target === 'uk' || target === 'ru') && cyr) return false
+  if (target === 'en' && !cyr && !/[^ -~’‘“”–—…]/.test(sentence)) return false
+  return sentence.split(/\s+/).length >= 2
+}
+
+function upsertLive(id: string, patch: Partial<LiveLine>): void {
+  const lines = get().live
+  const i = lines.findIndex((l) => l.id === id)
+  const next =
+    i >= 0
+      ? lines.map((l, j) => (j === i ? { ...l, ...patch } : l))
+      : [...lines, { id, text: '', translation: null, final: false, ...patch }]
+  set({ live: next.slice(-8) })
+  pushLiveToCapsule()
+}
+
+function pushLiveToCapsule(): void {
+  if (capsuleTimer) return
+  capsuleTimer = setTimeout(() => {
+    capsuleTimer = null
+    const lines = get()
+      .live.slice(-3)
+      .map(({ text, translation, final }) => ({ text, translation, final }))
+    void invoke('capsule:live', { lines, status: get().liveStatus }).catch(() => {})
+  }, 120)
+}
+
+function handleSentences(itemId: string, text: string, final: boolean): void {
+  const sentences = sentencesOf(text, final)
+  const done = processedSentences.get(itemId) ?? 0
+  for (let i = done; i < sentences.length; i++) {
+    const sentence = sentences[i]
+    // A question just ended → card right now (no waiting for the pause).
+    if (/\?$/.test(sentence) || looksLikeQuestion(sentence)) scheduleHint(Date.now())
+    if (needsTranslation(sentence)) void translateSentence(itemId, i, sentence, sentences[i - 1])
+  }
+  processedSentences.set(itemId, Math.max(done, sentences.length))
+}
+
+async function translateSentence(itemId: string, index: number, sentence: string, previous?: string): Promise<void> {
+  const serverId = get().serverId
+  if (!serverId) return
+  try {
+    const { translation } = await translateLine({
+      meetingId: serverId,
+      text: sentence,
+      target: nativeLanguageName(nativeLanguage),
+      context: previous
+    })
+    if (!translation) return
+    const list = translations.get(itemId) ?? []
+    list[index] = translation
+    translations.set(itemId, list)
+    const joined = list.filter(Boolean).join(' ')
+    upsertLive(itemId, { translation: joined })
+    // Already a transcript segment? Attach it there too.
+    if (get().segments.some((sg) => sg.id === itemId)) {
+      set({ segments: get().segments.map((sg) => (sg.id === itemId ? { ...sg, translation: joined } : sg)) })
+    }
+  } catch (err) {
+    console.warn('[live] translation failed', (err as Error).message)
+  }
+}
+
+async function startLive(system: MediaStream): Promise<void> {
+  const serverId = get().serverId
+  if (!serverId) return
+  live = new LiveTranscriber(
+    system,
+    async () => (await liveSession({ meetingId: serverId, languages: liveLanguages(), keywords: liveKeywords() })).secret,
+    {
+      onPartial: (id, text) => {
+        if (!liveStartMs.has(id)) liveStartMs.set(id, Math.max(0, Math.round(timeline() - 1500)))
+        upsertLive(id, { text })
+        handleSentences(id, text, false)
+      },
+      onFinal: (id, text) => {
+        upsertLive(id, { text, final: true })
+        handleSentences(id, text, true)
+        const seg: LiveSegment = {
+          speaker: 'them',
+          startMs: liveStartMs.get(id) ?? Math.round(timeline()),
+          endMs: Math.round(timeline()),
+          text,
+          id,
+          translation: (translations.get(id) ?? []).filter(Boolean).join(' ') || null
+        }
+        liveStartMs.delete(id)
+        if (!addSegment(seg)) return
+        const meetingId = get().meetingId
+        if (meetingId) {
+          void invoke('notes:appendSegment', {
+            meetingId,
+            speaker: 'Them',
+            startMs: seg.startMs,
+            endMs: seg.endMs,
+            text: seg.text
+          }).catch(() => {})
+        }
+      },
+      onStatus: (st) => {
+        set({ liveStatus: st === 'stopped' ? 'off' : st })
+        pushLiveToCapsule()
+        if (st === 'failed') console.warn('[live] gave up — falling back to chunk transcription')
+      }
+    }
+  )
+  try {
+    await live.start()
+  } catch (err) {
+    console.warn('[live] could not start', (err as Error).message)
+    set({ liveStatus: 'failed' })
+  }
+}
+
+function resetLive(): void {
+  liveStartMs.clear()
+  processedSentences.clear()
+  translations.clear()
+  set({ live: [], liveStatus: 'off' })
 }
 
 /** Append a task line to the user's notes so it lands in the AI action items. */
@@ -565,6 +768,7 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     }
     recorders.me?.start()
     recorders.them?.start()
+    resetLive()
 
     contextOwner = meetingId
     track('meeting_started', { systemAudio: Boolean(system), hasContext: Boolean(get().callContext.trim()) })
@@ -578,6 +782,7 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     })
     report()
     console.log('[session] recording', meetingId)
+    if (system) void startLive(system)
   } catch (err) {
     streams.forEach((st) => st.getTracks().forEach((t) => t.stop()))
     streams = []
@@ -599,6 +804,7 @@ export async function pauseMeeting(): Promise<void> {
   activeSince = null
   set({ status: 'paused' })
   report()
+  live?.pause()
   await Promise.all([recorders.me?.pause(), recorders.them?.pause()])
 }
 
@@ -607,6 +813,7 @@ export function resumeMeeting(): void {
   activeSince = performance.now()
   recorders.me?.resume()
   recorders.them?.resume()
+  live?.resume()
   set({ status: 'recording' })
   report()
 }
@@ -625,7 +832,10 @@ export async function stopMeeting(): Promise<void> {
   activeSince = null
   set({ status: 'finishing' })
 
-  await Promise.all([recorders.me?.stop(), recorders.them?.stop()])
+  const liveDone = live?.stop()
+  live = null
+  await Promise.all([recorders.me?.stop(), recorders.them?.stop(), liveDone])
+  void invoke('capsule:live', { lines: [], status: 'off' }).catch(() => {})
   recorders = {}
   streams.forEach((st) => st.getTracks().forEach((t) => t.stop()))
   streams = []

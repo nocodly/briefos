@@ -42,6 +42,7 @@ interface CapsuleState {
   expanded: boolean
   agentRun: AgentRun | null
   notice: string | null
+  live?: { lines: { text: string; translation: string | null; final: boolean }[]; status: 'off' | 'connecting' | 'live' | 'failed' }
 }
 
 type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun'
@@ -185,14 +186,24 @@ export default function Overlay() {
         </div>
       )}
 
-      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} />}
+      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} />}
     </Shell>
   )
 }
 
 // ─── Agent panel ────────────────────────────────────────────────────────────
 
-function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentRun | null; notice: string | null }) {
+function AgentPanel({
+  hint,
+  run,
+  notice,
+  live
+}: {
+  hint: ReplyHint | null
+  run: AgentRun | null
+  notice: string | null
+  live?: CapsuleState['live']
+}) {
   const [text, setText] = useState('')
   const [confirm, setConfirm] = useState<string | null>(null)
   const [agentName, setAgentName] = useState('Claude Code')
@@ -226,11 +237,13 @@ function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentR
 
   return (
     <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
+      {live && live.status !== 'off' && <LiveCaptions live={live} />}
       {hint ? (
         <QuestionCardView hint={hint} />
       ) : (
         !run &&
-        !confirm && (
+        !confirm &&
+        !(live && live.lines.length) && (
           <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/40">
             <i className="ti ti-sparkles text-[12px] text-accent" /> {notice ?? 'Listening for the client’s questions…'}
           </div>
@@ -301,6 +314,35 @@ function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentR
           <Chip icon="help-circle" label="Last question" onClick={() => void invoke('capsule:quick', 'lastQuestion')} />
           <Chip icon="send" label={`All to ${agentName.split(' ')[0]}`} onClick={() => setConfirm(QUICK_TASKS.all)} />
           <Chip icon="calendar-plus" label="Dates → calendar" onClick={() => setConfirm(QUICK_TASKS.calendar)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function LiveCaptions({ live }: { live: NonNullable<CapsuleState['live']> }) {
+  const lines = live.lines.slice(-2)
+  return (
+    <div className="rounded-[12px] border border-white/[.08] bg-white/[.04] px-2.5 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">
+        <span className={`h-1.5 w-1.5 rounded-full ${live.status === 'live' ? 'animate-pulse-dot bg-green' : 'bg-amber'}`} />
+        {live.status === 'live' ? 'Client · live' : live.status === 'failed' ? 'Live captions off' : 'Connecting…'}
+      </div>
+      {lines.length === 0 ? (
+        <div className="mt-1 text-[11.5px] text-white/35">Their words appear here as they speak.</div>
+      ) : (
+        <div className="mt-1 flex flex-col gap-1.5">
+          {lines.map((l, i) => (
+            <div key={i} className={i < lines.length - 1 ? 'opacity-55' : ''}>
+              <div className="line-clamp-3 text-[11.5px] leading-snug text-white/65">
+                {l.text}
+                {!l.final && <span className="ml-0.5 inline-block h-3 w-[2px] translate-y-0.5 animate-pulse bg-white/60" />}
+              </div>
+              {l.translation && (
+                <div className="mt-0.5 line-clamp-3 text-[12.5px] font-medium leading-snug text-white">{l.translation}</div>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

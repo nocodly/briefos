@@ -33,9 +33,9 @@ const SILENCE_PEAK = 0.012
 /** Level that counts as speech for pause detection. */
 const VOICE_LEVEL = 0.02
 /** A chunk split on a pause needs at least this much audio… */
-const MIN_SPLIT_MS = 2_500
+const MIN_SPLIT_MS = 6_000
 /** …and this much quiet after the last speech. */
-const PAUSE_MS = 700
+const PAUSE_MS = 900
 
 export class ChannelRecorder {
   private recorder: MediaRecorder | null = null

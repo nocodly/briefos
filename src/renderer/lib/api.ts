@@ -86,6 +86,8 @@ export async function transcribeChunk(input: {
   durationSec: number
   prompt?: string
   language?: string
+  /** The text came from live transcription: only meter the seconds. */
+  countOnly?: boolean
 }): Promise<string> {
   const form = new FormData()
   form.append('meetingId', input.meetingId)
@@ -93,6 +95,7 @@ export async function transcribeChunk(input: {
   form.append('durationSec', String(Math.max(1, Math.min(60, Math.round(input.durationSec)))))
   if (input.prompt) form.append('prompt', input.prompt.slice(-400))
   if (input.language) form.append('language', input.language)
+  if (input.countOnly) form.append('countOnly', '1')
   form.append('file', input.blob, `${input.channel}.webm`)
   const res = await call<{ text: string }>('transcribe-chunk', form, false)
   return res.text
@@ -163,4 +166,14 @@ export function billingPortal(): Promise<{ url: string; login?: boolean }> {
 /** Stripe Checkout with the price for the buyer's region (see functions/checkout). */
 export function createCheckout(input: { kind: 'pro' | 'max' | 'topup'; country: string | null }): Promise<{ url: string }> {
   return call<{ url: string }>('checkout', JSON.stringify(input), true)
+}
+
+/** Short-lived secret for live transcription of the client's channel. */
+export function liveSession(input: { meetingId: string; languages?: string[]; keywords?: string[] }): Promise<{ secret: string }> {
+  return call<{ secret: string }>('live-session', JSON.stringify(input), true)
+}
+
+/** Translate one caption line into the user's language (null = already in it). */
+export function translateLine(input: { meetingId: string; text: string; target: string; context?: string }): Promise<{ translation: string | null }> {
+  return call<{ translation: string | null }>('translate-line', JSON.stringify(input), true)
 }

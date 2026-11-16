@@ -8,6 +8,8 @@ import { ApiError, adminClient, authenticate, json, requireEnv, serve } from '..
 //   language    — optional ISO code hint ('uk', 'de', 'en'…)
 //   prompt      — optional tail of the previous text for continuity
 //   file        — audio chunk (webm/opus, ogg, wav, mp3, m4a)
+//   countOnly   — '1': the text comes from live transcription (live-session);
+//                 only meter the seconds, don't transcribe again
 // Response: { text }
 //
 // Audio is streamed straight to the transcription API and never stored.
@@ -37,6 +39,7 @@ serve(async (req) => {
   const language = String(form.get('language') ?? '').slice(0, 5)
   const prompt = String(form.get('prompt') ?? '').slice(-500)
   const file = form.get('file')
+  const countOnly = String(form.get('countOnly') ?? '') === '1'
 
   if (!meetingId) throw new ApiError(400, 'bad_request', 'meetingId is required.')
   if (channel !== 'me' && channel !== 'them') throw new ApiError(400, 'bad_request', 'channel must be me|them.')
@@ -75,6 +78,8 @@ serve(async (req) => {
     default:
       throw new Error(`unexpected verdict ${verdict}`)
   }
+
+  if (countOnly) return json({ text: '' })
 
   // Forward to OpenAI.
   const upstream = new FormData()

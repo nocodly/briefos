@@ -87,7 +87,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
 
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-  }, [s.segments.length])
+  }, [s.segments.length, s.live])
 
   // Jump to the AI notes as soon as they arrive.
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           <div className="flex-1 overflow-auto px-4 py-3 space-y-3">
             {s.segments.length === 0 && (
               <p className="text-[12px] text-text-4 leading-relaxed">
-                {live ? 'Listening… the first lines appear in about 20 seconds.' : 'The transcript will appear here.'}
+                {live ? 'Listening… lines appear as people speak.' : 'The transcript will appear here.'}
               </p>
             )}
             {s.segments.map((seg, i) => (
@@ -292,9 +292,28 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
                   }`}
                 >
                   {seg.text}
+                  {seg.translation && (
+                    <div className="mt-1 border-t border-border-soft pt-1 text-[12.5px] font-medium text-text">{seg.translation}</div>
+                  )}
                 </div>
               </div>
             ))}
+            {s.live
+              .filter((l) => !l.final && l.text)
+              .map((l) => (
+                <div key={l.id} className="pr-6">
+                  <div className="mb-0.5 flex items-center gap-1 font-mono text-[10px] text-text-4">
+                    <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-green" /> Them · live
+                  </div>
+                  <div className="rounded-card bg-bg-2 px-3 py-2 text-[13px] leading-relaxed text-text-2">
+                    {l.text}
+                    <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-text-3" />
+                    {l.translation && (
+                      <div className="mt-1 border-t border-border-soft pt-1 text-[12.5px] font-medium text-text">{l.translation}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
             <div ref={transcriptEnd} />
           </div>
           )}

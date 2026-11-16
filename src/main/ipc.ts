@@ -25,6 +25,7 @@ import {
   fitCapsule,
   getCapsule,
   setCapsuleAgentRun,
+  setCapsuleLive,
   showHint,
   toggleCapsuleExpanded,
   type ReplyHint
@@ -449,6 +450,19 @@ export function registerIpcHandlers(): void {
   })
   handle('capsule:notice', async (_e, text: string) => {
     capsuleNotice(String(text).slice(0, 120))
+    return { ok: true }
+  })
+  handle('capsule:live', async (_e, payload: { lines?: unknown; status?: string }) => {
+    const lines = (Array.isArray(payload?.lines) ? payload.lines : []).slice(-3).map((l) => {
+      const x = l as { text?: unknown; translation?: unknown; final?: unknown }
+      return {
+        text: String(x.text ?? '').slice(-400),
+        translation: typeof x.translation === 'string' ? x.translation.slice(-500) : null,
+        final: Boolean(x.final)
+      }
+    })
+    const st = ['off', 'connecting', 'live', 'failed'].includes(String(payload?.status)) ? String(payload?.status) : 'off'
+    setCapsuleLive({ lines, status: st as 'off' | 'connecting' | 'live' | 'failed' })
     return { ok: true }
   })
   handle('capsule:fit', async (_e, height: number) => {
