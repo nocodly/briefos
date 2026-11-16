@@ -72,7 +72,7 @@ const FAQ = [
   },
   {
     q: 'Which languages?',
-    a: 'Client questions can be shown in Ukrainian, Polish, Spanish, Portuguese, German, French, Italian, Russian and English, with more coming. The call itself can be in more than 50 languages.'
+    a: 'Client questions can be shown in Spanish, Portuguese, Hindi, Bengali, Urdu, Filipino, Indonesian, Vietnamese, Turkish, Arabic, Polish, Ukrainian, Romanian, German, French, Italian and more. The call itself can be in more than 50 languages.'
   }
 ]
 
@@ -182,8 +182,8 @@ export default function FreelancersPage() {
           <div className="container-x max-w-3xl text-center">
             <h2 className="h-section">One well-scoped project pays for a year</h2>
             <p className="mt-4 text-[16px] text-ink-2">
-              Free: {PLANS.free.meetingsPerMonth} calls a month with live question cards and the brief. Pro {PLANS.pro.price}/month:{' '}
-              {PLANS.pro.monthlyHours} hours of calls, unlimited cards, estimate, follow-up and agent tasks.
+              Free: {PLANS.free.meetingsPerMonth} calls a month, 20 question cards per call and the brief. Pro {PLANS.pro.price}/month:{' '}
+              {PLANS.pro.monthlyHours} hours of calls, up to 200 cards per call, estimate, follow-up and agent tasks.
             </p>
             <div className="mt-7 flex flex-wrap justify-center gap-3">
               <a href={SITE.downloadUrl} className="btn-accent">

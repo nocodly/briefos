@@ -11,18 +11,6 @@ const QUESTION = 'How would you structure the API on AWS — and can you have a 
 
 const LANGS = [
   {
-    id: 'uk',
-    label: 'Українська',
-    text: 'Як би ви побудували API на AWS — і чи зможете зробити першу версію до кінця наступного місяця?',
-    term: 'API Gateway + Lambda — типова «безсерверна» схема API на AWS: платите лише за запити.'
-  },
-  {
-    id: 'pl',
-    label: 'Polski',
-    text: 'Jak zbudowałbyś API na AWS — i czy dasz radę zrobić pierwszą wersję do końca przyszłego miesiąca?',
-    term: 'API Gateway + Lambda — typowy „serverless” układ API na AWS: płacisz tylko za zapytania.'
-  },
-  {
     id: 'es',
     label: 'Español',
     text: '¿Cómo estructurarías la API en AWS? ¿Y podrías tener una primera versión a finales del mes que viene?',
@@ -39,16 +27,46 @@ const LANGS = [
     label: 'हिन्दी',
     text: 'आप AWS पर API कैसे बनाएँगे — और क्या अगले महीने के अंत तक पहला वर्ज़न दे सकते हैं?',
     term: 'API Gateway + Lambda — AWS पर आम “serverless” सेटअप: सिर्फ़ रिक्वेस्ट के हिसाब से भुगतान।'
+  },
+  {
+    id: 'pl',
+    label: 'Polski',
+    text: 'Jak zbudowałbyś API na AWS — i czy dasz radę zrobić pierwszą wersję do końca przyszłego miesiąca?',
+    term: 'API Gateway + Lambda — typowy „serverless” układ API na AWS: płacisz tylko za zapytania.'
+  },
+  {
+    id: 'uk',
+    label: 'Українська',
+    text: 'Як би ви побудували API на AWS — і чи зможете зробити першу версію до кінця наступного місяця?',
+    term: 'API Gateway + Lambda — типова «безсерверна» схема API на AWS: платите лише за запити.'
   }
 ] as const
 
 type Phase = 'typing' | 'translation' | 'term'
+type LangId = (typeof LANGS)[number]['id']
+
+/** Ads can force a language (?lang=pt); otherwise follow the browser (en-IN → Hindi). */
+function initialLang(): LangId {
+  const ids = LANGS.map((l) => l.id) as readonly string[]
+  const param = new URLSearchParams(window.location.search).get('lang')?.toLowerCase()
+  if (param && ids.includes(param)) return param as LangId
+  const nav = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.toLowerCase())
+  for (const l of nav) {
+    if (l === 'en-in') return 'hi'
+    const base = l.slice(0, 2)
+    if (base === 'ru') return 'uk'
+    if (ids.includes(base)) return base as LangId
+  }
+  return 'es'
+}
 
 export function QuestionCardDemo() {
-  const [lang, setLang] = useState<(typeof LANGS)[number]['id']>('uk')
+  const [lang, setLang] = useState<LangId>('es')
   const [typed, setTyped] = useState(0)
   const [phase, setPhase] = useState<Phase>('typing')
   const current = LANGS.find((l) => l.id === lang) ?? LANGS[0]
+
+  useEffect(() => setLang(initialLang()), [])
 
   // Type the question once; afterwards language switches only swap the lines.
   useEffect(() => {

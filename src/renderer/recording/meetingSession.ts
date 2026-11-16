@@ -354,7 +354,16 @@ export const MEETING_LANGUAGES: { code: string; name: string }[] = [
   { code: 'es', name: 'Español' },
   { code: 'fr', name: 'Français' },
   { code: 'it', name: 'Italiano' },
-  { code: 'pt', name: 'Português' }
+  { code: 'pt', name: 'Português' },
+  { code: 'hi', name: 'हिन्दी (Hindi)' },
+  { code: 'bn', name: 'বাংলা (Bengali)' },
+  { code: 'ur', name: 'اردو (Urdu)' },
+  { code: 'tl', name: 'Filipino' },
+  { code: 'id', name: 'Bahasa Indonesia' },
+  { code: 'vi', name: 'Tiếng Việt' },
+  { code: 'tr', name: 'Türkçe' },
+  { code: 'ar', name: 'العربية (Arabic)' },
+  { code: 'ro', name: 'Română' }
 ]
 /** Settings value → language name for /enhance-notes (undefined = auto-detect). */
 export function notesLanguageName(code: string | null | undefined): string | undefined {
@@ -362,7 +371,8 @@ export function notesLanguageName(code: string | null | undefined): string | und
 }
 const LANGUAGE_NAMES: Record<string, string> = {
   uk: 'Ukrainian', en: 'English', de: 'German', ru: 'Russian', pl: 'Polish',
-  es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese'
+  es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese', hi: 'Hindi', bn: 'Bengali',
+  ur: 'Urdu', tl: 'Filipino', id: 'Indonesian', vi: 'Vietnamese', tr: 'Turkish', ar: 'Arabic', ro: 'Romanian'
 }
 let hintInFlight = false
 /** heardAt of a question that arrived while a card request was in flight. */
@@ -373,7 +383,8 @@ let aboutMe = ''
 
 /** Language name for the cards ('' → the app's / Windows language). */
 export function nativeLanguageName(code: string | null | undefined): string {
-  const c = (code || navigator.language || 'en').slice(0, 2).toLowerCase()
+  const raw = (code || navigator.language || 'en').toLowerCase()
+  const c = raw.startsWith('fil') ? 'tl' : raw.slice(0, 2)
   return LANGUAGE_NAMES[c] ?? 'English'
 }
 
