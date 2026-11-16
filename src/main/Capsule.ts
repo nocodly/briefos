@@ -46,6 +46,8 @@ export interface CapsuleState {
 }
 
 export interface CapsuleLiveLine {
+  id: string
+  speaker: 'me' | 'them'
   text: string
   translation: string | null
   final: boolean
@@ -77,7 +79,7 @@ const MARGIN = 16
 /** Width per mode; height comes from the rendered content (capsule:fit). */
 function widthFor(s: CapsuleState): number {
   if (s.mode === 'prompt') return 316
-  return s.expanded ? 372 : 252
+  return s.expanded ? 440 : 252
 }
 const MIN_HEIGHT = 64
 let contentHeight = MIN_HEIGHT
@@ -123,7 +125,7 @@ function apply(): void {
 
 /** The capsule renderer reports its content height; resize the window to fit. */
 export function fitCapsule(height: number): void {
-  const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 560))
+  const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 720))
   if (Math.abs(h - contentHeight) < 2) return
   contentHeight = h
   if (state.mode !== 'hidden') apply()

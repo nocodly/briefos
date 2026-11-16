@@ -301,11 +301,15 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
             {s.live
               .filter((l) => !l.final && l.text)
               .map((l) => (
-                <div key={l.id} className="pr-6">
+                <div key={l.id} className={l.speaker === 'me' ? 'pl-6' : 'pr-6'}>
                   <div className="mb-0.5 flex items-center gap-1 font-mono text-[10px] text-text-4">
-                    <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-green" /> Them · live
+                    <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-green" /> {l.speaker === 'me' ? 'You' : 'Them'} · live
                   </div>
-                  <div className="rounded-card bg-bg-2 px-3 py-2 text-[13px] leading-relaxed text-text-2">
+                  <div
+                    className={`rounded-card px-3 py-2 text-[13px] leading-relaxed ${
+                      l.speaker === 'me' ? 'bg-accent-soft text-text' : 'bg-bg-2 text-text-2'
+                    }`}
+                  >
                     {l.text}
                     <span className="ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 animate-pulse bg-text-3" />
                     {l.translation && (

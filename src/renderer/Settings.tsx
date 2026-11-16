@@ -56,6 +56,7 @@ interface SettingsState {
   agentAutonomy: 'safe' | 'full'
   meetingLanguage: string
   nativeLanguage: string
+  clientLanguage: string
   answerHints: boolean
   aboutMe: string
 }
@@ -73,6 +74,7 @@ const DEFAULTS: SettingsState = {
   agentAutonomy: 'safe',
   meetingLanguage: '',
   nativeLanguage: '',
+  clientLanguage: 'en',
   answerHints: false,
   aboutMe: ''
 }

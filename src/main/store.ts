@@ -46,6 +46,8 @@ export interface AppSettings {
   meetingLanguage: string
   /** Language question cards are translated into ('' = Windows language). */
   nativeLanguage: string
+  /** Language the client speaks — fixed for live transcription of their channel. */
+  clientLanguage: string
   /** Question cards also suggest what to mention (opt-in). */
   answerHints: boolean
   /** Who the user is: services, stack, rates — background for every call. */
@@ -82,6 +84,7 @@ const DEFAULTS: AppSettings = {
   agentWorkdir: '',
   meetingLanguage: '',
   nativeLanguage: '',
+  clientLanguage: 'en',
   answerHints: false,
   aboutMe: ''
 }

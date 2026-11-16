@@ -453,9 +453,11 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
   handle('capsule:live', async (_e, payload: { lines?: unknown; status?: string }) => {
-    const lines = (Array.isArray(payload?.lines) ? payload.lines : []).slice(-3).map((l) => {
-      const x = l as { text?: unknown; translation?: unknown; final?: unknown }
+    const lines = (Array.isArray(payload?.lines) ? payload.lines : []).slice(-10).map((l, i) => {
+      const x = l as { id?: unknown; speaker?: unknown; text?: unknown; translation?: unknown; final?: unknown }
       return {
+        id: String(x.id ?? i).slice(0, 80),
+        speaker: x.speaker === 'me' ? ('me' as const) : ('them' as const),
         text: String(x.text ?? '').slice(-400),
         translation: typeof x.translation === 'string' ? x.translation.slice(-500) : null,
         final: Boolean(x.final)
