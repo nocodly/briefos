@@ -26,3 +26,24 @@ where name = 'card_shown' and props ? 'latencyMs' and created_at > now() - inter
 -- Latest errors.
 select created_at, app_version, props->>'where' as where_, props->>'message' as message
 from public.app_events where name = 'error' order by created_at desc limit 50;
+
+-- Funnel by country (ad regions), last 14 days.
+select
+  coalesce(props->>'country', '??') as country,
+  count(distinct user_id) filter (where name = 'signup')          as signups,
+  count(distinct user_id) filter (where name = 'meeting_started') as started_a_call,
+  count(distinct user_id) filter (where name = 'notes_ready')     as got_notes,
+  count(distinct user_id) filter (where name = 'checkout_opened') as opened_checkout
+from public.app_events
+where created_at > now() - interval '14 days'
+group by 1
+order by signups desc;
+
+-- Paying users by country of their latest event.
+select coalesce(e.props->>'country', '??') as country, p.plan, count(*)
+from public.profiles p
+left join lateral (
+  select props from public.app_events where user_id = p.id order by created_at desc limit 1
+) e on true
+where p.plan in ('pro', 'max')
+group by 1, 2 order by 3 desc;

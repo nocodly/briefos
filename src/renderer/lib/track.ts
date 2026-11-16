@@ -25,6 +25,21 @@ const VERSION = (import.meta.env.VITE_APP_VERSION as string) || ''
 let queue: { name: EventName; props: Record<string, unknown>; at: number }[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
 let errorsSent = 0
+/** Visitor country (from minutama.com/api/region) — lets us compare ad regions. */
+let country: string | null = null
+let countryPromise: Promise<void> | null = null
+
+function loadCountry(): Promise<void> {
+  if (!countryPromise) {
+    countryPromise = fetch('https://minutama.com/api/region', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { country?: string | null } | null) => {
+        country = d?.country ?? null
+      })
+      .catch(() => {})
+  }
+  return countryPromise
+}
 
 export function track(name: EventName, props: Record<string, unknown> = {}): void {
   queue.push({ name, props, at: Date.now() })
@@ -39,7 +54,8 @@ async function flush(): Promise<void> {
   const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }))
   const token = data.session?.access_token
   if (!token) return // keep events until the user is signed in
-  const events = queue.splice(0, 50)
+  await loadCountry()
+  const events = queue.splice(0, 50).map((e) => ({ ...e, props: { ...e.props, country } }))
   try {
     await fetch(BASE, {
       method: 'POST',
