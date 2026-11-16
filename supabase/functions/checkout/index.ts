@@ -54,6 +54,7 @@ serve(async (req) => {
             ...common,
             mode: 'payment',
             success_url: 'https://minutama.com/welcome-pro?topup=1',
+            allow_promotion_codes: true,
             invoice_creation: { enabled: true, invoice_data: { footer: NO_VAT, metadata } },
             ...(customer ? {} : { customer_creation: 'always' as const })
           })
