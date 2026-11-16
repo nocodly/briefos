@@ -20,6 +20,12 @@ interface ReplyHint {
   id: string
   question: string
   answer: string
+  translation?: string | null
+  term?: string | null
+  termExplanation?: string | null
+  latencyMs?: number | null
+  total?: number
+  open?: number
 }
 interface AgentRun {
   runId: string | null
@@ -122,6 +128,15 @@ export default function Overlay() {
           </button>
           <IconButton icon="x" title="Not now" onClick={() => act('dismiss')} />
         </div>
+        <button
+          onClick={() => void invoke('capsule:quick', 'consent')}
+          style={noDrag}
+          className="mx-3 mb-2.5 -mt-1 flex items-center gap-1.5 text-left text-[10.5px] text-white/45 hover:text-white"
+          title="Copies a short message you can paste into the call chat"
+        >
+          <i className="ti ti-message-circle text-[12px] text-accent-pale" />
+          Let them know you take notes · <span className="underline">copy message</span>
+        </button>
       </Shell>
     )
   }
@@ -212,21 +227,12 @@ function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentR
   return (
     <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
       {hint ? (
-        <div className="rounded-[12px] border border-accent/25 bg-accent/[.08] px-2.5 py-2">
-          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
-            <i className="ti ti-bulb text-[12px]" /> They asked
-            <button onClick={() => act('clearHint')} className="ml-auto text-white/35 hover:text-white" title="Hide">
-              <i className="ti ti-x text-[12px]" />
-            </button>
-          </div>
-          <div className="mt-0.5 line-clamp-1 text-[11.5px] text-white/55">{hint.question}</div>
-          <div className="mt-1 line-clamp-4 text-[12.5px] leading-snug text-white">“{hint.answer}”</div>
-        </div>
+        <QuestionCardView hint={hint} />
       ) : (
         !run &&
         !confirm && (
           <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/40">
-            <i className="ti ti-sparkles text-[12px] text-accent" /> {notice ?? 'Listening for questions…'}
+            <i className="ti ti-sparkles text-[12px] text-accent" /> {notice ?? 'Listening for the client’s questions…'}
           </div>
         )
       )}
@@ -295,6 +301,41 @@ function AgentPanel({ hint, run, notice }: { hint: ReplyHint | null; run: AgentR
           <Chip icon="help-circle" label="Last question" onClick={() => void invoke('capsule:quick', 'lastQuestion')} />
           <Chip icon="send" label={`All to ${agentName.split(' ')[0]}`} onClick={() => setConfirm(QUICK_TASKS.all)} />
           <Chip icon="calendar-plus" label="Dates → calendar" onClick={() => setConfirm(QUICK_TASKS.calendar)} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QuestionCardView({ hint }: { hint: ReplyHint }) {
+  const secs = hint.latencyMs ? (hint.latencyMs / 1000).toFixed(1) : null
+  return (
+    <div className="rounded-[12px] border border-accent/25 bg-accent/[.08] px-2.5 py-2">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
+        <i className="ti ti-help-circle text-[12px]" /> Client asked
+        {secs && <span className="font-mono normal-case tracking-normal text-white/30" title="From the end of their sentence to this card">{secs}s</span>}
+        <span className="ml-auto flex items-center gap-2 normal-case tracking-normal">
+          {hint.open !== undefined && hint.open > 1 && <span className="text-white/40">{hint.open} open</span>}
+          <button onClick={() => void invoke('capsule:quick', 'answered')} className="text-white/45 hover:text-green" title="Answered">
+            <i className="ti ti-check text-[13px]" />
+          </button>
+          <button onClick={() => act('clearHint')} className="text-white/35 hover:text-white" title="Hide">
+            <i className="ti ti-x text-[12px]" />
+          </button>
+        </span>
+      </div>
+      <div className="mt-1 line-clamp-3 text-[12px] leading-snug text-white/70">{hint.question}</div>
+      {hint.translation && (
+        <div className="mt-1 line-clamp-3 text-[13px] font-medium leading-snug text-white">{hint.translation}</div>
+      )}
+      {hint.term && hint.termExplanation && (
+        <div className="mt-1.5 line-clamp-2 border-t border-white/[.07] pt-1.5 text-[11px] leading-snug text-white/60">
+          <span className="font-semibold text-accent-pale">{hint.term}:</span> {hint.termExplanation}
+        </div>
+      )}
+      {hint.answer && (
+        <div className="mt-1.5 line-clamp-3 text-[11px] leading-snug text-white/55">
+          <span className="font-semibold text-white/70">Mention:</span> {hint.answer}
         </div>
       )}
     </div>

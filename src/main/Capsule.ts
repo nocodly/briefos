@@ -13,10 +13,19 @@ import { createOverlayWindow, closeOverlayWindow, getOverlayWindow } from './ind
 // capsule:state; it sends user choices back with capsule:action.
 // =============================================================================
 
+/** Live question card: the client's question, translation, term, optional hint. */
 export interface ReplyHint {
   id: string
   question: string
+  /** Points to mention ('' when "Suggest what to answer" is off). */
   answer: string
+  translation?: string | null
+  term?: string | null
+  termExplanation?: string | null
+  latencyMs?: number | null
+  /** Cards in this call / still unanswered. */
+  total?: number
+  open?: number
 }
 
 export interface CapsuleState {
@@ -121,11 +130,11 @@ export function setCapsule(patch: Partial<CapsuleState>): void {
   apply()
 }
 
-/** Show a live reply hint for ~60 s (replaced by newer hints). */
+/** Show a question card for ~2 min (replaced by newer cards). */
 export function showHint(hint: ReplyHint): void {
   if (state.mode !== 'recording') return
   if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => setCapsule({ hint: null }), 60_000)
+  hintTimer = setTimeout(() => setCapsule({ hint: null }), 120_000)
   setCapsule({ hint, expanded: true })
 }
 

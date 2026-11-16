@@ -12,11 +12,14 @@ import {
   levels,
   pauseMeeting,
   resumeMeeting,
+  setCallContext,
+  setCardAnswered,
   setTemplate,
   setUserNotes,
   startMeetingSession,
   stopMeeting,
-  useMeetingSession
+  useMeetingSession,
+  type QuestionCard
 } from './recording/meetingSession'
 
 // =============================================================================
@@ -322,7 +325,7 @@ function AgentSide({
   onSave,
   onSend
 }: {
-  hints: { id: string; question: string; answer: string }[]
+  hints: QuestionCard[]
   hintsNote: string | null
   live: boolean
   onSave: (task: string) => void
@@ -338,6 +341,8 @@ function AgentSide({
 
   return (
     <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
+      <CallContextBox />
+
       {/* Task box */}
       <div className="rounded-card border border-border-soft bg-white/[.06] p-2.5">
         <textarea
@@ -376,23 +381,53 @@ function AgentSide({
         {saved && <div className="mt-1 text-[11px] text-green">Saved to your notes ✓</div>}
       </div>
 
-      {/* Reply hints */}
+      {/* Client questions */}
       <div>
         <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
-          <i className="ti ti-bulb text-[14px] text-accent" /> Reply hints
+          <i className="ti ti-help-circle text-[14px] text-accent" /> Client questions
+          {hints.some((h) => !h.answered) && (
+            <span className="ml-auto normal-case tracking-normal text-amber">
+              {hints.filter((h) => !h.answered).length} not answered
+            </span>
+          )}
         </div>
         {hints.length === 0 ? (
           <p className="text-[12px] text-text-4 leading-relaxed">
             {live
-              ? 'When someone asks you a question, a suggested answer appears here and in the floating capsule.'
-              : 'Start a meeting to get live reply hints.'}
+              ? 'Every question the client asks appears here and in the floating capsule, translated into your language.'
+              : 'Start a call to see the client’s questions live.'}
           </p>
         ) : (
           <div className="space-y-2">
             {hints.map((h) => (
-              <div key={h.id} className="rounded-card border border-accent/20 bg-accent-soft/60 px-3 py-2.5">
-                <div className="text-[11px] text-text-3">They asked: {h.question}</div>
-                <div className="mt-1 text-[13px] leading-snug text-text">“{h.answer}”</div>
+              <div
+                key={h.id}
+                className={`rounded-card border px-3 py-2.5 ${
+                  h.answered ? 'border-border-soft bg-white/[.03] opacity-60' : 'border-accent/20 bg-accent-soft/60'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12px] text-text-2">{h.question}</div>
+                    {h.translation && <div className="mt-0.5 text-[13px] font-medium leading-snug text-text">{h.translation}</div>}
+                  </div>
+                  <button
+                    onClick={() => setCardAnswered(h.id, !h.answered)}
+                    title={h.answered ? 'Mark as not answered' : 'Mark as answered'}
+                    className={`flex-shrink-0 ${h.answered ? 'text-green' : 'text-text-4 hover:text-green'}`}
+                  >
+                    <i className={`ti ti-${h.answered ? 'circle-check-filled' : 'circle-check'} text-[16px]`} />
+                  </button>
+                </div>
+                {h.term && h.termExplanation && (
+                  <div className="mt-1.5 text-[11.5px] text-text-3">
+                    <span className="font-semibold text-accent">{h.term}:</span> {h.termExplanation}
+                  </div>
+                )}
+                {h.answer && <div className="mt-1 text-[11.5px] text-text-3">Mention: {h.answer}</div>}
+                {h.latencyMs !== null && (
+                  <div className="mt-1 font-mono text-[10px] text-text-4">{(h.latencyMs / 1000).toFixed(1)} s after the question</div>
+                )}
               </div>
             ))}
           </div>
@@ -401,6 +436,31 @@ function AgentSide({
       </div>
 
       <AgentRuns compact />
+    </div>
+  )
+}
+
+// Background for the AI: the job post, proposal or stack for this client.
+function CallContextBox() {
+  const ctx = useMeetingSession((st) => st.callContext)
+  const [open, setOpen] = useState(!ctx)
+  return (
+    <div className="rounded-card border border-border-soft bg-white/[.04] p-2.5">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
+        <i className="ti ti-briefcase text-[14px] text-accent" /> About this call
+        <span className="ml-auto normal-case tracking-normal text-text-4">{ctx ? 'added ✓' : 'optional'}</span>
+      </button>
+      {open && (
+        <>
+          <textarea
+            value={ctx}
+            onChange={(e) => setCallContext(e.target.value)}
+            rows={4}
+            placeholder="Paste the job post, your proposal or the client’s stack. Minutama uses it to understand terms and to write the brief and estimate."
+            className="mt-2 w-full resize-y rounded-lg border border-border bg-white/[.04] p-2 text-[12px] leading-snug outline-none placeholder:text-text-4 focus:border-accent/50"
+          />
+        </>
+      )}
     </div>
   )
 }

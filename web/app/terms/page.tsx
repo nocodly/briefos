@@ -35,8 +35,7 @@ export default function Terms() {
       <h2>4. Plans and payment</h2>
       <ul>
         <li>
-          Free: {PLANS.free.meetingsPerMonth} meetings per month, up to {PLANS.free.maxMeetingMinutes} minutes each,
-          notes kept for {PLANS.free.historyDays} days.
+          Free: {PLANS.free.meetingsPerMonth} meetings per month, up to {PLANS.free.maxMeetingMinutes} minutes each.
         </li>
         <li>
           Pro: {PLANS.pro.price} per month with {PLANS.pro.monthlyHours} hours of meetings; Pro Max:{' '}

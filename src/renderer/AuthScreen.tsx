@@ -29,6 +29,10 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
   const [googleLoading, setGoogleLoading] = useState(false)
   const [error, setError] = useState('')
   const [showPass, setShowPass] = useState(false)
+  // Password reset: 'forgot' asks for the email, 'reset' sets the new password
+  // after the user opened the link from the email.
+  const [mode, setMode] = useState<'normal' | 'forgot' | 'reset'>('normal')
+  const [info, setInfo] = useState('')
 
   // Listen for OAuth callback deep link from main process.
   useEffect(() => {
@@ -43,6 +47,10 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
         const accessToken = fragment.get('access_token')
         const refreshToken = fragment.get('refresh_token')
 
+        const isRecovery =
+          fragment.get('type') === 'recovery' ||
+          parsed.searchParams.get('type') === 'recovery' ||
+          recoveryPending()
         if (accessToken && refreshToken) {
           const { error: err } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
           if (err) throw new Error(err.message)
@@ -50,6 +58,14 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
           // PKCE flow: code is in query params (?code=...)
           const { error: err } = await supabase.auth.exchangeCodeForSession(url)
           if (err) throw new Error(err.message)
+        }
+
+        if (isRecovery) {
+          clearRecoveryPending()
+          setPassword('')
+          setConfirmPassword('')
+          setMode('reset')
+          return
         }
 
         const { data: { user } } = await supabase.auth.getUser()
@@ -93,6 +109,40 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
         const isNew = isNewUser(data.user?.created_at)
         onAuthSuccess(isNew)
       }
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleForgot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setInfo('')
+    setLoading(true)
+    try {
+      const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: REDIRECT_URL })
+      if (err) throw new Error(err.message)
+      markRecoveryPending()
+      setInfo('Check your inbox. Open the link from the email on this computer: Minutama will open and let you set a new password.')
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (password.length < 6) return setError('Password must be at least 6 characters')
+    if (password !== confirmPassword) return setError('Passwords do not match')
+    setLoading(true)
+    try {
+      const { error: err } = await supabase.auth.updateUser({ password })
+      if (err) throw new Error(err.message)
+      onAuthSuccess(false)
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -180,6 +230,72 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       {/* ── Right: form ── */}
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="glass-strong w-full max-w-[400px] rounded-panel p-8">
+          {mode !== 'normal' ? (
+            <form onSubmit={mode === 'forgot' ? handleForgot : handleReset} className="space-y-4">
+              <h2 className="font-display font-bold text-[24px]">
+                {mode === 'forgot' ? 'Reset your password' : 'Set a new password'}
+              </h2>
+              <p className="text-[13px] text-text-3">
+                {mode === 'forgot'
+                  ? 'Enter your account email and we will send you a link.'
+                  : 'Choose a new password for your Minutama account.'}
+              </p>
+              {mode === 'forgot' ? (
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  autoFocus
+                  className={inputCls}
+                />
+              ) : (
+                <>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="New password (min 6 characters)"
+                    required
+                    autoFocus
+                    className={inputCls}
+                  />
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Repeat new password"
+                    required
+                    className={inputCls}
+                  />
+                </>
+              )}
+              {error && (
+                <div className="text-[12px] text-red bg-red-soft border border-red/20 rounded-xl px-3 py-2">{error}</div>
+              )}
+              {info && (
+                <div className="text-[12px] text-green bg-green-soft border border-green/20 rounded-xl px-3 py-2">{info}</div>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-accent w-full rounded-xl py-2.5 text-[13px] font-semibold disabled:opacity-60"
+              >
+                {loading ? 'Please wait…' : mode === 'forgot' ? 'Send reset link' : 'Save password and sign in'}
+              </button>
+              {mode === 'forgot' && (
+                <button
+                  type="button"
+                  onClick={() => { setMode('normal'); setError(''); setInfo('') }}
+                  className="w-full text-center text-[12px] text-text-3 hover:text-text-2"
+                >
+                  ← Back to sign in
+                </button>
+              )}
+            </form>
+          ) : (
+          <>
           <h2 className="font-display font-bold text-[24px] mb-1">
             {tab === 'register' ? 'Create your account' : 'Welcome back'}
           </h2>
@@ -251,6 +367,18 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
               </div>
             </div>
 
+            {tab === 'login' && (
+              <div className="-mt-2 text-right">
+                <button
+                  type="button"
+                  onClick={() => { setMode('forgot'); setError(''); setInfo('') }}
+                  className="text-[11.5px] text-text-3 hover:text-accent"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
             {tab === 'register' && (
               <div>
                 <label className="block text-[12px] font-medium text-text-2 mb-1.5">Confirm password</label>
@@ -292,6 +420,8 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
             {' '}and{' '}
             <button type="button" onClick={() => window.open('https://minutama.com/privacy', '_blank')} className="underline hover:text-text-2">Privacy Policy</button>.
           </p>
+          </>
+          )}
         </div>
       </div>
     </div>
@@ -299,6 +429,24 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Remember for an hour that a reset email was sent, so the deep link from it is
+// treated as a password reset even when the URL carries no "type=recovery".
+const RECOVERY_KEY = 'minutama:recoveryRequestedAt'
+function markRecoveryPending(): void {
+  try { localStorage.setItem(RECOVERY_KEY, String(Date.now())) } catch { /* ignore */ }
+}
+function clearRecoveryPending(): void {
+  try { localStorage.removeItem(RECOVERY_KEY) } catch { /* ignore */ }
+}
+function recoveryPending(): boolean {
+  try {
+    const t = Number(localStorage.getItem(RECOVERY_KEY) || 0)
+    return t > 0 && Date.now() - t < 60 * 60_000
+  } catch {
+    return false
+  }
+}
 
 /** A user is "new" if their account was created within the last 30 seconds. */
 function isNewUser(createdAt?: string): boolean {

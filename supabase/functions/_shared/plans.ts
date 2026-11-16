@@ -22,7 +22,7 @@ export interface PlanLimits {
   proFeatures: boolean
 }
 
-export const FREE_TEMPLATES = ['general', 'one-on-one', 'standup'] as const
+export const FREE_TEMPLATES = ['client-call', 'general', 'one-on-one', 'standup'] as const
 export const ALL_TEMPLATES = [...FREE_TEMPLATES, 'sales-call', 'interview', 'customer-discovery'] as const
 
 export const LIMITS: Record<Tier, PlanLimits> = {

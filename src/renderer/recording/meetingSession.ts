@@ -23,6 +23,8 @@ import { ChannelRecorder, type AudioChunk } from './ChannelRecorder'
 // =============================================================================
 
 const CHUNK_MS = 20_000
+/** The client's channel is split on speech pauses; this is only the upper bound. */
+const THEM_MAX_CHUNK_MS = 15_000
 const UPLOAD_CONCURRENCY = 2
 const MAX_RETRIES = 4
 
@@ -50,18 +52,30 @@ interface SessionState {
   upgradeNeeded: boolean
   limits: StartMeetingResult['limits'] | null
   enhanced: EnhancedNotes | null
-  /** Live reply hints (newest first). */
-  hints: ReplyHint[]
-  /** Set when the plan's hint quota for this meeting is used up. */
+  /** Live question cards (newest first). */
+  hints: QuestionCard[]
+  /** Set when the plan's card quota for this meeting is used up. */
   hintsNote: string | null
+  /** What the user pasted about this call: job post, proposal, stack. */
+  callContext: string
 }
 
-export interface ReplyHint {
+/** A question the client asked, with translation and a term explanation. */
+export interface QuestionCard {
   id: string
   question: string
-  answer: string
+  translation: string | null
+  term: string | null
+  termExplanation: string | null
+  /** Points to mention — only when "Suggest what to answer" is on. */
+  answer: string | null
   at: number
+  /** From the end of the client's sentence to the card on screen. */
+  latencyMs: number | null
+  answered: boolean
 }
+/** @deprecated old name */
+export type ReplyHint = QuestionCard
 
 export const useMeetingSession = create<SessionState>(() => ({
   status: 'idle',
@@ -77,7 +91,8 @@ export const useMeetingSession = create<SessionState>(() => ({
   limits: null,
   enhanced: null,
   hints: [],
-  hintsNote: null
+  hintsNote: null,
+  callContext: ''
 }))
 
 const set = useMeetingSession.setState
@@ -186,7 +201,11 @@ function near(a: LiveSegment, b: LiveSegment): boolean {
 function addSegment(seg: LiveSegment): boolean {
   const current = get().segments
   const sameChannelDup = current.some(
-    (s) => s.speaker === seg.speaker && near(s, seg) && similarity(s.text, seg.text) >= SELF_DUP
+    (s) =>
+      s.speaker === seg.speaker &&
+      near(s, seg) &&
+      Math.min(wordSet(s.text).size, wordSet(seg.text).size) >= 4 &&
+      similarity(s.text, seg.text) >= SELF_DUP
   )
   if (sameChannelDup) {
     console.log(`[session] drop repeated ${seg.speaker} chunk @${seg.startMs}`)
@@ -233,7 +252,11 @@ async function runJob(job: Job): Promise<void> {
       text: text.trim()
     }
     if (!addSegment(seg)) return
-    if (seg.speaker === 'them' && looksLikeQuestion(seg.text)) scheduleHint()
+    if (seg.speaker === 'them') {
+      const tx = Date.now() - job.chunk.heardAt
+      console.log(`[latency] them chunk ${Math.round(job.chunk.durationMs)}ms → text after ${tx}ms`)
+      if (looksLikeQuestion(seg.text)) scheduleHint(job.chunk.heardAt)
+    }
     await invoke('notes:appendSegment', {
       meetingId,
       speaker: seg.speaker === 'me' ? 'Me' : 'Them',
@@ -340,55 +363,125 @@ const LANGUAGE_NAMES: Record<string, string> = {
   uk: 'Ukrainian', en: 'English', de: 'German', ru: 'Russian', pl: 'Polish',
   es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese'
 }
-let hintTimer: ReturnType<typeof setTimeout> | null = null
 let hintInFlight = false
-let lastHintAt = 0
-const HINT_DEBOUNCE_MS = 2500
-const HINT_MIN_GAP_MS = 15_000
+/** heardAt of a question that arrived while a card request was in flight. */
+let pendingHeardAt: number | null = null
+let answerHints = false
+let nativeLanguage = ''
+let aboutMe = ''
 
-function scheduleHint(): void {
+/** Language name for the cards ('' → the app's / Windows language). */
+export function nativeLanguageName(code: string | null | undefined): string {
+  const c = (code || navigator.language || 'en').slice(0, 2).toLowerCase()
+  return LANGUAGE_NAMES[c] ?? 'English'
+}
+
+function scheduleHint(heardAt: number): void {
   if (!hintsEnabled || get().hintsNote) return
-  if (hintTimer) clearTimeout(hintTimer)
-  hintTimer = setTimeout(() => void requestHint(), HINT_DEBOUNCE_MS)
+  if (hintInFlight) {
+    pendingHeardAt = heardAt
+    return
+  }
+  void requestHint(false, heardAt)
+}
+
+function cardToCapsule(c: QuestionCard) {
+  return {
+    id: c.id,
+    question: c.question,
+    answer: c.answer ?? '',
+    translation: c.translation,
+    term: c.term,
+    termExplanation: c.termExplanation,
+    latencyMs: c.latencyMs,
+    total: get().hints.length,
+    open: get().hints.filter((h) => !h.answered).length
+  }
 }
 
 /**
- * "What was the last question?" from the capsule: show the latest hint again,
+ * "What was the last question?" from the capsule: show the latest card again,
  * or ask the server right now. Returns false when there is nothing to show.
  */
 export async function hintNow(): Promise<boolean> {
   const latest = get().hints[0]
   if (latest && Date.now() - latest.at < 5 * 60_000) {
-    await invoke('capsule:hint', { id: latest.id, question: latest.question, answer: latest.answer }).catch(() => {})
+    await invoke('capsule:hint', cardToCapsule(latest)).catch(() => {})
     return true
   }
   if (!get().segments.some((sg) => sg.speaker === 'them')) return false
   const before = get().hints.length
-  await requestHint(true)
+  await requestHint(true, null)
   return get().hints.length > before
 }
 
-async function requestHint(force = false): Promise<void> {
+/** Mark a question as answered (or not) — open ones are listed before the call ends. */
+export function setCardAnswered(id: string, answered = true): void {
+  set({ hints: get().hints.map((h) => (h.id === id ? { ...h, answered } : h)) })
+}
+
+/** Meeting the current call context belongs to (a new call starts empty). */
+let contextOwner: string | null = null
+
+export function setCallContext(text: string): void {
+  set({ callContext: text.slice(0, 6000) })
+}
+
+function contextForAI(): string {
+  return [aboutMe && `About me: ${aboutMe}`, get().callContext && `About this call: ${get().callContext}`]
+    .filter(Boolean)
+    .join('\n\n')
+}
+
+async function requestHint(force: boolean, heardAt: number | null): Promise<void> {
   const { serverId, segments, userNotes, status } = get()
   if (!serverId || (status !== 'recording' && status !== 'paused')) return
-  if (hintInFlight || (!force && Date.now() - lastHintAt < HINT_MIN_GAP_MS)) return
+  if (hintInFlight) return
   hintInFlight = true
-  lastHintAt = Date.now()
+  const t0 = Date.now()
   try {
     const res = await suggestReply({
       meetingId: serverId,
-      transcript: segments.slice(-40).map(({ speaker, text }) => ({ speaker, text })),
-      userNotes
+      transcript: segments.slice(-30).map(({ speaker, text }) => ({ speaker, text })),
+      userNotes,
+      nativeLanguage: nativeLanguageName(nativeLanguage),
+      context: contextForAI(),
+      answerHint: answerHints
     })
-    if (!res.question || !res.answer) return
-    const hint: ReplyHint = { id: String(Date.now()), question: res.question, answer: res.answer, at: Date.now() }
-    set({ hints: [hint, ...get().hints].slice(0, 12) })
-    await invoke('capsule:hint', { id: hint.id, question: hint.question, answer: hint.answer }).catch(() => {})
+    if (!res.question) {
+      if (force) void invoke('capsule:notice', 'No open question from them yet').catch(() => {})
+      return
+    }
+    // Same question again (it was split over two chunks, or re-detected)?
+    const dup = get().hints.find((h) => Date.now() - h.at < 90_000 && similarity(h.question, res.question!) >= 0.75)
+    if (dup && !force) return
+    const latencyMs = heardAt ? Date.now() - heardAt : null
+    console.log(`[latency] card: request ${Date.now() - t0}ms (ai ${res.aiMs ?? '?'}ms), end-to-end ${latencyMs ?? '-'}ms`)
+    const card: QuestionCard = {
+      id: String(Date.now()),
+      question: res.question,
+      translation: res.translation ?? null,
+      term: res.term ?? null,
+      termExplanation: res.termExplanation ?? null,
+      answer: res.answer ?? null,
+      at: Date.now(),
+      latencyMs,
+      answered: false
+    }
+    set({ hints: [card, ...get().hints].slice(0, 40) })
+    await invoke('capsule:hint', cardToCapsule(card)).catch(() => {})
   } catch (err) {
     if (err instanceof ApiError && err.isPlanLimit) set({ hintsNote: err.message })
-    else console.warn('[session] reply hint failed', (err as Error).message)
+    else console.warn('[session] question card failed', (err as Error).message)
   } finally {
     hintInFlight = false
+    const next = pendingHeardAt
+    pendingHeardAt = null
+  if (contextOwner !== null) {
+    set({ callContext: '' })
+    contextOwner = null
+  }
+    if (next !== null) void requestHint(false, next)
   }
 }
 
@@ -419,9 +512,13 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     hintsNote: null,
     templateId: templateId ?? s.templateId
   })
-  hintsEnabled = await invoke<boolean>('settings:get', 'replyHints').then((v) => v !== false).catch(() => true)
-  meetingLanguage = await invoke<string>('settings:get', 'meetingLanguage').then((v) => v || '').catch(() => '')
-  lastHintAt = 0
+  const setting = <T,>(key: string, fallback: T) => invoke<T>('settings:get', key).then((v) => v ?? fallback).catch(() => fallback)
+  hintsEnabled = (await setting<boolean>('replyHints', true)) !== false
+  answerHints = (await setting<boolean>('answerHints', false)) === true
+  meetingLanguage = (await setting<string>('meetingLanguage', '')) || ''
+  nativeLanguage = (await setting<string>('nativeLanguage', '')) || ''
+  aboutMe = String((await setting<string>('aboutMe', '')) || '').slice(0, 2000)
+  pendingHeardAt = null
   console.log('[session] starting')
 
   try {
@@ -443,11 +540,14 @@ export async function startMeeting_(templateId?: string): Promise<void> {
 
     recorders = {
       me: new ChannelRecorder(mic, CHUNK_MS, timeline, (c) => enqueue('me', c)),
-      them: system ? new ChannelRecorder(system, CHUNK_MS, timeline, (c) => enqueue('them', c)) : undefined
+      them: system
+        ? new ChannelRecorder(system, THEM_MAX_CHUNK_MS, timeline, (c) => enqueue('them', c), { splitOnPause: true })
+        : undefined
     }
     recorders.me?.start()
     recorders.them?.start()
 
+    contextOwner = meetingId
     set({
       status: 'recording',
       meetingId,
@@ -537,7 +637,8 @@ export async function stopMeeting(): Promise<void> {
 export async function enhanceCurrent(templateId?: string): Promise<void> {
   const { meetingId, serverId, userNotes, segments } = get()
   if (!meetingId || !serverId) return
-  const tpl = templateId ?? get().templateId
+  // A call with "About this call" filled in is a client call → brief + estimate.
+  const tpl = templateId ?? (get().templateId === 'general' && get().callContext.trim() ? 'client-call' : get().templateId)
   set({ status: 'enhancing', templateId: tpl })
   try {
     const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
@@ -546,7 +647,8 @@ export async function enhanceCurrent(templateId?: string): Promise<void> {
       templateId: tpl,
       userNotes,
       transcript: segments.map(({ speaker, startMs, text }) => ({ speaker, startMs, text })),
-      language: notesLanguageName(lang)
+      language: notesLanguageName(lang),
+      context: contextForAI() || undefined
     })
     await invoke('notes:saveEnhanced', { meetingId, templateId: tpl, ...result })
     set({ enhanced: result, status: 'idle' })

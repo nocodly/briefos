@@ -117,12 +117,14 @@ export function enhanceNotes(input: {
   userNotes: string
   transcript: TranscriptLine[]
   language?: string
+  context?: string
 }): Promise<EnhancedNotes> {
   return call<EnhancedNotes>('enhance-notes', JSON.stringify(input), true)
 }
 
 // Mirrors supabase/functions/_shared/templates.ts (names only, for the picker).
 export const TEMPLATE_OPTIONS: { id: string; name: string; pro: boolean }[] = [
+  { id: 'client-call', name: 'Client call (brief, estimate, follow-up)', pro: false },
   { id: 'general', name: 'General meeting', pro: false },
   { id: 'one-on-one', name: '1:1', pro: false },
   { id: 'standup', name: 'Standup', pro: false },
@@ -131,16 +133,29 @@ export const TEMPLATE_OPTIONS: { id: string; name: string; pro: boolean }[] = [
   { id: 'customer-discovery', name: 'Customer discovery', pro: true }
 ]
 
-export interface ReplySuggestion {
+export interface QuestionCardResult {
   question: string | null
-  answer?: string
+  translation?: string | null
+  term?: string | null
+  termExplanation?: string | null
+  answer?: string | null
+  confidence?: number
+  aiMs?: number
 }
 
-/** Live "what do I say?" hint for the latest question from the other side. */
+/** Live question card for the latest question from the client. */
 export function suggestReply(input: {
   meetingId: string
   transcript: { speaker: 'me' | 'them'; text: string }[]
   userNotes: string
-}): Promise<ReplySuggestion> {
-  return call<ReplySuggestion>('suggest-reply', JSON.stringify(input), true)
+  nativeLanguage?: string
+  context?: string
+  answerHint?: boolean
+}): Promise<QuestionCardResult> {
+  return call<QuestionCardResult>('suggest-reply', JSON.stringify(input), true)
+}
+
+/** Stripe Customer Portal: cancel, switch plan, card, invoices. */
+export function billingPortal(): Promise<{ url: string; login?: boolean }> {
+  return call<{ url: string; login?: boolean }>('billing-portal', '{}', true)
 }

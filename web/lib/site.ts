@@ -11,7 +11,9 @@ export const SITE = {
   /** Windows installer. Override with NEXT_PUBLIC_DOWNLOAD_URL once releases move. */
   downloadUrl:
     process.env.NEXT_PUBLIC_DOWNLOAD_URL ??
-    'https://github.com/nocodly/briefos/releases/latest/download/Minutama-Setup.exe'
+    'https://github.com/nocodly/briefos/releases/latest/download/Minutama-Setup.exe',
+  /** Stripe Customer Portal login (Minutama configuration): manage or cancel. */
+  billingPortalUrl: 'https://billing.stripe.com/p/login/aFaaEX7V59w4baj1wG5Vu00'
 } as const
 
 export const PLANS = {

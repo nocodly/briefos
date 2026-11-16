@@ -8,9 +8,40 @@ export interface Template {
   id: string
   name: string
   sections: string[]
+  /** Extra rules for this template (appended to the system prompt). */
+  instructions?: string
 }
 
 export const TEMPLATES: Record<string, Template> = {
+  'client-call': {
+    id: 'client-call',
+    name: 'Client call',
+    sections: [
+      'Project brief',
+      'Scope & deliverables',
+      'Budget & price',
+      'Deadlines',
+      'Tools & stack',
+      'Open points',
+      'Estimate draft',
+      'Follow-up email'
+    ],
+    instructions: [
+      'This is a call between a freelancer ("Me") and a client ("Them").',
+      '- Project brief: 2–4 sentences — what the client wants and why.',
+      '- Budget & price: every amount, rate or budget mentioned, exactly as said. If none, write one bullet',
+      '  saying the budget was not discussed (in the output language).',
+      '- Open points: what is still unclear or undecided (budget, ownership, access, acceptance criteria…).',
+      '  These are questions the freelancer should ask next.',
+      '- Estimate draft: a markdown table "Task | Rough hours" built ONLY from the scope discussed, plus a',
+      '  total row. Mark it clearly as a draft for the freelancer to edit. Base hours on typical effort; if the',
+      '  scope is too vague to estimate, say so instead of a table.',
+      '- Follow-up email: a short, friendly, ready-to-send email from "Me" to the client that confirms scope,',
+      '  price/budget (only if agreed), deadlines and next steps. Write the email in the language the CLIENT',
+      '  spoke, even if the rest of the notes is in another language. Put it in a markdown blockquote.',
+      '- Never invent prices, dates or promises that were not said.'
+    ].join('\n')
+  },
   general: {
     id: 'general',
     name: 'General meeting',

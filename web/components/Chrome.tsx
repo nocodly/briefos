@@ -51,6 +51,7 @@ export function Footer() {
             <Link href="/privacy" className="block hover:text-ink">Privacy</Link>
             <Link href="/terms" className="block hover:text-ink">Terms</Link>
             <Link href="/impressum" className="block hover:text-ink">Impressum</Link>
+            <Link href="/account" className="block hover:text-ink">Verträge hier kündigen</Link>
           </div>
           <div className="space-y-2">
             <div className="font-semibold text-ink">Contact</div>

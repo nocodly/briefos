@@ -44,6 +44,12 @@ export interface AppSettings {
   agentWorkdir: string
   /** Meeting language ISO code for transcription + notes ('' = auto-detect). */
   meetingLanguage: string
+  /** Language question cards are translated into ('' = Windows language). */
+  nativeLanguage: string
+  /** Question cards also suggest what to mention (opt-in). */
+  answerHints: boolean
+  /** Who the user is: services, stack, rates — background for every call. */
+  aboutMe: string
 }
 
 const DEFAULTS: AppSettings = {
@@ -74,7 +80,10 @@ const DEFAULTS: AppSettings = {
   agentProvider: 'claude',
   agentAutonomy: 'safe',
   agentWorkdir: '',
-  meetingLanguage: ''
+  meetingLanguage: '',
+  nativeLanguage: '',
+  answerHints: false,
+  aboutMe: ''
 }
 
 // encryptionKey obfuscates the on-disk JSON (electron-store uses AES-256-CBC).

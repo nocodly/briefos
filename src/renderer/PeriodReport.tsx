@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { invoke, subscribe } from './lib/ipc'
+import { supabase } from './lib/supabaseClient'
 import Processing from './Processing'
 
 // =============================================================================
@@ -163,10 +164,18 @@ export default function PeriodReport() {
     setStep('Starting…')
     const unsub = subscribe('progress:periodReport', ({ step: s }) => setStep(s))
     try {
+      const { data } = await supabase.auth.getSession()
+      const accessToken = data.session?.access_token
+      if (!accessToken) throw new Error('Please sign in again.')
       const result = await invoke<Report>('ai:generatePeriodReport', {
         from: range.from,
         to: range.to,
-        label: selected
+        label: selected,
+        server: {
+          url: import.meta.env.VITE_SUPABASE_URL as string,
+          anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
+          accessToken
+        }
       })
       setReport(result)
       setView('report')

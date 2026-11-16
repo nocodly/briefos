@@ -371,8 +371,7 @@ export default function Home() {
                     `Up to ${PLANS.free.maxMeetingMinutes} minutes per meeting`,
                     'AI notes, decisions and next steps',
                     'Live transcript, all languages',
-                    'Call capsule + 5 reply hints per call',
-                    `Notes kept for ${PLANS.free.historyDays} days`
+                    'Live question cards: 20 per call, translated'
                   ].map((t) => (
                     <li key={t} className="flex gap-2">
                       <Check /> {t}
@@ -400,10 +399,9 @@ export default function Home() {
                     `${PLANS.pro.monthlyHours} hours of meetings a month`,
                     'Unlimited meetings, up to 4 h each',
                     'Stronger AI for notes and the agent',
-                    'Reply hints, send tasks to Claude Code / Codex',
+                    'Question cards on every call, send tasks to Claude Code / Codex',
                     'All templates · Period Reports',
-                    'Share as PDF, Notion, Slack',
-                    'Notes kept forever'
+                    'Share as PDF, Notion, Slack'
                   ].map((t) => (
                     <li key={t} className="flex gap-2">
                       <Check /> {t}

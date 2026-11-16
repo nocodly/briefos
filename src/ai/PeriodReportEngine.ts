@@ -1,24 +1,12 @@
-import { readFileSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { app } from 'electron'
-import OpenAI from 'openai'
-import Anthropic from '@anthropic-ai/sdk'
 import { getDatabase, type BriefOSDatabase } from '@storage/Database'
 
 // =============================================================================
 // PeriodReportEngine — pulls every meeting summary in a date range from SQLite,
-// sends them to GPT-4o as one batch, and returns a cross-meeting intelligence
+// sends them to the Minutama server as one batch, and returns a cross-meeting intelligence
 // report. Saved to period_reports so the user can revisit without regenerating.
-// Uses OpenAI (same key as transcription) — no separate Anthropic key needed.
 // =============================================================================
 
-const OPENAI_MODEL_DEFAULT = 'gpt-4o'
-const ANTHROPIC_MODEL_DEFAULT = 'claude-sonnet-4-5'
-const MAX_TOKENS = 4000
-
-type Provider =
-  | { type: 'anthropic'; client: Anthropic; model: string }
-  | { type: 'openai'; client: OpenAI; model: string }
+const SERVER_TIMEOUT_MS = 120_000
 
 export interface PeriodReportResult {
   reportId: string
@@ -49,29 +37,12 @@ export interface GenerateArgs {
 }
 
 export class PeriodReportEngine {
-  private provider: Provider
   private db: BriefOSDatabase
 
-  constructor(opts: { anthropicApiKey?: string; openaiApiKey: string; model?: string }) {
-    if (opts.anthropicApiKey) {
-      const model = opts.model || ANTHROPIC_MODEL_DEFAULT
-      console.log(`[period] using Anthropic ${model}`)
-      this.provider = { type: 'anthropic', model, client: new Anthropic({ apiKey: opts.anthropicApiKey }) }
-    } else {
-      const model = opts.model || OPENAI_MODEL_DEFAULT
-      console.log(`[period] using OpenAI ${model}`)
-      this.provider = { type: 'openai', model, client: new OpenAI({ apiKey: opts.openaiApiKey }) }
-    }
+  /** The AI step runs on the Minutama server with the user's session token. */
+  constructor(private server: { url: string; anonKey: string; accessToken: string }) {
+    if (!server.url || !server.accessToken) throw new Error('Please sign in again.')
     this.db = getDatabase()
-  }
-
-  private loadPrompt(): string {
-    const dir = app.isPackaged
-      ? join(process.resourcesPath, 'prompts')
-      : join(app.getAppPath(), 'src', 'ai', 'prompts')
-    const path = join(dir, 'period-report.md')
-    if (!existsSync(path)) throw new Error(`period-report.md prompt not found at ${path}`)
-    return readFileSync(path, 'utf8')
   }
 
   async generate({ from, to, label, onProgress }: GenerateArgs): Promise<PeriodReportResult> {
@@ -89,6 +60,7 @@ export class PeriodReportEngine {
       title: m.title,
       date: m.started_at,
       durationMinutes: Math.round(((m.duration_s as number) ?? 0) / 60),
+      notes: String(m.enhanced_notes ?? m.user_notes ?? '').slice(0, 3000),
       tldr: m.tldr,
       decisions: m.decisions,
       actionItems: m.action_items,
@@ -96,30 +68,10 @@ export class PeriodReportEngine {
       keywords: m.keywords
     }))
 
-    onProgress?.('Sending to GPT-4o for cross-meeting analysis…')
-    const systemPrompt = this.loadPrompt()
-    const userContent = `Period: ${label}\nDate range: ${from} to ${to}\nTotal meetings: ${meetings.length}\n\n${JSON.stringify(
-      context,
-      null,
-      2
-    )}`
+    onProgress?.('Analyzing the period on Minutama servers…')
+    const report = this.normalize(await this.callServer({ label, from, to, meetings: context }))
 
-    const raw = await this.callAI(systemPrompt, userContent)
-
-    onProgress?.('Parsing and saving report…')
-    let report: Omit<PeriodReportResult, 'reportId' | 'meetingCount'>
-    try {
-      report = this.parseJSON(raw)
-    } catch (err) {
-      console.warn('[period] first parse failed, retrying once:', (err as Error).message)
-      const retry = await this.callAI(
-        systemPrompt +
-          '\n\nIMPORTANT: Return ONLY the raw JSON object. No markdown, no code fences, no commentary.',
-        userContent
-      )
-      report = this.parseJSON(retry)
-    }
-
+    onProgress?.('Saving report…')
     const totalDurationS = meetings.reduce(
       (sum, m) => sum + ((m.duration_s as number) ?? 0),
       0
@@ -147,53 +99,36 @@ export class PeriodReportEngine {
     return { reportId, meetingCount: meetings.length, ...report }
   }
 
-  private async callAI(systemPrompt: string, userContent: string): Promise<string> {
+  private async callServer(body: unknown): Promise<Record<string, unknown>> {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), SERVER_TIMEOUT_MS)
     try {
-      if (this.provider.type === 'anthropic') {
-        const res = await this.provider.client.messages.create({
-          model: this.provider.model,
-          max_tokens: MAX_TOKENS,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userContent }]
-        })
-        const block = res.content[0]
-        if (!block || block.type !== 'text') throw new Error('Anthropic returned no text')
-        return block.text
-      } else {
-        const res = await this.provider.client.chat.completions.create({
-          model: this.provider.model,
-          max_tokens: MAX_TOKENS,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent }
-          ]
-        })
-        const content = res.choices[0]?.message?.content
-        if (!content) throw new Error('OpenAI returned no content')
-        return content
+      const res = await fetch(`${this.server.url}/functions/v1/period-report`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.server.accessToken}`,
+          apikey: this.server.anonKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal
+      })
+      const payload = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+        error?: { message?: string }
       }
+      if (!res.ok) throw new Error(payload.error?.message ?? `Request failed (${res.status}).`)
+      return payload
     } catch (err) {
-      console.error(`[period] ${this.provider.type} API error`, err)
-      throw new Error(`${this.provider.type} API call failed: ${(err as Error).message}`)
+      console.error('[period] server error', err)
+      if ((err as Error).name === 'AbortError') throw new Error('The report took too long. Try a shorter period.')
+      if (err instanceof TypeError) throw new Error('No connection to Minutama servers.')
+      throw err
+    } finally {
+      clearTimeout(timer)
     }
   }
 
-  private parseJSON(raw: string): Omit<PeriodReportResult, 'reportId' | 'meetingCount'> {
-    const clean = raw
-      .replace(/^```json\s*/i, '')
-      .replace(/^```\s*/i, '')
-      .replace(/```\s*$/i, '')
-      .trim()
-
-    let parsed: Record<string, unknown>
-    try {
-      parsed = JSON.parse(clean)
-    } catch (err) {
-      throw new Error(
-        `AI returned invalid JSON: ${(err as Error).message}\nRaw: ${raw.slice(0, 200)}`
-      )
-    }
-
+  private normalize(parsed: Record<string, unknown>): Omit<PeriodReportResult, 'reportId' | 'meetingCount'> {
     const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
     return {
       executiveSummary: String(parsed.executiveSummary ?? ''),

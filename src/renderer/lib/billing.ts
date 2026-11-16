@@ -24,3 +24,10 @@ export async function openCheckout(kind: Checkout): Promise<void> {
   if (user.email) url.searchParams.set('prefilled_email', user.email)
   window.open(url.toString(), '_blank')
 }
+
+/** Open "Manage subscription" (Stripe Customer Portal) in the browser. */
+export async function openBillingPortal(): Promise<void> {
+  const { billingPortal } = await import('./api')
+  const { url } = await billingPortal()
+  window.open(url, '_blank')
+}

@@ -9,6 +9,11 @@
 //
 // A level meter tracks the peak volume per chunk; silent chunks are dropped
 // (saves money and avoids transcription "hallucinations" on silence).
+//
+// splitOnPause (the "them" channel): instead of waiting the full CHUNK_MS, a
+// chunk is closed as soon as the speaker pauses after a sentence, so a
+// client's question reaches the server ~1 s after they stop talking. That is
+// what makes live question cards fast without a streaming STT.
 // =============================================================================
 
 export interface AudioChunk {
@@ -18,11 +23,19 @@ export interface AudioChunk {
   durationMs: number
   /** Peak RMS level (0..1) inside the chunk. */
   peak: number
+  /** Wall-clock time (Date.now) of the last voiced moment in the chunk. */
+  heardAt: number
 }
 
 const MIME = 'audio/webm;codecs=opus'
 const BITRATE = 32_000
 const SILENCE_PEAK = 0.012
+/** Level that counts as speech for pause detection. */
+const VOICE_LEVEL = 0.02
+/** A chunk split on a pause needs at least this much audio… */
+const MIN_SPLIT_MS = 2_500
+/** …and this much quiet after the last speech. */
+const PAUSE_MS = 700
 
 export class ChannelRecorder {
   private recorder: MediaRecorder | null = null
@@ -32,6 +45,10 @@ export class ChannelRecorder {
   private analyser: AnalyserNode
   private buffer: Float32Array<ArrayBuffer>
   private chunkPeak = 0
+  private chunkStart = 0
+  private lastVoiceAt = 0
+  private voicedInChunk = false
+  private splitting = false
   private stopResolvers: (() => void)[] = []
   /** Latest instantaneous level (0..1) for UI meters. */
   public level = 0
@@ -41,7 +58,8 @@ export class ChannelRecorder {
     private chunkMs: number,
     /** Returns the meeting's current active-timeline position in ms. */
     private timeline: () => number,
-    private onChunk: (chunk: AudioChunk) => void
+    private onChunk: (chunk: AudioChunk) => void,
+    private opts: { splitOnPause?: boolean } = {}
   ) {
     this.audioCtx = new AudioContext()
     const source = this.audioCtx.createMediaStreamSource(stream)
@@ -84,7 +102,26 @@ export class ChannelRecorder {
     for (let i = 0; i < this.buffer.length; i++) sum += this.buffer[i] * this.buffer[i]
     const rms = Math.sqrt(sum / this.buffer.length)
     this.level = rms
-    if (this.recorder) this.chunkPeak = Math.max(this.chunkPeak, rms)
+    if (!this.recorder) return
+    this.chunkPeak = Math.max(this.chunkPeak, rms)
+    const now = performance.now()
+    if (rms >= VOICE_LEVEL) {
+      this.lastVoiceAt = now
+      this.voicedInChunk = true
+    }
+    if (
+      this.opts.splitOnPause &&
+      !this.splitting &&
+      this.voicedInChunk &&
+      now - this.chunkStart >= MIN_SPLIT_MS &&
+      now - this.lastVoiceAt >= PAUSE_MS
+    ) {
+      this.splitting = true
+      void this.endChunk().then(() => {
+        this.splitting = false
+        this.beginChunk()
+      })
+    }
   }
 
   private beginChunk(): void {
@@ -92,6 +129,9 @@ export class ChannelRecorder {
     const startMs = this.timeline()
     const t0 = performance.now()
     this.chunkPeak = 0
+    this.chunkStart = t0
+    this.voicedInChunk = false
+    this.lastVoiceAt = t0
 
     const rec = new MediaRecorder(this.stream, { mimeType: MIME, audioBitsPerSecond: BITRATE })
     rec.ondataavailable = (e) => {
@@ -99,9 +139,11 @@ export class ChannelRecorder {
     }
     rec.onstop = () => {
       const peak = this.chunkPeak
-      const durationMs = performance.now() - t0
+      const end = performance.now()
+      const durationMs = end - t0
+      const heardAt = Date.now() - Math.max(0, end - this.lastVoiceAt)
       if (parts.length && durationMs > 500) {
-        this.onChunk({ blob: new Blob(parts, { type: MIME }), startMs, durationMs, peak })
+        this.onChunk({ blob: new Blob(parts, { type: MIME }), startMs, durationMs, peak, heardAt })
       }
       const resolvers = this.stopResolvers
       this.stopResolvers = []

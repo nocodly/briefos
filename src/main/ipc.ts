@@ -42,6 +42,10 @@ import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId
 // renderer can render instead of an unhandled rejection.
 // =============================================================================
 
+/** One-click consent message for the call chat (§201 StGB and similar laws). */
+const CONSENT_TEXT =
+  'Hi! I use a note-taking tool (Minutama) so I don’t miss any detail of what we discuss. Is that OK with you?'
+
 /** Uniform result envelope for fallible operations. */
 type Ok<T> = { ok: true; data: T }
 type Err = { ok: false; error: string }
@@ -245,26 +249,22 @@ export function registerIpcHandlers(): void {
   )
 
   // --- AI (SummaryEngine / PeriodReportEngine) -----------------------------
-  handle('ai:generatePeriodReport', async (_e, payload: { from: string; to: string; label: string }) => {
-    // Period Reports require own API key (byok or pro).
-    if (!isProOrByok()) throw new Error('Period Reports require your own API key. Go to Settings → Plan → Free + Own Keys.')
-    const openaiKey = getSetting('openaiApiKey') || process.env['OPENAI_API_KEY'] || ''
-    const anthropicKey = getSetting('anthropicApiKey')
-    const useAnthropic = getSetting('aiProvider') === 'anthropic' && !!anthropicKey
-    if (!useAnthropic && !openaiKey) throw new Error('No AI key configured. Contact hello@minutama.com')
-    const planModel = 'gpt-4o'
-    const engine = new PeriodReportEngine({
-      anthropicApiKey: useAnthropic ? anthropicKey : undefined,
-      openaiApiKey: openaiKey,
-      model: getSetting('aiModel') || (useAnthropic ? undefined : planModel),
-    })
-    return engine.generate({
-      from: payload.from,
-      to: payload.to,
-      label: payload.label,
-      onProgress: (step) => progress.periodReport(50, step)
-    })
-  })
+  handle(
+    'ai:generatePeriodReport',
+    async (
+      _e,
+      payload: { from: string; to: string; label: string; server: { url: string; anonKey: string; accessToken: string } }
+    ) => {
+      // The plan check happens on the server (period-report → 402 for Free).
+      const engine = new PeriodReportEngine(payload.server)
+      return engine.generate({
+        from: payload.from,
+        to: payload.to,
+        label: payload.label,
+        onProgress: (step) => progress.periodReport(50, step)
+      })
+    }
+  )
 
   // --- Export (output/*) ---------------------------------------------------
   handle('export:pdf', async (_e, payload: { meetingId: string; outputPath?: string; transcript?: boolean }) => {
@@ -437,8 +437,14 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
   // Quick actions from the capsule that need the meeting (main renderer).
-  handle('capsule:quick', async (_e, kind: 'lastQuestion') => {
-    if (kind === 'lastQuestion') sendToRenderer('capsule:quick', { kind })
+  handle('capsule:quick', async (_e, kind: 'lastQuestion' | 'answered' | 'consent') => {
+    if (kind === 'lastQuestion' || kind === 'answered') {
+      sendToRenderer('capsule:quick', { kind, id: getCapsule().hint?.id ?? null })
+      if (kind === 'answered') clearHint()
+    } else if (kind === 'consent') {
+      clipboard.writeText(CONSENT_TEXT)
+      capsuleNotice('Copied — paste it into the call chat')
+    }
     return { ok: true }
   })
   handle('capsule:notice', async (_e, text: string) => {
@@ -450,8 +456,20 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
   handle('capsule:hint', async (_e, hint: ReplyHint) => {
-    if (!hint || typeof hint.answer !== 'string') throw new Error('Bad hint')
-    showHint({ id: String(hint.id), question: String(hint.question).slice(0, 200), answer: hint.answer.slice(0, 600) })
+    if (!hint || typeof hint.question !== 'string') throw new Error('Bad hint')
+    const str = (v: unknown, n: number) => (typeof v === 'string' && v ? v.slice(0, n) : null)
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    showHint({
+      id: String(hint.id),
+      question: hint.question.slice(0, 300),
+      answer: String(hint.answer ?? '').slice(0, 600),
+      translation: str(hint.translation, 400),
+      term: str(hint.term, 60),
+      termExplanation: str(hint.termExplanation, 240),
+      latencyMs: num(hint.latencyMs),
+      total: num(hint.total) ?? undefined,
+      open: num(hint.open) ?? undefined
+    })
     return { ok: true }
   })
 

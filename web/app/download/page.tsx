@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 }
 
 const STEPS = [
-  'Run Minutama-Setup.exe and follow the installer.',
+  'Run Minutama-Setup.exe. If Windows shows “Windows protected your PC”, click “More info” → “Run anyway” (our code-signing certificate is on the way).',
   'Sign in with Google or email.',
   'Allow the microphone when Windows asks.',
   'In your next call press Ctrl+Shift+B — that’s it.'

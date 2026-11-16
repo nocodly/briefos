@@ -3,7 +3,7 @@ import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { supabase } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
-import { openCheckout, PRICES, type Checkout } from './lib/billing'
+import { openBillingPortal, openCheckout, PRICES, type Checkout } from './lib/billing'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
 import { MEETING_LANGUAGES } from './recording/meetingSession'
 
@@ -55,6 +55,9 @@ interface SettingsState {
   agentProvider: AgentId
   agentAutonomy: 'safe' | 'full'
   meetingLanguage: string
+  nativeLanguage: string
+  answerHints: boolean
+  aboutMe: string
 }
 
 const DEFAULTS: SettingsState = {
@@ -68,7 +71,10 @@ const DEFAULTS: SettingsState = {
   replyHints: true,
   agentProvider: 'claude',
   agentAutonomy: 'safe',
-  meetingLanguage: ''
+  meetingLanguage: '',
+  nativeLanguage: '',
+  answerHints: false,
+  aboutMe: ''
 }
 
 /** Load + save app settings (shared by Settings, Agent and Integrations pages). */
@@ -186,10 +192,10 @@ function PlanCard({ usage, onError }: { usage: UsageInfo | null; onError: (m: st
           <div className="font-display text-[18px] font-bold text-text">{name}</div>
           <div className="mt-0.5 text-[12px] text-text-3">
             {usage.tier === 'free'
-              ? `${usage.meetingsUsed} of ${usage.meetingsLimit} meetings used this month · notes kept 30 days`
+              ? `${usage.meetingsUsed} of ${usage.meetingsLimit} meetings used this month`
               : usage.tier === 'max'
                 ? '100 hours a month, everything in Pro'
-                : '25 hours a month, all templates, exports, reply hints and agent'}
+                : '25 hours a month, all templates, exports, question cards and agent'}
           </div>
         </div>
       </div>
@@ -239,6 +245,14 @@ function PlanCard({ usage, onError }: { usage: UsageInfo | null; onError: (m: st
             className="rounded-xl border border-border bg-white/[.06] px-4 py-2 text-[13px] font-semibold text-text hover:border-accent/50"
           >
             <i className="ti ti-plus text-[14px]" /> Add 10 hours — {PRICES.topup}
+          </button>
+        )}
+        {usage.tier !== 'free' && (
+          <button
+            onClick={() => void openBillingPortal().catch((e) => onError((e as Error).message))}
+            className="rounded-xl border border-border bg-white/[.06] px-4 py-2 text-[13px] font-semibold text-text hover:border-accent/50"
+          >
+            <i className="ti ti-settings text-[14px]" /> Manage or cancel subscription
           </button>
         )}
       </div>

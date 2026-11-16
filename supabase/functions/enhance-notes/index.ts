@@ -43,8 +43,9 @@ function clock(ms: number): string {
   return `${mm}:${ss}`
 }
 
-function systemPrompt(sections: string[], language?: string): string {
+function systemPrompt(sections: string[], language?: string, extra?: string): string {
   return [
+    ...(extra ? [extra, ''] : []),
     'You turn a person\'s rough meeting notes plus the meeting transcript into clean, useful notes.',
     '',
     'Rules:',
@@ -96,6 +97,7 @@ serve(async (req) => {
     userNotes?: string
     transcript?: Segment[]
     language?: string
+    context?: string
   }
   try {
     body = await req.json()
@@ -107,6 +109,7 @@ serve(async (req) => {
   const templateId = String(body.templateId ?? 'general')
   const userNotes = String(body.userNotes ?? '').slice(0, MAX_NOTES_CHARS)
   const transcript = Array.isArray(body.transcript) ? body.transcript : []
+  const context = String(body.context ?? '').slice(0, 6_000)
 
   if (!meetingId) throw new ApiError(400, 'bad_request', 'meetingId is required.')
 
@@ -150,10 +153,14 @@ serve(async (req) => {
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt(template.sections, body.language) },
+        { role: 'system', content: systemPrompt(template.sections, body.language, template.instructions) },
         {
           role: 'user',
-          content: `MY NOTES:\n${userNotes || '(none)'}\n\nTRANSCRIPT:\n${transcriptText || '(none)'}`
+          content:
+            (context
+              ? 'BACKGROUND from the user (job post, proposal, stack). Use it to understand terms; what was ' +
+                `agreed must come from the transcript:\n${context}\n\n`
+              : '') + `MY NOTES:\n${userNotes || '(none)'}\n\nTRANSCRIPT:\n${transcriptText || '(none)'}`
         }
       ]
     })
