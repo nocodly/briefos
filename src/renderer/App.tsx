@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
+import { track } from './lib/track'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
 import PeriodReport from './PeriodReport'
@@ -205,6 +206,7 @@ export default function App() {
 
   // ── Auth callbacks ──────────────────────────────────────────────────────────
   const handleAuthSuccess = useCallback(async (isNew: boolean) => {
+    if (isNew) track('signup')
     if (isNew) {
       setStage('onboarding')
     } else {

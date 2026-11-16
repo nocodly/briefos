@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { track } from '../lib/track'
 import { create } from 'zustand'
 import { invoke, subscribe } from '../lib/ipc'
 
@@ -121,6 +122,7 @@ export function SendToAgentModal({
     setError('')
     try {
       const { runId } = await invoke<{ runId: string }>('agent:run', { prompt, agent })
+      track('agent_task', { agent: agent ?? 'default' })
       useAgentRuns.setState(({ runs }) => ({
         runs: [{ runId, agent, task, status: 'running' as const, output: '', startedAt: Date.now() }, ...runs].slice(0, 20)
       }))

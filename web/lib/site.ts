@@ -43,12 +43,14 @@ export const PLANS = {
 } as const
 
 // Legal entity for Impressum / Privacy / Terms.
-// TODO(owner): replace every [placeholder] before launch.
+// Sole trader (Gewerbe), small business under § 19 UStG: no VAT is charged.
+// TODO(owner): street address (required for the Impressum).
 export const LEGAL = {
-  owner: '[Full name or company name]',
+  owner: 'Oleksandr Rybalchenko',
+  business: 'Oleksandr Rybalchenko, Minutama (Einzelunternehmen)',
   address: '[Street and number], [Postal code] [City], Germany',
   email: 'hello@minutama.com',
-  phone: '[Phone number]',
-  vatId: '[USt-IdNr., if any]',
+  /** Optional — shown only when set. */
+  phone: '',
   supabaseRegion: 'EU — Stockholm, Sweden'
 } as const

@@ -10,6 +10,7 @@ import {
   type StartMeetingResult
 } from '../lib/api'
 import { ChannelRecorder, type AudioChunk } from './ChannelRecorder'
+import { track } from '../lib/track'
 
 // =============================================================================
 // Meeting session — the whole live flow, owned by the main window renderer so
@@ -469,6 +470,13 @@ async function requestHint(force: boolean, heardAt: number | null): Promise<void
       answered: false
     }
     set({ hints: [card, ...get().hints].slice(0, 40) })
+    track('card_shown', {
+      latencyMs,
+      requestMs: Date.now() - t0,
+      aiMs: res.aiMs ?? null,
+      translated: Boolean(card.translation),
+      term: Boolean(card.term)
+    })
     await invoke('capsule:hint', cardToCapsule(card)).catch(() => {})
   } catch (err) {
     if (err instanceof ApiError && err.isPlanLimit) set({ hintsNote: err.message })
@@ -548,6 +556,7 @@ export async function startMeeting_(templateId?: string): Promise<void> {
     recorders.them?.start()
 
     contextOwner = meetingId
+    track('meeting_started', { systemAudio: Boolean(system), hasContext: Boolean(get().callContext.trim()) })
     set({
       status: 'recording',
       meetingId,
@@ -596,6 +605,11 @@ export async function stopMeeting(): Promise<void> {
   if (s.status !== 'recording' && s.status !== 'paused') return
   console.log('[session] stopping')
   const durationMs = timeline()
+  track('meeting_finished', {
+    minutes: Math.round(durationMs / 60_000),
+    cards: s.hints.length,
+    unanswered: s.hints.filter((h) => !h.answered).length
+  })
   activeBaseMs = durationMs
   activeSince = null
   set({ status: 'finishing' })
@@ -652,6 +666,7 @@ export async function enhanceCurrent(templateId?: string): Promise<void> {
     })
     await invoke('notes:saveEnhanced', { meetingId, templateId: tpl, ...result })
     set({ enhanced: result, status: 'idle' })
+    track('notes_ready', { template: tpl, segments: segments.length })
     console.log('[session] enhanced', meetingId)
   } catch (err) {
     const upgrade = err instanceof ApiError && err.isPlanLimit

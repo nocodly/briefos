@@ -67,7 +67,8 @@ export default defineConfig({
       'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY ?? ''),
       'import.meta.env.VITE_STRIPE_PRO_LINK': JSON.stringify(process.env.VITE_STRIPE_PRO_LINK ?? ''),
       'import.meta.env.VITE_STRIPE_MAX_LINK': JSON.stringify(process.env.VITE_STRIPE_MAX_LINK ?? ''),
-      'import.meta.env.VITE_STRIPE_TOPUP_LINK': JSON.stringify(process.env.VITE_STRIPE_TOPUP_LINK ?? '')
+      'import.meta.env.VITE_STRIPE_TOPUP_LINK': JSON.stringify(process.env.VITE_STRIPE_TOPUP_LINK ?? ''),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(process.env.npm_package_version ?? '')
     },
     resolve: {
       alias: {

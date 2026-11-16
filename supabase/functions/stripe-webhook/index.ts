@@ -19,6 +19,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2?target=deno
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY')!, { apiVersion: '2024-04-10' })
 const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET')!
+const NO_VAT_FOOTER = 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet. / No VAT charged (small business, § 19 UStG).'
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -138,6 +139,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session) {
     }
   }
   await updateBy('id', userId, fields)
+  // Small business (§ 19 UStG): every renewal invoice must say no VAT is charged.
+  if (customerId) {
+    try {
+      await stripe.customers.update(customerId, { invoice_settings: { footer: NO_VAT_FOOTER } })
+    } catch (err) {
+      console.warn('[stripe-webhook] could not set invoice footer:', (err as Error).message)
+    }
+  }
   console.log(`[stripe-webhook] checkout completed for user ${userId} → ${fields.plan}`)
 }
 

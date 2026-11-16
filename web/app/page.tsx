@@ -437,7 +437,7 @@ export default function Home() {
             </div>
             <p className="mx-auto mt-6 max-w-2xl text-center text-[13px] text-ink-3">
               Need more in a busy month? Add {PLANS.topup.hours} hours for {PLANS.topup.price} any time — they last until
-              the month ends. A meeting in progress is never cut off. Prices in USD, incl. VAT where applicable.
+              the month ends. A meeting in progress is never cut off. Prices in USD. No VAT is charged (small business, § 19 UStG).
             </p>
           </div>
         </section>

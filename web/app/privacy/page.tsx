@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" updated="13 November 2026">
+    <LegalPage title="Privacy Policy" updated="16 November 2026">
       <p>
         This policy explains what personal data Minutama (&quot;we&quot;) processes when you use our website and our
         desktop app, why, and what your rights are under the EU General Data Protection Regulation (GDPR).
@@ -17,7 +17,7 @@ export default function Privacy() {
 
       <h2>1. Who is responsible</h2>
       <p>
-        {LEGAL.owner}, {LEGAL.address}. Email: <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>.
+        {LEGAL.business}, {LEGAL.address}. Email: <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>.
       </p>
 
       <h2>2. The short version</h2>
@@ -43,7 +43,8 @@ export default function Privacy() {
       </p>
       <h3>Notes and transcripts</h3>
       <p>
-        To create AI notes, the transcript and your own notes are sent to our AI provider, and the result is returned to
+        To create AI notes and live question cards, the transcript, your own notes and any background you enter
+        (&quot;About this call&quot;, &quot;About you&quot;) are sent to our AI provider, and the result is returned to
         your app. Notes and transcripts are saved locally on your computer, not on our servers. You can delete them in
         the app at any time.
       </p>
@@ -51,6 +52,19 @@ export default function Privacy() {
       <p>
         Payments for Pro are handled by Stripe. We receive your Stripe customer ID and subscription status, never your
         card details. Legal basis: Art. 6(1)(b) and (c) GDPR (tax and accounting obligations).
+      </p>
+      <h3>Product usage</h3>
+      <p>
+        The app sends us a small set of usage events linked to your account: for example that you signed up, started
+        or finished a meeting, how fast a question card appeared, opened checkout, or that an error happened (with the
+        app version and the error message, never the content of your meetings). Purpose: finding out where the app
+        fails or confuses people and improving it. Legal basis: legitimate interest (Art. 6(1)(f) GDPR). We delete these
+        events after 12 months. You can object any time by writing to us.
+      </p>
+      <h3>Emails</h3>
+      <p>
+        Account emails (for example password reset) are sent through Resend, Inc. (USA). Legal basis: Art. 6(1)(b)
+        GDPR.
       </p>
       <h3>Waitlist</h3>
       <p>
@@ -60,7 +74,9 @@ export default function Privacy() {
       <h3>Website</h3>
       <p>
         Our hosting provider processes technical data (IP address, browser, time of request) in server logs to deliver
-        and protect the website (Art. 6(1)(f) GDPR). We do not use advertising or analytics cookies on this website.
+        and protect the website (Art. 6(1)(f) GDPR). We measure visits with Cloudflare Web Analytics, which does not
+        use cookies and does not track you across sites (Art. 6(1)(f) GDPR). We do not use advertising or analytics
+        cookies on this website.
       </p>
 
       <h2>4. Your responsibility when recording</h2>
@@ -74,7 +90,9 @@ export default function Privacy() {
         <li>Supabase Inc. — authentication, database and server functions ({LEGAL.supabaseRegion}).</li>
         <li>OpenAI, L.L.C. (USA) — speech-to-text and AI notes via its API. API data is not used to train models.</li>
         <li>Stripe Payments Europe Ltd. — payments.</li>
-        <li>Our website hosting provider — delivery of minutama.com.</li>
+        <li>Resend, Inc. (USA) — sending account emails.</li>
+        <li>Cloudflare, Inc. — DNS, protection and cookieless web analytics for minutama.com.</li>
+        <li>Railway Corporation (USA) — hosting of minutama.com.</li>
       </ul>
       <p>
         Where data is transferred outside the EU/EEA, we rely on the EU–US Data Privacy Framework and/or the European
@@ -83,7 +101,7 @@ export default function Privacy() {
 
       <h2>6. How long we keep data</h2>
       <p>
-        Account data: as long as your account exists. Usage counters: up to 24 months. Billing records: as required by
+        Account data: as long as your account exists. Usage counters: up to 24 months. Usage events: 12 months. Billing records: as required by
         tax law (usually 10 years in Germany). Waitlist emails: until the launch message is sent or you ask us to delete
         them.
       </p>

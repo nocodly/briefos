@@ -9,10 +9,10 @@ export const metadata: Metadata = {
 
 export default function Impressum() {
   return (
-    <LegalPage title="Impressum" updated="13 November 2026">
+    <LegalPage title="Impressum" updated="16 November 2026">
       <h2>Angaben gemäß § 5 DDG</h2>
       <p>
-        {LEGAL.owner}
+        {LEGAL.business}
         <br />
         {LEGAL.address}
       </p>
@@ -20,12 +20,16 @@ export default function Impressum() {
       <h2>Kontakt</h2>
       <p>
         E-Mail: <a href={`mailto:${LEGAL.email}`}>{LEGAL.email}</a>
-        <br />
-        Telefon: {LEGAL.phone}
+        {LEGAL.phone && (
+          <>
+            <br />
+            Telefon: {LEGAL.phone}
+          </>
+        )}
       </p>
 
-      <h2>Umsatzsteuer-ID</h2>
-      <p>{LEGAL.vatId}</p>
+      <h2>Umsatzsteuer</h2>
+      <p>Kleinunternehmer gemäß § 19 UStG. Es wird keine Umsatzsteuer berechnet und ausgewiesen.</p>
 
       <h2>Verantwortlich für den Inhalt nach § 18 Abs. 2 MStV</h2>
       <p>

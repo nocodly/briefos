@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { track } from './track'
 
 // Stripe Payment Links (public URLs, baked in at build time from .env).
 const LINKS = {
@@ -21,6 +22,7 @@ export async function openCheckout(kind: Checkout): Promise<void> {
   const url = new URL(link)
   // The webhook links the payment to this account by client_reference_id.
   url.searchParams.set('client_reference_id', user.id)
+  track('checkout_opened', { kind })
   if (user.email) url.searchParams.set('prefilled_email', user.email)
   window.open(url.toString(), '_blank')
 }
@@ -29,5 +31,6 @@ export async function openCheckout(kind: Checkout): Promise<void> {
 export async function openBillingPortal(): Promise<void> {
   const { billingPortal } = await import('./api')
   const { url } = await billingPortal()
+  track('portal_opened')
   window.open(url, '_blank')
 }
