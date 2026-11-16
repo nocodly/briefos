@@ -46,10 +46,11 @@ type Phase = 'typing' | 'translation' | 'term'
 type LangId = (typeof LANGS)[number]['id']
 
 /** Ads can force a language (?lang=pt); otherwise follow the browser (en-IN → Hindi). */
-function initialLang(): LangId {
+function initialLang(pageLang?: string): LangId {
   const ids = LANGS.map((l) => l.id) as readonly string[]
   const param = new URLSearchParams(window.location.search).get('lang')?.toLowerCase()
   if (param && ids.includes(param)) return param as LangId
+  if (pageLang && ids.includes(pageLang)) return pageLang as LangId
   const nav = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.toLowerCase())
   for (const l of nav) {
     if (l === 'en-in') return 'hi'
@@ -60,13 +61,19 @@ function initialLang(): LangId {
   return 'es'
 }
 
-export function QuestionCardDemo() {
-  const [lang, setLang] = useState<LangId>('es')
+export function QuestionCardDemo({
+  defaultLang,
+  labels = { asked: 'Client asked', yourLanguage: 'Your language:' }
+}: {
+  defaultLang?: string
+  labels?: { asked: string; yourLanguage: string }
+}) {
+  const [lang, setLang] = useState<LangId>((defaultLang as LangId) ?? 'es')
   const [typed, setTyped] = useState(0)
   const [phase, setPhase] = useState<Phase>('typing')
   const current = LANGS.find((l) => l.id === lang) ?? LANGS[0]
 
-  useEffect(() => setLang(initialLang()), [])
+  useEffect(() => setLang(initialLang(defaultLang)), [defaultLang])
 
   // Type the question once; afterwards language switches only swap the lines.
   useEffect(() => {
@@ -99,7 +106,7 @@ export function QuestionCardDemo() {
 
           <div className="mt-3 rounded-[14px] border border-accent/30 bg-accent/[.10] p-3.5">
             <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.12em] text-[#FFB59C]">
-              Client asked
+              {labels.asked}
             </div>
             <p className="mt-1.5 min-h-[44px] text-[14px] leading-snug text-white/75">
               {QUESTION.slice(0, typed)}
@@ -124,7 +131,7 @@ export function QuestionCardDemo() {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-2" role="group" aria-label="Show the card in your language">
-        <span className="text-[13px] text-ink-3">Your language:</span>
+        <span className="text-[13px] text-ink-3">{labels.yourLanguage}</span>
         {LANGS.map((l) => (
           <button
             key={l.id}

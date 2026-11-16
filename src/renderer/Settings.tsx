@@ -3,7 +3,7 @@ import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { supabase } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
-import { openBillingPortal, openCheckout, PRICES, type Checkout } from './lib/billing'
+import { openBillingPortal, openCheckout, usePrices, type Checkout } from './lib/billing'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
 import { MEETING_LANGUAGES } from './recording/meetingSession'
 
@@ -179,6 +179,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 // ── Plan & hours ────────────────────────────────────────────────────────────
 function PlanCard({ usage, onError }: { usage: UsageInfo | null; onError: (m: string) => void }) {
   const go = (kind: Checkout) => openCheckout(kind).catch((e) => onError((e as Error).message))
+  const PRICES = usePrices()
   if (!usage) return <div className="text-[12px] text-text-3">Loading usage…</div>
 
   const name = usage.tier === 'max' ? 'Pro Max' : usage.tier === 'pro' ? 'Pro' : 'Free'

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Markdown from './components/Markdown'
 import { AgentRuns, SendToAgentModal } from './components/Agent'
 import ShareMenu from './components/ShareMenu'
-import { openCheckout, PRICES } from './lib/billing'
+import { openCheckout, usePrices } from './lib/billing'
 import { TEMPLATE_OPTIONS } from './lib/api'
 import {
   activeDurationMs,
@@ -468,6 +468,7 @@ function CallContextBox() {
 // Buttons on the "limit reached" banner: hours → top-up (+ Pro Max for Pro),
 // meeting count (Free) → upgrade to Pro.
 function LimitActions({ error }: { error: string }) {
+  const PRICES = usePrices()
   const hours = /hour/i.test(error)
   const isMax = /wait for the next month/i.test(error)
   return (

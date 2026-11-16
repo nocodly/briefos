@@ -38,12 +38,13 @@ export default function Terms() {
           Free: {PLANS.free.meetingsPerMonth} meetings per month, up to {PLANS.free.maxMeetingMinutes} minutes each.
         </li>
         <li>
-          Pro: {PLANS.pro.price} per month with {PLANS.pro.monthlyHours} hours of meetings; Pro Max:{' '}
-          {PLANS.max.price} per month with {PLANS.max.monthlyHours} hours. Billed in advance through Stripe, renews
+          Pro with {PLANS.pro.monthlyHours} hours of meetings a month and Pro Max with {PLANS.max.monthlyHours} hours a
+          month. The price depends on your country (purchasing-power pricing) and is shown before you pay; it is{' '}
+          {PLANS.pro.price} and {PLANS.max.price} per month in most countries. Billed in advance through Stripe, renews
           automatically until cancelled. Unused hours do not carry over.
         </li>
         <li>
-          Extra hours: {PLANS.topup.hours} hours for {PLANS.topup.price}, a one-time purchase valid until the end of the
+          Extra hours: {PLANS.topup.hours} hours for {PLANS.topup.price} (or your country&apos;s price), a one-time purchase valid until the end of the
           calendar month (UTC). When your hours are used up, a meeting already in progress continues to the end; new
           meetings need more hours or a higher plan.
         </li>

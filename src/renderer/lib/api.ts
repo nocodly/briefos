@@ -159,3 +159,8 @@ export function suggestReply(input: {
 export function billingPortal(): Promise<{ url: string; login?: boolean }> {
   return call<{ url: string; login?: boolean }>('billing-portal', '{}', true)
 }
+
+/** Stripe Checkout with the price for the buyer's region (see functions/checkout). */
+export function createCheckout(input: { kind: 'pro' | 'max' | 'topup'; country: string | null }): Promise<{ url: string }> {
+  return call<{ url: string }>('checkout', JSON.stringify(input), true)
+}

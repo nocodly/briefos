@@ -4,6 +4,7 @@ import { Footer, Nav, WindowsIcon } from '@/components/Chrome'
 import { Waitlist } from '@/components/Waitlist'
 import { AgentHandoffDemo, CallCapsuleDemo, ReplyHintDemo } from '@/components/AgentShowcase'
 import { PLANS } from '@/lib/site'
+import { RegionalPrice } from '@/components/RegionalPricing'
 
 const APPS = [
   'Zoom',
@@ -387,7 +388,7 @@ export default function Home() {
                 </span>
                 <div className="font-display text-[22px] font-bold">Pro</div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-display text-[42px] font-extrabold">{PLANS.pro.price}</span>
+                  <span className="font-display text-[42px] font-extrabold"><RegionalPrice plan="pro" /></span>
                   <span className="text-ink-3">/ month</span>
                 </div>
                 <p className="mt-1 text-[14px] text-ink-3">For people with meetings every day.</p>
@@ -414,7 +415,7 @@ export default function Home() {
               <div className="rounded-xl2 border border-line bg-white p-7">
                 <div className="font-display text-[22px] font-bold">Pro Max</div>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="font-display text-[42px] font-extrabold">{PLANS.max.price}</span>
+                  <span className="font-display text-[42px] font-extrabold"><RegionalPrice plan="max" /></span>
                   <span className="text-ink-3">/ month</span>
                 </div>
                 <p className="mt-1 text-[14px] text-ink-3">For people who live in calls.</p>
@@ -436,7 +437,7 @@ export default function Home() {
               </div>
             </div>
             <p className="mx-auto mt-6 max-w-2xl text-center text-[13px] text-ink-3">
-              Need more in a busy month? Add {PLANS.topup.hours} hours for {PLANS.topup.price} any time — they last until
+              Need more in a busy month? Add {PLANS.topup.hours} hours for <RegionalPrice plan="topup" /> any time — they last until
               the month ends. A meeting in progress is never cut off. Prices in USD. No VAT is charged (small business, § 19 UStG).
             </p>
           </div>
