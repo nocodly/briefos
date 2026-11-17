@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function Terms() {
   return (
-    <LegalPage title="Terms of Service" updated="16 November 2026">
+    <LegalPage title="Terms of Service" updated="17 November 2026">
       <p>
         These terms apply to the Minutama desktop app and related services provided by {LEGAL.business} (&quot;we&quot;).
         By creating an account you agree to them.
@@ -19,6 +19,14 @@ export default function Terms() {
       <p>
         Minutama records audio on your computer while you take notes, transcribes it and creates AI-generated notes.
         AI output can contain mistakes — please review important notes before relying on or sharing them.
+      </p>
+      <h3>AI transcription, translation and suggestions</h3>
+      <p>
+        Live captions, translations, question cards, term explanations, briefs, estimates and emails are generated
+        automatically by AI. They are an aid to help you follow the conversation, not a professional or certified
+        translation, and they can be incomplete or wrong. We do not guarantee their accuracy. You are responsible for
+        checking the information and translations yourself before you rely on them, quote a price, agree to terms or
+        send anything to a client. Our liability is limited as described in section 8.
       </p>
 
       <h2>2. Your account</h2>

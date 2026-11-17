@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { invoke } from './lib/ipc'
+import { LanguageFields, type LanguageValues } from './components/LanguageFields'
+import { MEETING_LANGUAGES } from './recording/meetingSession'
 
 // =============================================================================
-// Onboarding — two steps, no API keys, no drivers:
+// Onboarding — three steps, no API keys, no drivers:
 //   1. What Minutama does (no bot, your notes + AI)
-//   2. Allow the microphone (live level meter proves it works)
+//   2. Your languages (your language for translations, the call language)
+//   3. Allow the microphone (live level meter proves it works)
 // =============================================================================
 
 interface Props {
@@ -23,24 +26,24 @@ export default function Onboarding({ onDone }: Props) {
     <div className="min-h-screen flex items-center justify-center p-6 font-body">
       <div className="w-full max-w-[520px] glass-strong rounded-modal p-8 animate-fade-up">
         <div className="flex gap-1.5 mb-7">
-          {[0, 1].map((i) => (
+          {[0, 1, 2].map((i) => (
             <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border'}`} />
           ))}
         </div>
 
-        {step === 0 ? <Welcome /> : <MicStep />}
+        {step === 0 ? <Welcome /> : step === 1 ? <LanguagesStep /> : <MicStep />}
 
         <div className="flex justify-between mt-8">
           <button
-            onClick={() => setStep(0)}
+            onClick={() => setStep((n) => Math.max(0, n - 1))}
             disabled={step === 0}
             className="text-[13px] text-text-3 hover:text-text disabled:opacity-0"
           >
             Back
           </button>
-          {step === 0 ? (
+          {step < 2 ? (
             <button
-              onClick={() => setStep(1)}
+              onClick={() => setStep((n) => n + 1)}
               className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold"
             >
               Continue
@@ -82,6 +85,47 @@ function Welcome() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function LanguagesStep() {
+  const browser = (navigator.language || 'en').slice(0, 2).toLowerCase()
+  const guess = MEETING_LANGUAGES.some((l) => l.code === browser) ? browser : ''
+  const [v, setV] = useState<LanguageValues>({ nativeLanguage: guess, clientLanguage: 'en', myCallLanguage: '' })
+
+  useEffect(() => {
+    invoke<Partial<LanguageValues>>('settings:getAll')
+      .then((all) => {
+        const next = {
+          nativeLanguage: all?.nativeLanguage || guess,
+          clientLanguage: all?.clientLanguage || 'en',
+          myCallLanguage: all?.myCallLanguage ?? ''
+        }
+        setV(next)
+        // Save the guess so it is explicit from the start.
+        if (!all?.nativeLanguage && guess) void invoke('settings:set', { key: 'nativeLanguage', value: guess }).catch(() => {})
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const change = <K extends keyof LanguageValues>(key: K, value: LanguageValues[K]) => {
+    setV((prev) => ({ ...prev, [key]: value }))
+    void invoke('settings:set', { key, value }).catch(() => {})
+  }
+
+  return (
+    <div>
+      <h1 className="font-display font-extrabold text-[24px] text-text mb-2">Your languages</h1>
+      <p className="text-[14px] text-text-2 mb-5">
+        Minutama shows what the client says in your language. You can change this any time in Settings.
+      </p>
+      <LanguageFields value={v} onChange={change} />
+      <p className="mt-4 rounded-card border border-border-soft bg-white/[.04] px-3 py-2 text-[11.5px] leading-relaxed text-text-3">
+        AI transcription and translation can contain mistakes. Always check important details — prices, dates,
+        commitments — yourself.
+      </p>
     </div>
   )
 }

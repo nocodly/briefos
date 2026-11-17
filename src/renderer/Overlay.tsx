@@ -42,13 +42,14 @@ interface CapsuleState {
   expanded: boolean
   agentRun: AgentRun | null
   notice: string | null
+  large?: boolean
   live?: {
     lines: { id: string; speaker: 'me' | 'them'; text: string; translation: string | null; final: boolean }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
 }
 
-type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun'
+type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'size' | 'clearRun' | 'cancelRun'
 
 // Drag the capsule by its body; anything clickable opts out.
 const drag = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
@@ -172,6 +173,13 @@ export default function Overlay() {
         >
           <i className="ti ti-player-stop-filled text-[13px]" />
         </button>
+        {cap.expanded && (
+          <IconButton
+            icon={cap.large ? 'arrows-minimize' : 'arrows-maximize'}
+            title={cap.large ? 'Small capsule at the side' : 'Big reading view in the middle'}
+            onClick={() => act('size')}
+          />
+        )}
         <IconButton
           icon={cap.expanded ? 'chevron-up' : 'sparkles'}
           title={cap.expanded ? 'Hide agent' : 'Show agent'}
@@ -189,7 +197,7 @@ export default function Overlay() {
         </div>
       )}
 
-      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} />}
+      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} large={Boolean(cap.large)} />}
     </Shell>
   )
 }
@@ -200,12 +208,14 @@ function AgentPanel({
   hint,
   run,
   notice,
-  live
+  live,
+  large
 }: {
   hint: ReplyHint | null
   run: AgentRun | null
   notice: string | null
   live?: CapsuleState['live']
+  large: boolean
 }) {
   const [text, setText] = useState('')
   const [confirm, setConfirm] = useState<string | null>(null)
@@ -240,7 +250,7 @@ function AgentPanel({
 
   return (
     <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
-      {live && live.status !== 'off' && <LiveCaptions live={live} />}
+      {live && live.status !== 'off' && <LiveCaptions live={live} large={large} />}
       {hint ? (
         <QuestionCardView hint={hint} />
       ) : (
@@ -323,40 +333,54 @@ function AgentPanel({
   )
 }
 
-function LiveCaptions({ live }: { live: NonNullable<CapsuleState['live']> }) {
+function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>; large: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
+  const hovering = useRef(false)
   const lines = live.lines
+  const lastId = lines[lines.length - 1]?.id
 
-  // Follow the conversation unless the user scrolled up to read.
+  // Calm scrolling: move only when a NEW line starts (not on every letter), and
+  // never while the mouse is over the text or the user scrolled up to read.
   useEffect(() => {
     const el = box.current
-    if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  })
+    if (!el || !stick.current || hovering.current) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+  }, [lastId, lines.length])
 
   return (
     <div className="rounded-[14px] border border-white/[.08] bg-white/[.035]">
-      <div className="flex items-center gap-1.5 px-3 pt-2 text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">
+      <div className="flex items-center gap-1.5 px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">
         <span className={`h-1.5 w-1.5 rounded-full ${live.status === 'live' ? 'animate-pulse-dot bg-green' : 'bg-amber'}`} />
         {live.status === 'live' ? 'Live' : live.status === 'failed' ? 'Live captions off' : 'Connecting…'}
+        <span className="ml-auto normal-case tracking-normal text-white/30">Hover to pause scrolling</span>
       </div>
       <div
         ref={box}
+        onMouseEnter={() => (hovering.current = true)}
+        onMouseLeave={() => {
+          hovering.current = false
+          const el = box.current
+          if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        }}
         onScroll={(e) => {
           const el = e.currentTarget
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40
+          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
         }}
-        className="caption-scroll h-[300px] overflow-y-auto px-3 pb-3 pt-1.5"
+        className={`caption-scroll overflow-y-auto px-4 pb-4 pt-2 ${large ? 'h-[460px]' : 'h-[300px]'}`}
       >
         {lines.length === 0 ? (
-          <div className="pt-2 text-[12px] text-white/35">Words appear here as people speak.</div>
+          <div className="pt-2 text-[13px] text-white/35">Words appear here as people speak.</div>
         ) : (
-          <div className="flex flex-col gap-2.5">
+          <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
             {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} />
+              <CaptionLine key={l.id} line={l} large={large} />
             ))}
           </div>
         )}
+      </div>
+      <div className="border-t border-white/[.06] px-4 py-1.5 text-[10.5px] text-white/35">
+        AI transcription and translation can contain mistakes. Check important details yourself.
       </div>
     </div>
   )
@@ -364,29 +388,35 @@ function LiveCaptions({ live }: { live: NonNullable<CapsuleState['live']> }) {
 
 type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
-function CaptionLine({ line }: { line: CaptionLineData }) {
+function CaptionLine({ line, large }: { line: CaptionLineData; large: boolean }) {
   const client = line.speaker !== 'me'
   return (
     <div className="animate-caption-in">
-      <div className={`text-[9.5px] font-semibold uppercase tracking-[.12em] ${client ? 'text-accent-pale' : 'text-[#9DB7FF]'}`}>
+      <div className={`text-[10px] font-semibold uppercase tracking-[.12em] ${client ? 'text-accent-pale' : 'text-[#9DB7FF]'}`}>
         {client ? 'Client' : 'You'}
       </div>
       <SmoothText
         text={line.text}
         typing={!line.final}
-        className={`mt-0.5 text-[12.5px] leading-snug ${client ? 'text-white/70' : 'text-white/85'}`}
+        className={`mt-1 leading-relaxed ${large ? 'text-[16px]' : 'text-[13px]'} ${client ? 'text-white/80' : 'text-white/90'}`}
       />
       {client && line.translation && (
-        <SmoothText text={line.translation} typing={false} className="mt-1 text-[13.5px] font-medium leading-snug text-white" />
+        <div className={`mt-2 border-l-2 border-[#5EC8F2]/60 pl-3 ${large ? 'ml-1' : ''}`}>
+          <SmoothText
+            text={line.translation}
+            typing={false}
+            className={`font-medium leading-relaxed text-[#BFE9FF] ${large ? 'text-[18px]' : 'text-[14px]'}`}
+          />
+        </div>
       )}
     </div>
   )
 }
 
 /**
- * Types the text out letter by letter and catches up smoothly when the
- * recognizer jumps ahead by whole words. The newest letters glow orange and an
- * orange caret leads while the line is still being spoken.
+ * Writes the text out at a calm reading pace (about 22 letters a second) and
+ * only speeds up when far behind, so the eyes can follow. The newest letters
+ * glow orange and an orange caret leads while the line is still being spoken.
  */
 function SmoothText({ text, typing, className }: { text: string; typing: boolean; className?: string }) {
   const [shown, setShown] = useState(0)
@@ -404,8 +434,8 @@ function SmoothText({ text, typing, className }: { text: string; typing: boolean
       if (pos > goal) pos = goal
       const behind = goal - pos
       if (behind > 0) {
-        // ~45 letters/s when in sync, much faster when far behind.
-        const speed = 0.045 + behind * 0.012
+        // 22 letters/s; gently faster only when more than ~3 s behind.
+        const speed = 0.022 + Math.max(0, behind - 66) * 0.0015
         pos = Math.min(goal, pos + speed * dt)
         setShown(Math.floor(pos))
       }
@@ -417,8 +447,8 @@ function SmoothText({ text, typing, className }: { text: string; typing: boolean
 
   const visible = text.slice(0, shown)
   const writing = typing || shown < text.length
-  // While writing, the newest letters glow orange; once done they settle to white.
-  const settled = writing ? visible.slice(0, Math.max(0, visible.length - 5)) : visible
+  // While writing, the newest letters glow orange; once done they settle.
+  const settled = writing ? visible.slice(0, Math.max(0, visible.length - 4)) : visible
   const fresh = writing ? visible.slice(settled.length) : ''
   return (
     <div className={className}>

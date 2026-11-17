@@ -6,6 +6,7 @@ import { getUsage, type UsageInfo } from './lib/usage'
 import { openBillingPortal, openCheckout, usePrices, type Checkout } from './lib/billing'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
 import { MEETING_LANGUAGES } from './recording/meetingSession'
+import { LanguageFields } from './components/LanguageFields'
 
 // ── Updater hook ─────────────────────────────────────────────────────────────
 type UpdaterState = 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'none' | 'error'
@@ -144,6 +145,13 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 
         <Panel title="Plan" icon="crown" desc={email ? `Signed in as ${email}` : 'Your Minutama plan.'}>
           <PlanCard usage={usage} onError={setError} />
+        </Panel>
+
+        <Panel title="Languages" icon="language" desc="Set once — change any time.">
+          <LanguageFields
+            value={{ nativeLanguage: s.nativeLanguage, clientLanguage: s.clientLanguage, myCallLanguage: s.myCallLanguage }}
+            onChange={(k, v) => set(k, v)}
+          />
         </Panel>
 
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">

@@ -50,6 +50,8 @@ export interface AppSettings {
   clientLanguage: string
   /** Language you speak on calls ('' = same as the client). */
   myCallLanguage: string
+  /** Recording capsule opens as the big centred reading view. */
+  capsuleLarge: boolean
   /** Question cards also suggest what to mention (opt-in). */
   answerHints: boolean
   /** Who the user is: services, stack, rates — background for every call. */
@@ -88,6 +90,7 @@ const DEFAULTS: AppSettings = {
   nativeLanguage: '',
   clientLanguage: 'en',
   myCallLanguage: '',
+  capsuleLarge: true,
   answerHints: false,
   aboutMe: ''
 }

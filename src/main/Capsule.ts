@@ -1,5 +1,6 @@
 import { screen, type BrowserWindow } from 'electron'
 import { createOverlayWindow, closeOverlayWindow, getOverlayWindow } from './index'
+import { getSetting, setSetting } from './store'
 
 // =============================================================================
 // Capsule — state of the floating Minutama capsule (the always-on-top overlay
@@ -41,6 +42,8 @@ export interface CapsuleState {
   agentRun: CapsuleAgentRun | null
   /** Short status line shown for a few seconds (e.g. "No question yet"). */
   notice: string | null
+  /** Large reading view: a big window in the middle of the screen. */
+  large: boolean
   /** Live captions of the client: last lines with translations. */
   live: { lines: CapsuleLiveLine[]; status: 'off' | 'connecting' | 'live' | 'failed' }
 }
@@ -70,6 +73,7 @@ let state: CapsuleState = {
   expanded: true,
   agentRun: null,
   notice: null,
+  large: true,
   live: { lines: [], status: 'off' }
 }
 let hintTimer: NodeJS.Timeout | null = null
@@ -77,15 +81,20 @@ let hintTimer: NodeJS.Timeout | null = null
 const MARGIN = 16
 
 /** Width per mode; height comes from the rendered content (capsule:fit). */
-function widthFor(s: CapsuleState): number {
+function widthFor(s: CapsuleState, workWidth: number): number {
   if (s.mode === 'prompt') return 316
-  return s.expanded ? 440 : 252
+  if (!s.expanded) return 252
+  return s.large ? Math.min(820, workWidth - 2 * MARGIN) : 440
+}
+function isLarge(s: CapsuleState): boolean {
+  return s.mode === 'recording' && s.expanded && s.large
 }
 const MIN_HEIGHT = 64
 let contentHeight = MIN_HEIGHT
 
-/** Where the user dragged the capsule: its right edge + top (null = default). */
+/** Where the user dragged the capsule: its right edge + top (null = default). Separate for the large view. */
 let userSpot: { right: number; y: number } | null = null
+let largeSpot: { x: number; y: number } | null = null
 const tracked = new WeakSet<BrowserWindow>()
 
 function apply(): void {
@@ -100,18 +109,28 @@ function apply(): void {
     // capsule grows to the left when it widens.
     win.on('moved', () => {
       const b = win.getBounds()
-      userSpot = { right: b.x + b.width, y: b.y }
+      if (isLarge(state)) largeSpot = { x: b.x, y: b.y }
+      else userSpot = { right: b.x + b.width, y: b.y }
     })
   }
-  const width = widthFor(state)
-  const height = Math.max(MIN_HEIGHT, contentHeight)
-  const display = userSpot
-    ? screen.getDisplayNearestPoint({ x: userSpot.right - 10, y: userSpot.y + 10 })
-    : screen.getPrimaryDisplay()
+  const large = isLarge(state)
+  const anchor = large ? largeSpot && { x: largeSpot.x + 10, y: largeSpot.y + 10 } : userSpot && { x: userSpot.right - 10, y: userSpot.y + 10 }
+  const display = anchor ? screen.getDisplayNearestPoint(anchor) : screen.getPrimaryDisplay()
   const wa = display.workArea
-  const right = userSpot ? userSpot.right : wa.x + wa.width - MARGIN
-  const top = userSpot ? userSpot.y : wa.y + Math.round(wa.height * 0.2)
-  const x = Math.min(Math.max(right - width, wa.x), wa.x + wa.width - width)
+  const width = widthFor(state, wa.width)
+  const height = Math.min(Math.max(MIN_HEIGHT, contentHeight), wa.height - 2 * MARGIN)
+  let x: number
+  let top: number
+  if (large) {
+    // Big reading view: centred unless the user moved it.
+    x = largeSpot ? largeSpot.x : wa.x + Math.round((wa.width - width) / 2)
+    top = largeSpot ? largeSpot.y : wa.y + Math.round(wa.height * 0.08)
+  } else {
+    const right = userSpot ? userSpot.right : wa.x + wa.width - MARGIN
+    x = right - width
+    top = userSpot ? userSpot.y : wa.y + Math.round(wa.height * 0.2)
+  }
+  x = Math.min(Math.max(x, wa.x), wa.x + wa.width - width)
   const y = Math.min(Math.max(top, wa.y), wa.y + wa.height - height)
   // Lock the size: on Windows a transparent frameless window can creep in size
   // while it is dragged (DPI rounding) — fixed min = max prevents that.
@@ -125,7 +144,7 @@ function apply(): void {
 
 /** The capsule renderer reports its content height; resize the window to fit. */
 export function fitCapsule(height: number): void {
-  const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 720))
+  const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 1400))
   if (Math.abs(h - contentHeight) < 2) return
   contentHeight = h
   if (state.mode !== 'hidden') apply()
@@ -178,6 +197,12 @@ export function setCapsuleLive(live: CapsuleState['live']): void {
   if (win && !win.isDestroyed()) win.webContents.send('capsule:state', state)
 }
 
+/** Switch between the big centred reading view and the small side capsule. */
+export function toggleCapsuleLarge(): void {
+  setSetting('capsuleLarge', !state.large)
+  setCapsule({ large: !state.large, expanded: true })
+}
+
 export function toggleCapsuleExpanded(): void {
   setCapsule({ expanded: !state.expanded })
 }
@@ -215,7 +240,7 @@ export function capsuleOnCallEnd(): void {
 }
 
 export function capsuleOnRecordingStart(): void {
-  setCapsule({ mode: 'recording', callEnded: false, hint: null, expanded: true })
+  setCapsule({ mode: 'recording', callEnded: false, hint: null, expanded: true, large: getSetting('capsuleLarge') !== false })
 }
 
 export function capsuleOnRecordingStop(): void {

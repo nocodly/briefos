@@ -28,6 +28,7 @@ import {
   setCapsuleLive,
   showHint,
   toggleCapsuleExpanded,
+  toggleCapsuleLarge,
   type ReplyHint
 } from './Capsule'
 import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
@@ -404,8 +405,9 @@ export function registerIpcHandlers(): void {
 
   // --- Capsule (floating call prompt / recording widget) --------------------
   handle('capsule:get', async () => getCapsule())
-  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'clearRun' | 'cancelRun') => {
+  handle('capsule:action', async (_e, action: 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'size' | 'clearRun' | 'cancelRun') => {
     if (action === 'toggle') toggleCapsuleExpanded()
+    else if (action === 'size') toggleCapsuleLarge()
     else if (action === 'clearRun') setCapsuleAgentRun(null)
     else if (action === 'cancelRun') {
       const run = getCapsule().agentRun
