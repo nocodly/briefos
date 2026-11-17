@@ -335,38 +335,52 @@ function AgentPanel({
 
 function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>; large: boolean }) {
   const box = useRef<HTMLDivElement>(null)
-  const stick = useRef(true)
-  const hovering = useRef(false)
+  const follow = useRef(true)
+  const [following, setFollowing] = useState(true)
   const lines = live.lines
-  const lastId = lines[lines.length - 1]?.id
 
-  // Calm scrolling: move only when a NEW line starts (not on every letter), and
-  // never while the mouse is over the text or the user scrolled up to read.
+  // Always keep the newest words in view: every frame, glide the scroll toward
+  // the bottom (also while a line is still being typed). Stops only when the
+  // user scrolls up to read; scrolling back down resumes it.
   useEffect(() => {
-    const el = box.current
-    if (!el || !stick.current || hovering.current) return
-    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [lastId, lines.length])
+    let raf = 0
+    const tick = () => {
+      const el = box.current
+      if (el && follow.current) {
+        const target = el.scrollHeight - el.clientHeight
+        const diff = target - el.scrollTop
+        if (diff > 0.5) el.scrollTop += Math.max(1, diff * 0.18)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  const setFollow = (v: boolean) => {
+    follow.current = v
+    setFollowing(v)
+  }
+  const atBottom = (el: HTMLDivElement) => el.scrollHeight - el.scrollTop - el.clientHeight < 24
 
   return (
-    <div className="rounded-[14px] border border-white/[.08] bg-white/[.035]">
+    <div className="relative rounded-[14px] border border-white/[.08] bg-white/[.035]">
       <div className="flex items-center gap-1.5 px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">
         <span className={`h-1.5 w-1.5 rounded-full ${live.status === 'live' ? 'animate-pulse-dot bg-green' : 'bg-amber'}`} />
         {live.status === 'live' ? 'Live' : live.status === 'failed' ? 'Live captions off' : 'Connecting…'}
-        <span className="ml-auto normal-case tracking-normal text-white/30">Hover to pause scrolling</span>
       </div>
       <div
         ref={box}
-        onMouseEnter={() => (hovering.current = true)}
-        onMouseLeave={() => {
-          hovering.current = false
-          const el = box.current
-          if (el && stick.current) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+        // Only a deliberate scroll up stops following; reaching the bottom again resumes it.
+        onWheel={(e) => {
+          if (e.deltaY < 0) setFollow(false)
+          else if (atBottom(e.currentTarget)) setFollow(true)
         }}
         onScroll={(e) => {
-          const el = e.currentTarget
-          stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+          if (!follow.current && atBottom(e.currentTarget)) setFollow(true)
         }}
+        onMouseDown={() => setFollow(false)}
+        onMouseUp={(e) => atBottom(e.currentTarget) && setFollow(true)}
         className={`caption-scroll overflow-y-auto px-4 pb-4 pt-2 ${large ? 'h-[460px]' : 'h-[300px]'}`}
       >
         {lines.length === 0 ? (
@@ -379,6 +393,14 @@ function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>
           </div>
         )}
       </div>
+      {!following && (
+        <button
+          onClick={() => setFollow(true)}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-[11.5px] font-semibold text-white shadow-lg animate-caption-in"
+        >
+          ↓ Latest
+        </button>
+      )}
       <div className="border-t border-white/[.06] px-4 py-1.5 text-[10.5px] text-white/35">
         AI transcription and translation can contain mistakes. Check important details yourself.
       </div>
