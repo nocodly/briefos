@@ -158,6 +158,51 @@ export function suggestReply(input: {
   return call<QuestionCardResult>('suggest-reply', JSON.stringify(input), true)
 }
 
+/**
+ * "Ask AI" about a caption line: streams a short answer the user can use while
+ * the call goes on. onText gets the answer so far. Shares the per-call quota
+ * with question cards.
+ */
+export async function askAiStream(
+  input: {
+    meetingId: string
+    line: string
+    transcript: { speaker: 'me' | 'them'; text: string }[]
+    messages?: { role: 'user' | 'assistant'; text: string }[]
+    nativeLanguage?: string
+    context?: string
+  },
+  onText: (soFar: string) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE}/ask-ai`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${await token()}`, apikey: ANON, 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+      signal
+    })
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') throw err
+    throw new ApiError(0, 'network', 'No connection to Minutama servers.')
+  }
+  if (!res.ok || !res.body) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: { code?: string; message?: string } }
+    throw new ApiError(res.status, payload.error?.code ?? 'ask_failed', payload.error?.message ?? 'AI could not answer right now.')
+  }
+  const reader = res.body.getReader()
+  const dec = new TextDecoder()
+  let text = ''
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) break
+    text += dec.decode(value, { stream: true })
+    if (text.trim()) onText(text.trim())
+  }
+  return text.trim()
+}
+
 /** Stripe Customer Portal: cancel, switch plan, card, invoices. */
 export function billingPortal(): Promise<{ url: string; login?: boolean }> {
   return call<{ url: string; login?: boolean }>('billing-portal', '{}', true)

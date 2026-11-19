@@ -22,7 +22,7 @@ const INVOKE_CHANNELS = new Set([
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
   'tasks:getAll', 'tasks:setDone', 'import:pickTranscript',
-  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice', 'capsule:live',
+  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice', 'capsule:live', 'capsule:ask', 'capsule:askState',
   'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',
   'updater:check', 'updater:install'
 ])
@@ -34,7 +34,7 @@ const PUSH_CHANNELS = new Set([
   'progress:done', 'progress:error',
   'updater:status', 'navigate',
   'hotkey:toggleRecording', 'auth:deeplink',
-  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask', 'agent:runFromCapsule', 'capsule:quick'
+  'capsule:state', 'agent:output', 'agent:done', 'agent:compose', 'agent:saveTask', 'agent:runFromCapsule', 'capsule:quick', 'capsule:ask'
 ])
 
 type Listener = (data: any) => void

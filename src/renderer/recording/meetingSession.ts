@@ -8,6 +8,7 @@ import {
   suggestReply,
   transcribeChunk,
   translateLineStream,
+  askAiStream,
   type EnhancedNotes,
   type StartMeetingResult
 } from '../lib/api'
@@ -639,6 +640,93 @@ function upsertLive(id: string, speaker: 'me' | 'them', patch: Partial<LiveLine>
 function removeLive(id: string): void {
   set({ live: get().live.filter((l) => l.id !== id) })
   pushLiveToCapsule()
+}
+
+// --- "Ask AI" mini chat in the capsule ---------------------------------------
+// The user hovers a caption line and asks AI about it; follow-ups continue the
+// same little chat. State lives here (the session has the meeting + token) and
+// is mirrored into the capsule with capsule:askState.
+
+interface AskState {
+  line: string
+  messages: { role: 'user' | 'assistant'; text: string }[]
+  status: 'thinking' | 'answering' | 'done' | 'failed'
+  error: string | null
+}
+let ask: AskState | null = null
+let askCtrl: AbortController | null = null
+let askPushTimer: ReturnType<typeof setTimeout> | null = null
+
+function pushAsk(now = false): void {
+  const send = () => {
+    askPushTimer = null
+    void invoke('capsule:askState', ask).catch(() => {})
+  }
+  if (now) {
+    if (askPushTimer) clearTimeout(askPushTimer)
+    send()
+  } else if (!askPushTimer) askPushTimer = setTimeout(send, 60)
+}
+
+export function closeAsk(): void {
+  askCtrl?.abort()
+  askCtrl = null
+  ask = null
+}
+
+/** Start a new chat about `line`, or add a follow-up question to the open one. */
+export async function askAi(input: { line?: string; followUp?: string }): Promise<void> {
+  const { serverId, status } = get()
+  if (input.line) {
+    askCtrl?.abort()
+    ask = { line: input.line, messages: [], status: 'thinking', error: null }
+  } else if (input.followUp && ask) {
+    if (ask.status === 'thinking' || ask.status === 'answering') return
+    ask = { ...ask, messages: [...ask.messages, { role: 'user', text: input.followUp }], status: 'thinking', error: null }
+  } else return
+  pushAsk(true)
+  if (!serverId || (status !== 'recording' && status !== 'paused')) {
+    ask = { ...ask, status: 'failed', error: 'Start a call recording to ask AI.' }
+    pushAsk(true)
+    return
+  }
+
+  const ctrl = new AbortController()
+  askCtrl = ctrl
+  const history = ask.messages
+  const transcript = [
+    ...get().segments.slice(-30).map((g) => ({ speaker: g.speaker, text: g.text })),
+    ...get().live.filter((l) => !l.final).map((l) => ({ speaker: l.speaker, text: l.text }))
+  ]
+  track('ask_ai', { followUp: Boolean(input.followUp) })
+  const t0 = performance.now()
+  try {
+    const answer = await askAiStream(
+      {
+        meetingId: serverId,
+        line: ask.line,
+        transcript,
+        messages: history,
+        nativeLanguage: nativeLanguageName(nativeLanguage),
+        context: contextForAI()
+      },
+      (soFar) => {
+        if (ctrl.signal.aborted || !ask) return
+        const msgs = [...history, { role: 'assistant' as const, text: soFar }]
+        ask = { ...ask, messages: msgs, status: 'answering' }
+        pushAsk()
+      },
+      ctrl.signal
+    )
+    if (ctrl.signal.aborted || !ask) return
+    ask = { ...ask, messages: [...history, { role: 'assistant', text: answer || 'No answer.' }], status: 'done' }
+    pushAsk(true)
+    console.log('[ask-ai] answered in', Math.round(performance.now() - t0), 'ms')
+  } catch (err) {
+    if (ctrl.signal.aborted || (err as Error).name === 'AbortError' || !ask) return
+    ask = { ...ask, messages: history, status: 'failed', error: (err as Error).message || 'AI could not answer right now.' }
+    pushAsk(true)
+  }
 }
 
 function pushLiveToCapsule(): void {

@@ -13,6 +13,7 @@ type EventName =
   | 'meeting_finished'
   | 'notes_ready'
   | 'card_shown'
+  | 'ask_ai'
   | 'checkout_opened'
   | 'portal_opened'
   | 'agent_task'

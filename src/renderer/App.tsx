@@ -12,7 +12,7 @@ import Onboarding from './Onboarding'
 import Processing from './Processing'
 import AuthScreen from './AuthScreen'
 import LiveMeeting from './LiveMeeting'
-import { addTaskToNotes, handleRecordingCommand, hintNow, setCardAnswered, startMeetingSession, useMeetingSession } from './recording/meetingSession'
+import { addTaskToNotes, askAi, closeAsk, handleRecordingCommand, hintNow, setCardAnswered, startMeetingSession, useMeetingSession } from './recording/meetingSession'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
@@ -157,6 +157,10 @@ export default function App() {
   useEffect(() => {
     const unsubs = [
       subscribe('agent:saveTask', ({ text }: { text: string }) => addTaskToNotes(text)),
+      subscribe('capsule:ask', (p: { line?: string; followUp?: string; close?: boolean }) => {
+        if (p?.close) closeAsk()
+        else void askAi(p ?? {})
+      }),
       subscribe('capsule:quick', async ({ kind, id }: { kind: string; id?: string | null }) => {
         if (kind === 'answered') {
           if (id) setCardAnswered(id)

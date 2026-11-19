@@ -47,6 +47,13 @@ interface CapsuleState {
     lines: { id: string; speaker: 'me' | 'them'; text: string; translation: string | null; final: boolean }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
+  ask?: AskState | null
+}
+interface AskState {
+  line: string
+  messages: { role: 'user' | 'assistant'; text: string }[]
+  status: 'thinking' | 'answering' | 'done' | 'failed'
+  error: string | null
 }
 
 type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'size' | 'clearRun' | 'cancelRun'
@@ -197,7 +204,7 @@ export default function Overlay() {
         </div>
       )}
 
-      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} large={Boolean(cap.large)} />}
+      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} large={Boolean(cap.large)} ask={cap.ask ?? null} />}
     </Shell>
   )
 }
@@ -209,13 +216,15 @@ function AgentPanel({
   run,
   notice,
   live,
-  large
+  large,
+  ask
 }: {
   hint: ReplyHint | null
   run: AgentRun | null
   notice: string | null
   live?: CapsuleState['live']
   large: boolean
+  ask: AskState | null
 }) {
   const [text, setText] = useState('')
   const [confirm, setConfirm] = useState<string | null>(null)
@@ -250,7 +259,15 @@ function AgentPanel({
 
   return (
     <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
-      {live && live.status !== 'off' && <LiveCaptions live={live} large={large} />}
+      {/* Same tree whether the chat is open or not, so the captions never re-mount (and re-type). */}
+      <div className={large ? 'flex gap-2' : 'flex flex-col gap-2'}>
+        {live && live.status !== 'off' && (
+          <div className="min-w-0 flex-1">
+            <LiveCaptions live={live} large={large} compact={!large && Boolean(ask)} />
+          </div>
+        )}
+        {ask && <AskPanel ask={ask} large={large && Boolean(live && live.status !== 'off')} />}
+      </div>
       {hint ? (
         <QuestionCardView hint={hint} />
       ) : (
@@ -333,7 +350,7 @@ function AgentPanel({
   )
 }
 
-function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>; large: boolean }) {
+function LiveCaptions({ live, large, compact = false }: { live: NonNullable<CapsuleState['live']>; large: boolean; compact?: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
   const [following, setFollowing] = useState(true)
@@ -381,7 +398,7 @@ function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>
         }}
         onMouseDown={() => setFollow(false)}
         onMouseUp={(e) => atBottom(e.currentTarget) && setFollow(true)}
-        className={`caption-scroll overflow-y-auto px-4 pb-4 pt-2 ${large ? 'h-[460px]' : 'h-[300px]'}`}
+        className={`caption-scroll overflow-y-auto px-4 pb-4 pt-2 ${large ? 'h-[460px]' : compact ? 'h-[200px]' : 'h-[300px]'}`}
       >
         {lines.length === 0 ? (
           <div className="pt-2 text-[13px] text-white/35">Words appear here as people speak.</div>
@@ -408,14 +425,107 @@ function LiveCaptions({ live, large }: { live: NonNullable<CapsuleState['live']>
   )
 }
 
+/**
+ * "Ask AI" mini chat: the picked line, the AI answer (streams in) and a box for
+ * follow-up questions. Lives next to the captions so the call can go on.
+ */
+function AskPanel({ ask, large }: { ask: AskState; large: boolean }) {
+  const [text, setText] = useState('')
+  const box = useRef<HTMLDivElement>(null)
+  const busy = ask.status === 'thinking' || ask.status === 'answering'
+
+  // Keep the newest part of the answer in view while it streams.
+  useEffect(() => {
+    const el = box.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [ask.messages, ask.status])
+
+  const send = () => {
+    const t = text.trim()
+    if (!t || busy) return
+    setText('')
+    void invoke('capsule:ask', { followUp: t })
+  }
+
+  return (
+    <div
+      className={`flex flex-col rounded-[14px] border border-accent/30 bg-[#1A1210]/60 animate-caption-in ${
+        large ? 'h-[503px] w-[300px] flex-none' : 'h-[240px]'
+      }`}
+    >
+      <div className="flex items-center gap-1.5 px-3.5 pt-2.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
+        <i className="ti ti-sparkles text-[12px]" /> Ask AI
+        <button
+          onClick={() => void invoke('capsule:ask', { close: true })}
+          title="Close"
+          className="ml-auto flex h-5 w-5 items-center justify-center rounded-md text-white/45 hover:bg-white/10 hover:text-white"
+        >
+          <i className="ti ti-x text-[12px]" />
+        </button>
+      </div>
+      <div ref={box} className="caption-scroll min-h-0 flex-1 overflow-y-auto px-3.5 pb-2 pt-2">
+        <div className="border-l-2 border-white/20 pl-2.5 text-[12px] italic leading-snug text-white/55 line-clamp-3">{ask.line}</div>
+        <div className="mt-2.5 flex flex-col gap-2.5">
+          {ask.messages.map((m, i) =>
+            m.role === 'user' ? (
+              <div key={i} className="self-end rounded-[10px] bg-white/[.08] px-2.5 py-1.5 text-[12px] text-white/85">
+                {m.text}
+              </div>
+            ) : (
+              <div key={i} className={`whitespace-pre-wrap leading-relaxed text-white/90 ${large ? 'text-[14px]' : 'text-[13px]'}`}>
+                {m.text}
+                {ask.status === 'answering' && i === ask.messages.length - 1 && <span className="caption-caret" aria-hidden="true" />}
+              </div>
+            )
+          )}
+          {ask.status === 'thinking' && (
+            <div className="flex items-center gap-1.5 text-[12px] text-white/50">
+              <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-accent" /> Thinking…
+            </div>
+          )}
+          {ask.status === 'failed' && <div className="text-[12px] text-red">{ask.error ?? 'AI could not answer right now.'}</div>}
+        </div>
+      </div>
+      <div className="flex items-center gap-1 border-t border-white/[.06] p-1.5 pl-3">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && send()}
+          placeholder={busy ? 'AI is answering…' : 'Ask a follow-up…'}
+          className="min-w-0 flex-1 bg-transparent text-[12px] text-white outline-none placeholder:text-white/35"
+        />
+        <button
+          onClick={send}
+          disabled={!text.trim() || busy}
+          title="Ask (Enter)"
+          className="btn-accent flex h-7 w-7 items-center justify-center rounded-lg disabled:opacity-30"
+        >
+          <i className="ti ti-send text-[13px]" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
 function CaptionLine({ line, large }: { line: CaptionLineData; large: boolean }) {
   const client = line.speaker !== 'me'
   return (
-    <div className="animate-caption-in">
-      <div className={`text-[10px] font-semibold uppercase tracking-[.12em] ${client ? 'text-accent-pale' : 'text-[#9DB7FF]'}`}>
-        {client ? 'Client' : 'You'}
+    <div className="group relative animate-caption-in">
+      <div className="flex items-center gap-2">
+        <div className={`text-[10px] font-semibold uppercase tracking-[.12em] ${client ? 'text-accent-pale' : 'text-[#9DB7FF]'}`}>
+          {client ? 'Client' : 'You'}
+        </div>
+        {line.text.trim() && (
+          <button
+            onClick={() => void invoke('capsule:ask', { line: line.text })}
+            title="Ask AI what this means and what to answer"
+            className="ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale opacity-0 transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100"
+          >
+            <i className="ti ti-sparkles text-[11px]" /> Ask AI
+          </button>
+        )}
       </div>
       <SmoothText
         text={line.text}

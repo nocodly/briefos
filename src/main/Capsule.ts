@@ -46,6 +46,17 @@ export interface CapsuleState {
   large: boolean
   /** Live captions of the client: last lines with translations. */
   live: { lines: CapsuleLiveLine[]; status: 'off' | 'connecting' | 'live' | 'failed' }
+  /** "Ask AI" mini chat about a caption line (null = closed). */
+  ask: CapsuleAsk | null
+}
+
+export interface CapsuleAsk {
+  /** The caption line the user picked. */
+  line: string
+  /** Follow-up questions and AI answers; the first answer is about the line. */
+  messages: { role: 'user' | 'assistant'; text: string }[]
+  status: 'thinking' | 'answering' | 'done' | 'failed'
+  error: string | null
 }
 
 export interface CapsuleLiveLine {
@@ -74,7 +85,8 @@ let state: CapsuleState = {
   agentRun: null,
   notice: null,
   large: true,
-  live: { lines: [], status: 'off' }
+  live: { lines: [], status: 'off' },
+  ask: null
 }
 let hintTimer: NodeJS.Timeout | null = null
 
@@ -159,6 +171,7 @@ export function setCapsule(patch: Partial<CapsuleState>): void {
   if (state.mode !== 'recording') {
     state.hint = null
     state.live = { lines: [], status: 'off' }
+    state.ask = null
   }
   apply()
 }
@@ -194,6 +207,20 @@ export function setCapsuleLive(live: CapsuleState['live']): void {
   state = { ...state, live }
   const win = getOverlayWindow()
   // Content-only change: push it without re-applying the window bounds.
+  if (win && !win.isDestroyed()) win.webContents.send('capsule:state', state)
+}
+
+/** "Ask AI" mini chat, driven by the main renderer (it holds the session). */
+export function setCapsuleAsk(ask: CapsuleAsk | null): void {
+  if (state.mode !== 'recording' && ask) return
+  const opening = Boolean(ask) !== Boolean(state.ask)
+  if (opening) {
+    // Opening / closing changes the layout: re-apply the window bounds.
+    setCapsule({ ask, expanded: true })
+    return
+  }
+  state = { ...state, ask }
+  const win = getOverlayWindow()
   if (win && !win.isDestroyed()) win.webContents.send('capsule:state', state)
 }
 

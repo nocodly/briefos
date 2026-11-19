@@ -26,6 +26,7 @@ import {
   getCapsule,
   setCapsuleAgentRun,
   setCapsuleLive,
+  setCapsuleAsk,
   showHint,
   toggleCapsuleExpanded,
   toggleCapsuleLarge,
@@ -467,6 +468,40 @@ export function registerIpcHandlers(): void {
     })
     const st = ['off', 'connecting', 'live', 'failed'].includes(String(payload?.status)) ? String(payload?.status) : 'off'
     setCapsuleLive({ lines, status: st as 'off' | 'connecting' | 'live' | 'failed' })
+    return { ok: true }
+  })
+  // "Ask AI" about a caption line: the overlay picks the line (or types a
+  // follow-up); the main renderer, which holds the session, asks the server
+  // and streams the answer back with capsule:askState.
+  handle('capsule:ask', async (_e, payload: { line?: string; followUp?: string; close?: boolean }) => {
+    if (payload?.close) {
+      setCapsuleAsk(null)
+      sendToRenderer('capsule:ask', { close: true })
+      return { ok: true }
+    }
+    const line = typeof payload?.line === 'string' ? payload.line.trim().slice(0, 800) : ''
+    const followUp = typeof payload?.followUp === 'string' ? payload.followUp.trim().slice(0, 800) : ''
+    if (!line && !followUp) throw new Error('Nothing to ask')
+    sendToRenderer('capsule:ask', line ? { line } : { followUp })
+    return { ok: true }
+  })
+  handle('capsule:askState', async (_e, payload: unknown) => {
+    if (!payload || typeof payload !== 'object') {
+      setCapsuleAsk(null)
+      return { ok: true }
+    }
+    const x = payload as { line?: unknown; messages?: unknown; status?: unknown; error?: unknown }
+    const messages = (Array.isArray(x.messages) ? x.messages : []).slice(-12).map((m) => {
+      const y = m as { role?: unknown; text?: unknown }
+      return { role: y.role === 'user' ? ('user' as const) : ('assistant' as const), text: String(y.text ?? '').slice(0, 3000) }
+    })
+    const status = ['thinking', 'answering', 'done', 'failed'].includes(String(x.status)) ? String(x.status) : 'done'
+    setCapsuleAsk({
+      line: String(x.line ?? '').slice(0, 800),
+      messages,
+      status: status as 'thinking' | 'answering' | 'done' | 'failed',
+      error: typeof x.error === 'string' ? x.error.slice(0, 200) : null
+    })
     return { ok: true }
   })
   handle('capsule:fit', async (_e, height: number) => {
