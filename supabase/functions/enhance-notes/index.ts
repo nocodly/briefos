@@ -19,7 +19,9 @@ import { TEMPLATES } from '../_shared/templates.ts'
 // The user's own notes are the backbone; the transcript fills in details.
 // =============================================================================
 
-const MODEL = Deno.env.get('NOTES_MODEL') ?? 'gpt-4o-mini'
+// gpt-4.1-mini follows the section/JSON rules far better than 4o-mini (which
+// sometimes returned an empty brief with only the email); once per call, cheap.
+const MODEL = Deno.env.get('NOTES_MODEL') ?? 'gpt-4.1-mini'
 const MAX_TRANSCRIPT_CHARS = 180_000 // ~4h of speech; keeps cost bounded
 const MAX_NOTES_CHARS = 20_000
 
@@ -85,6 +87,8 @@ function systemPrompt(sections: string[], language?: string, extra?: string, tod
     '- The section headings MUST be translated into the output language too — e.g. for Ukrainian write',
     '  "## Підсумок", "## Ключові моменти", "## Рішення", "## Задачі", never "## Summary" or "## Action items".',
     '- If a section has no real content, OMIT the heading entirely. Never write "None", "N/A" or "None noted".',
+    `- "notesMarkdown" is REQUIRED and never empty: the FIRST section (${mdSections[0]}) is always there,` +
+    '  2–4 sentences on what the call was about — even for a short, vague or small-talk call.',
     '- Use short bullet points under each heading.',
     '',
     'Respond with JSON only:',
@@ -192,7 +196,8 @@ serve(async (req) => {
 
   console.log('[enhance-notes] user', auth.userId, 'template', templateId, 'chars', transcriptText.length)
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const ask = (extra?: string) =>
+    fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`,
@@ -217,16 +222,28 @@ serve(async (req) => {
               ? 'BACKGROUND from the user (job post, proposal, stack). Use it to understand terms; what was ' +
                 `agreed must come from the transcript:\n${context}\n\n`
               : '') + `MY NOTES:\n${userNotes || '(none)'}\n\nTRANSCRIPT:\n${transcriptText || '(none)'}`
-        }
+        },
+        ...(extra ? [{ role: 'user', content: extra }] : [])
       ]
     })
   })
-  if (!res.ok) {
-    console.error('[enhance-notes] openai error', res.status, (await res.text()).slice(0, 500))
-    throw new ApiError(502, 'ai_failed', 'Could not generate notes right now. Please try again.')
+
+  const run = async (extra?: string) => {
+    const res = await ask(extra)
+    if (!res.ok) {
+      console.error('[enhance-notes] openai error', res.status, (await res.text()).slice(0, 500))
+      throw new ApiError(502, 'ai_failed', 'Could not generate notes right now. Please try again.')
+    }
+    const completion = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+    return { raw: completion.choices?.[0]?.message?.content ?? '', result: parseResult(completion.choices?.[0]?.message?.content ?? '') }
   }
-  const completion = (await res.json()) as { choices?: { message?: { content?: string } }[] }
-  const result = parseResult(completion.choices?.[0]?.message?.content ?? '')
+
+  let { result } = await run()
+  // Guard: a brief with no sections (only the appended email) is a failed answer.
+  if (!/^##\s/m.test(result.notesMarkdown.split(/\n##\s[^\n]*\n>/)[0])) {
+    console.warn('[enhance-notes] empty brief, retrying', meetingId)
+    result = (await run('Your notesMarkdown was empty. Write the notes sections now (at least the first one), then the email.')).result
+  }
 
   await db.from('meeting_sessions').update({ enhanced_at: new Date().toISOString() }).eq('id', meetingId)
 
