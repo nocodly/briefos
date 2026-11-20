@@ -13,5 +13,7 @@ export interface ActionItem {
   person: string
   task: string
   deadline: string | null
+  /** Resolved calendar date (YYYY-MM-DD) of the deadline, when the AI could tell. */
+  dueDate?: string | null
   priority: 'high' | 'medium' | 'low'
 }

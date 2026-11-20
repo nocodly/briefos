@@ -1,8 +1,6 @@
-import { Page, SoonBadge } from './components/Page'
+import { Page } from './components/Page'
 import { AgentRuns, useAgentRuns } from './components/Agent'
-import { useEffect, useState } from 'react'
-import { AgentsSettings, Panel, Toggle, useAppSettings } from './Settings'
-import { LanguageFields } from './components/LanguageFields'
+import { AgentsSettings, Panel, useAppSettings } from './Settings'
 
 // =============================================================================
 // Agent — everything about Minutama Agent in one place: the coding agent it
@@ -15,7 +13,7 @@ export default function AgentPage() {
   const runs = useAgentRuns((st) => st.runs)
 
   return (
-    <Page title="Agent" subtitle="Your meeting agent — only you see it, and it asks before it acts.">
+    <Page title="Coding agent" subtitle="Advanced: hand tasks from your calls to Claude Code or Codex on this computer. It asks before it acts.">
       {error && <div className="rounded-lg border border-red/20 bg-red-soft px-3 py-2 text-[12px] text-red">{error}</div>}
 
       <Panel
@@ -31,32 +29,6 @@ export default function AgentPage() {
         />
       </Panel>
 
-      <Panel
-        title="Client questions"
-        icon="help-circle"
-        desc="When the client asks something, a card shows their exact words and the translation in your language."
-      >
-        <Toggle label="Show question cards during calls" value={s.replyHints} onSave={(v) => set('replyHints', v)} />
-        <LanguageFields
-          value={{ nativeLanguage: s.nativeLanguage, clientLanguage: s.clientLanguage, myCallLanguage: s.myCallLanguage }}
-          onChange={(k, v) => set(k, v)}
-        />
-        <Toggle
-          label="Also suggest what to mention (off by default — you answer in your own words)"
-          value={s.answerHints}
-          onSave={(v) => set('answerHints', v)}
-        />
-        <AboutMe value={s.aboutMe} onSave={(v) => set('aboutMe', v)} />
-      </Panel>
-
-      <Panel title="During calls" icon="sparkles" desc="The floating capsule at the edge of your screen.">
-        <Toggle label="Offer to take notes when a call starts" value={s.detectCalls} onSave={(v) => set('detectCalls', v)} />
-        <div className="flex items-center justify-between">
-          <span className="text-[12px] font-medium text-text">Voice commands (“Hey …, add a task”)</span>
-          <SoonBadge />
-        </div>
-      </Panel>
-
       <Panel title="Activity" icon="history" desc="Tasks your agent worked on in this session.">
         {runs.length === 0 ? (
           <p className="text-[12.5px] text-text-3">
@@ -67,24 +39,5 @@ export default function AgentPage() {
         )}
       </Panel>
     </Page>
-  )
-}
-
-function AboutMe({ value, onSave }: { value: string; onSave: (v: string) => void }) {
-  const [text, setText] = useState(value)
-  useEffect(() => setText(value), [value])
-  return (
-    <div>
-      <label className="mb-1.5 block text-[12px] font-medium text-text">About you (used on every call)</label>
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onBlur={() => text !== value && onSave(text.slice(0, 2000))}
-        rows={3}
-        placeholder="e.g. Full-stack developer: Next.js, Node, AWS (Lambda, API Gateway), Stripe. Rate $45/h."
-        className="w-full resize-y rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[12.5px] leading-snug text-text placeholder:text-text-4 focus:border-accent focus:outline-none"
-      />
-      <p className="mt-1 text-[11px] text-text-3">Helps Minutama get your terms right and write a realistic estimate.</p>
-    </div>
   )
 }

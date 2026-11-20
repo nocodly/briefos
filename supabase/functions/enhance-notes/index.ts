@@ -43,7 +43,7 @@ function clock(ms: number): string {
   return `${mm}:${ss}`
 }
 
-function systemPrompt(sections: string[], language?: string, extra?: string): string {
+function systemPrompt(sections: string[], language?: string, extra?: string, today?: string): string {
   return [
     ...(extra ? [extra, ''] : []),
     'You turn a person\'s rough meeting notes plus the meeting transcript into clean, useful notes.',
@@ -68,8 +68,15 @@ function systemPrompt(sections: string[], language?: string, extra?: string): st
     'Respond with JSON only:',
     '{ "title": string (max 8 words),',
     '  "notesMarkdown": string,',
-    '  "actionItems": [{ "text": string, "owner": "me" | "them" | a name, "due": string (optional) }],',
-    '  "decisions": [string] }'
+    '  "actionItems": [{ "text": string, "owner": "me" | "them" | a name, "due": string (optional, as said),',
+    '                    "dueDate": "YYYY-MM-DD" (optional) }],',
+    '  "decisions": [string] }',
+    '',
+    today
+      ? `"dueDate": the calendar date of the deadline when it is clear. TODAY is ${today}; resolve "tomorrow", ` +
+        '"Friday", "next Monday", "end of the week", "on the 25th" relative to TODAY (always a future date). ' +
+        'Omit dueDate when no deadline was said or it is vague ("soon", "later").'
+      : 'Omit "dueDate".'
   ].join('\n')
 }
 
@@ -98,6 +105,8 @@ serve(async (req) => {
     transcript?: Segment[]
     language?: string
     context?: string
+    /** User's local date, e.g. "2026-11-20 (Friday)", to resolve "by Friday". */
+    today?: string
   }
   try {
     body = await req.json()
@@ -153,7 +162,7 @@ serve(async (req) => {
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt(template.sections, body.language, template.instructions) },
+        { role: 'system', content: systemPrompt(template.sections, body.language, template.instructions, String(body.today ?? '').slice(0, 40) || undefined) },
         {
           role: 'user',
           content:

@@ -4,15 +4,19 @@ import { LanguageFields, type LanguageValues } from './components/LanguageFields
 import { MEETING_LANGUAGES } from './recording/meetingSession'
 
 // =============================================================================
-// Onboarding — three steps, no API keys, no drivers:
-//   1. What Minutama does (no bot, your notes + AI)
-//   2. Your languages (your language for translations, the call language)
-//   3. Allow the microphone (live level meter proves it works)
+// Onboarding — three simple steps, each one thing the user will do:
+//   1. Start recording   — allow the mic (live level proves it works)
+//   2. Ask AI on a call   — live captions + translation, "Ask AI" on any line;
+//                           pick your language here
+//   3. Get the result     — notes, tasks with dates → calendar, follow-up email;
+//                           recordings from elsewhere can be imported
 // =============================================================================
 
 interface Props {
   onDone: () => void
 }
+
+const STEPS = ['Start recording', 'Ask AI on the call', 'Get the result']
 
 export default function Onboarding({ onDone }: Props) {
   const [step, setStep] = useState(0)
@@ -24,14 +28,19 @@ export default function Onboarding({ onDone }: Props) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 font-body">
-      <div className="w-full max-w-[520px] glass-strong rounded-modal p-8 animate-fade-up">
-        <div className="flex gap-1.5 mb-7">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className={`h-1 flex-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border'}`} />
+      <div className="w-full max-w-[560px] glass-strong rounded-modal p-8 animate-fade-up">
+        <div className="mb-7 grid grid-cols-3 gap-2">
+          {STEPS.map((label, i) => (
+            <button key={label} onClick={() => setStep(i)} className="text-left">
+              <div className={`h-1 rounded-full ${i <= step ? 'bg-accent' : 'bg-border'}`} />
+              <div className={`mt-2 text-[11px] font-semibold ${i === step ? 'text-text' : 'text-text-3'}`}>
+                {i + 1}. {label}
+              </div>
+            </button>
           ))}
         </div>
 
-        {step === 0 ? <Welcome /> : step === 1 ? <LanguagesStep /> : <MicStep />}
+        {step === 0 ? <RecordStep /> : step === 1 ? <AskStep /> : <ResultStep />}
 
         <div className="flex justify-between mt-8">
           <button
@@ -42,17 +51,11 @@ export default function Onboarding({ onDone }: Props) {
             Back
           </button>
           {step < 2 ? (
-            <button
-              onClick={() => setStep((n) => n + 1)}
-              className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold"
-            >
-              Continue
+            <button onClick={() => setStep((n) => n + 1)} className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold">
+              Next
             </button>
           ) : (
-            <button
-              onClick={finish}
-              className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold"
-            >
+            <button onClick={finish} className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-semibold">
               Start using Minutama
             </button>
           )}
@@ -62,75 +65,19 @@ export default function Onboarding({ onDone }: Props) {
   )
 }
 
-function Welcome() {
-  const points = [
-    { icon: 'robot-off', title: 'No meeting bot', text: 'Minutama listens on your computer. Works with Zoom, Meet, Teams, Telegram, Slack — anything.' },
-    { icon: 'pencil', title: 'Jot a few words', text: 'Write what matters to you during the call. Or nothing at all.' },
-    { icon: 'sparkles', title: 'Get perfect notes', text: 'When the call ends, AI turns your notes + the conversation into clear notes and action items.' }
-  ]
+function StepTitle({ n, title, text }: { n: number; title: string; text: string }) {
   return (
-    <div>
-      <h1 className="font-display font-extrabold text-[26px] text-text mb-2">Welcome to Minutama</h1>
-      <p className="text-[14px] text-text-2 mb-6">AI notes for every meeting.</p>
-      <div className="space-y-4">
-        {points.map((p) => (
-          <div key={p.title} className="flex gap-3">
-            <div className="w-9 h-9 rounded-card bg-accent-soft flex items-center justify-center flex-shrink-0">
-              <i className={`ti ti-${p.icon} text-[18px] text-accent`} />
-            </div>
-            <div>
-              <div className="text-[14px] font-semibold text-text">{p.title}</div>
-              <div className="text-[13px] text-text-3 leading-relaxed">{p.text}</div>
-            </div>
-          </div>
-        ))}
-      </div>
+    <div className="mb-5">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[.12em] text-accent">Step {n} of 3</div>
+      <h1 className="font-display font-extrabold text-[24px] text-text mb-1.5">{title}</h1>
+      <p className="text-[14px] leading-relaxed text-text-2">{text}</p>
     </div>
   )
 }
 
-function LanguagesStep() {
-  const browser = (navigator.language || 'en').slice(0, 2).toLowerCase()
-  const guess = MEETING_LANGUAGES.some((l) => l.code === browser) ? browser : ''
-  const [v, setV] = useState<LanguageValues>({ nativeLanguage: guess, clientLanguage: 'en', myCallLanguage: '' })
+// ── 1. Start recording ──────────────────────────────────────────────────────
 
-  useEffect(() => {
-    invoke<Partial<LanguageValues>>('settings:getAll')
-      .then((all) => {
-        const next = {
-          nativeLanguage: all?.nativeLanguage || guess,
-          clientLanguage: all?.clientLanguage || 'en',
-          myCallLanguage: all?.myCallLanguage ?? ''
-        }
-        setV(next)
-        // Save the guess so it is explicit from the start.
-        if (!all?.nativeLanguage && guess) void invoke('settings:set', { key: 'nativeLanguage', value: guess }).catch(() => {})
-      })
-      .catch(() => {})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const change = <K extends keyof LanguageValues>(key: K, value: LanguageValues[K]) => {
-    setV((prev) => ({ ...prev, [key]: value }))
-    void invoke('settings:set', { key, value }).catch(() => {})
-  }
-
-  return (
-    <div>
-      <h1 className="font-display font-extrabold text-[24px] text-text mb-2">Your languages</h1>
-      <p className="text-[14px] text-text-2 mb-5">
-        Minutama shows what the client says in your language. You can change this any time in Settings.
-      </p>
-      <LanguageFields value={v} onChange={change} />
-      <p className="mt-4 rounded-card border border-border-soft bg-white/[.04] px-3 py-2 text-[11.5px] leading-relaxed text-text-3">
-        AI transcription and translation can contain mistakes. Always check important details — prices, dates,
-        commitments — yourself.
-      </p>
-    </div>
-  )
-}
-
-function MicStep() {
+function RecordStep() {
   const [state, setState] = useState<'idle' | 'on' | 'denied'>('idle')
   const [level, setLevel] = useState(0)
   const cleanup = useRef<() => void>(() => {})
@@ -164,14 +111,18 @@ function MicStep() {
 
   return (
     <div>
-      <h1 className="font-display font-extrabold text-[24px] text-text mb-2">Allow your microphone</h1>
-      <p className="text-[14px] text-text-2 mb-6">
-        Minutama records your voice and your computer&apos;s audio only while you take notes. Audio is never stored.
-      </p>
+      <StepTitle
+        n={1}
+        title="Start recording"
+        text="Join your call in Zoom, Meet, Teams or any app. Minutama asks “Start notes?” — or press Start call. No bot joins the call."
+      />
+      <div className="mb-5 flex items-center gap-2 rounded-card border border-border bg-white/[.04] px-3 py-2.5 text-[12.5px] text-text-2">
+        <i className="ti ti-keyboard text-[16px] text-accent" /> Shortcut: <span className="font-mono text-text">Ctrl + Shift + B</span>
+      </div>
       {state === 'idle' && (
         <button
           onClick={allow}
-          className="w-full border-2 border-dashed border-accent/40 rounded-panel py-6 text-accent font-semibold text-[14px] hover:bg-accent-soft transition-all"
+          className="w-full border-2 border-dashed border-accent/40 rounded-panel py-5 text-accent font-semibold text-[14px] hover:bg-accent-soft transition-all"
         >
           <i className="ti ti-microphone text-[18px]" /> Allow microphone
         </button>
@@ -182,10 +133,7 @@ function MicStep() {
             <i className="ti ti-circle-check" /> Microphone works — say something
           </div>
           <div className="h-2 bg-surface rounded-full overflow-hidden">
-            <div
-              className="h-full bg-green rounded-full transition-all duration-100"
-              style={{ width: `${Math.min(100, Math.sqrt(level) * 220)}%` }}
-            />
+            <div className="h-full bg-green rounded-full transition-all duration-100" style={{ width: `${Math.min(100, Math.sqrt(level) * 220)}%` }} />
           </div>
         </div>
       )}
@@ -198,6 +146,108 @@ function MicStep() {
           </button>
         </div>
       )}
+      <p className="mt-3 text-[11.5px] text-text-3">Tip: headphones give the cleanest captions.</p>
+    </div>
+  )
+}
+
+// ── 2. Ask AI on the call ───────────────────────────────────────────────────
+
+function AskStep() {
+  const browser = (navigator.language || 'en').slice(0, 2).toLowerCase()
+  const guess = MEETING_LANGUAGES.some((l) => l.code === browser) ? browser : ''
+  const [v, setV] = useState<LanguageValues>({ nativeLanguage: guess, clientLanguage: 'en', myCallLanguage: '' })
+
+  useEffect(() => {
+    invoke<Partial<LanguageValues>>('settings:getAll')
+      .then((all) => {
+        setV({
+          nativeLanguage: all?.nativeLanguage || guess,
+          clientLanguage: all?.clientLanguage || 'en',
+          myCallLanguage: all?.myCallLanguage ?? ''
+        })
+        // Save the guess so it is explicit from the start.
+        if (!all?.nativeLanguage && guess) void invoke('settings:set', { key: 'nativeLanguage', value: guess }).catch(() => {})
+      })
+      .catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const change = <K extends keyof LanguageValues>(key: K, value: LanguageValues[K]) => {
+    setV((prev) => ({ ...prev, [key]: value }))
+    void invoke('settings:set', { key, value }).catch(() => {})
+  }
+
+  return (
+    <div>
+      <StepTitle
+        n={2}
+        title="Ask AI during the call"
+        text="The capsule shows what the client says, translated into your language. Hover any line and click Ask AI — the answer appears next to it while you keep talking."
+      />
+      <CapsulePreview />
+      <div className="mt-5">
+        <LanguageFields value={v} onChange={change} compact />
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-text-3">
+        AI transcription and translation can contain mistakes. Check prices, dates and commitments yourself.
+      </p>
+    </div>
+  )
+}
+
+function CapsulePreview() {
+  return (
+    <div className="flex gap-2 rounded-[16px] border border-white/[.09] bg-[#121317] p-2.5" aria-hidden="true">
+      <div className="min-w-0 flex-1 rounded-[12px] border border-white/[.08] bg-white/[.035] px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[9.5px] font-semibold uppercase tracking-[.12em] text-accent-pale">Client</span>
+          <span className="ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-1.5 py-0.5 text-[9.5px] font-semibold text-accent-pale">
+            <i className="ti ti-sparkles text-[10px]" /> Ask AI
+          </span>
+        </div>
+        <div className="mt-1 text-[12px] leading-snug text-white/80">What’s your estimate for the MVP — fixed price or hourly?</div>
+        <div className="mt-1.5 border-l-2 border-[#5EC8F2]/60 pl-2 text-[12px] font-medium leading-snug text-[#BFE9FF]">
+          Яка ваша оцінка MVP — фіксована ціна чи погодинно?
+        </div>
+      </div>
+      <div className="w-[42%] flex-none rounded-[12px] border border-accent/30 bg-[#1A1210]/60 px-3 py-2.5">
+        <div className="flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[.1em] text-accent-pale">
+          <i className="ti ti-sparkles text-[10px]" /> Ask AI
+        </div>
+        <div className="mt-1 text-[11px] leading-snug text-white/85">
+          Він питає про оцінку й формат оплати. Скажи: “About 2–3 weeks, fixed price per milestone.”
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── 3. Get the result ───────────────────────────────────────────────────────
+
+function ResultStep() {
+  const points = [
+    { icon: 'file-text', title: 'Notes and a client brief', text: 'What the client wants, budget, deadlines and open points — ready when the call ends.' },
+    { icon: 'calendar-plus', title: 'Tasks with dates', text: '“Send the estimate by Friday” becomes a task — add it to your calendar in one click.' },
+    { icon: 'mail', title: 'Follow-up email', text: 'A short recap to send the client, in the language of the call.' },
+    { icon: 'upload', title: 'Import other recordings', text: 'Recorded a call somewhere else? Import the audio or video and get the same notes.' }
+  ]
+  return (
+    <div>
+      <StepTitle n={3} title="Get the result of the call" text="Press Stop when the call ends. Minutama writes everything up for you." />
+      <div className="space-y-3.5">
+        {points.map((p) => (
+          <div key={p.title} className="flex gap-3">
+            <div className="w-9 h-9 rounded-card bg-accent-soft flex items-center justify-center flex-shrink-0">
+              <i className={`ti ti-${p.icon} text-[18px] text-accent`} />
+            </div>
+            <div>
+              <div className="text-[14px] font-semibold text-text">{p.title}</div>
+              <div className="text-[13px] text-text-3 leading-relaxed">{p.text}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

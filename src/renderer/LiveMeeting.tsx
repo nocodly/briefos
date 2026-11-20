@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Markdown from './components/Markdown'
-import { AgentRuns, SendToAgentModal } from './components/Agent'
 import ShareMenu from './components/ShareMenu'
 import { openCheckout, usePrices } from './lib/billing'
 import { TEMPLATE_OPTIONS } from './lib/api'
 import {
   activeDurationMs,
-  addTaskToNotes,
   clearError,
   enhanceCurrent,
   levels,
@@ -74,13 +72,12 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
   const busy = s.status === 'finishing' || s.status === 'enhancing'
   const tick = useTicker(live)
   const [view, setView] = useState<'notes' | 'ai'>('notes')
-  const [side, setSide] = useState<'transcript' | 'agent'>('transcript')
-  const [agentTask, setAgentTask] = useState<string | null>(null)
+  const [side, setSide] = useState<'transcript' | 'questions'>('transcript')
   const seenHints = useRef(0)
 
-  // A new reply hint pulls the Agent tab forward once.
+  // A new question card pulls the Questions tab forward once.
   useEffect(() => {
-    if (s.hints.length > seenHints.current) setSide('agent')
+    if (s.hints.length > seenHints.current) setSide('questions')
     seenHints.current = s.hints.length
   }, [s.hints.length])
   const transcriptEnd = useRef<HTMLDivElement>(null)
@@ -109,13 +106,16 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           <i className="ti ti-arrow-left text-[18px]" />
         </button>
         <h1 className="font-display font-bold text-[16px] text-text flex-1 truncate">
-          {s.enhanced?.title ?? (live ? 'Meeting in progress' : 'New meeting')}
+          {s.enhanced?.title ?? (live ? 'Call in progress' : 'New call')}
         </h1>
 
         {s.meetingId && s.enhanced && !live && !busy && (
           <ShareMenu meetingId={s.meetingId} onOpenIntegrations={() => navigate('integrations')} />
         )}
 
+        {/* The template is picked automatically (client call when "About this
+            call" is filled); it can be changed once the notes are written. */}
+        {s.enhanced && !live && (
         <select
           value={s.templateId}
           onChange={(e) => (hasSession && !live ? void enhanceCurrent(e.target.value) : setTemplate(e.target.value))}
@@ -130,6 +130,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
             </option>
           ))}
         </select>
+        )}
 
         {live && (
           <>
@@ -249,7 +250,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           <div className="px-2 pt-2 pb-1.5 border-b border-border-soft flex items-center gap-1">
             {([
               ['transcript', 'message-2', 'Transcript'],
-              ['agent', 'sparkles', 'Agent']
+              ['questions', 'help-circle', 'Questions']
             ] as const).map(([id, icon, label]) => (
               <button
                 key={id}
@@ -259,21 +260,15 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
                 }`}
               >
                 <i className={`ti ti-${icon} text-[14px] ${side === id ? 'text-accent' : ''}`} /> {label}
-                {id === 'agent' && s.hints.length > 0 && (
+                {id === 'questions' && s.hints.length > 0 && (
                   <span className="ml-0.5 rounded-full bg-accent px-1.5 text-[10px] text-white">{s.hints.length}</span>
                 )}
               </button>
             ))}
             {s.pendingUploads > 0 && <i className="ti ti-loader-2 animate-spin-slow text-text-3 ml-auto mr-2" />}
           </div>
-          {side === 'agent' ? (
-            <AgentSide
-              hints={s.hints}
-              hintsNote={s.hintsNote}
-              live={live}
-              onSave={(t) => addTaskToNotes(t)}
-              onSend={(t) => setAgentTask(t)}
-            />
+          {side === 'questions' ? (
+            <QuestionsSide hints={s.hints} hintsNote={s.hintsNote} live={live} />
           ) : (
           <div className="flex-1 overflow-auto px-4 py-3 space-y-3">
             {s.segments.length === 0 && (
@@ -323,86 +318,16 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           )}
         </aside>
       </div>
-      {agentTask !== null && (
-        <SendToAgentModal
-          task={agentTask}
-          context={{
-            title: s.enhanced?.title ?? 'Current meeting',
-            date: new Date().toLocaleDateString(),
-            notes: s.enhanced?.notesMarkdown ?? s.userNotes,
-            transcript: s.segments.map((g) => ({ speaker: g.speaker === 'me' ? 'Me' : 'Them', text: g.text }))
-          }}
-          onClose={() => setAgentTask(null)}
-        />
-      )}
     </div>
   )
 }
 
-// ─── Agent tab: reply hints + task box + agent runs ─────────────────────────
+// ─── Questions tab: what the call is about + the client's questions ─────────
 
-function AgentSide({
-  hints,
-  hintsNote,
-  live,
-  onSave,
-  onSend
-}: {
-  hints: QuestionCard[]
-  hintsNote: string | null
-  live: boolean
-  onSave: (task: string) => void
-  onSend: (task: string) => void
-}) {
-  const [task, setTask] = useState('')
-  const [saved, setSaved] = useState(false)
-  const submit = (fn: (t: string) => void) => {
-    if (!task.trim()) return
-    fn(task.trim())
-    setTask('')
-  }
-
+function QuestionsSide({ hints, hintsNote, live }: { hints: QuestionCard[]; hintsNote: string | null; live: boolean }) {
   return (
     <div className="flex-1 overflow-auto px-3 py-3 space-y-4">
       <CallContextBox />
-
-      {/* Task box */}
-      <div className="rounded-card border border-border-soft bg-white/[.06] p-2.5">
-        <textarea
-          value={task}
-          onChange={(e) => {
-            setTask(e.target.value)
-            setSaved(false)
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit(onSend)
-          }}
-          rows={2}
-          placeholder="Tell your agent… e.g. “Send Anna the pricing deck”"
-          className="w-full resize-none bg-transparent text-[13px] leading-snug outline-none placeholder:text-text-4"
-        />
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <button
-            onClick={() => {
-              submit(onSave)
-              setSaved(true)
-            }}
-            disabled={!task.trim()}
-            className="rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:text-text disabled:opacity-40"
-            title="Add to your notes as an action item"
-          >
-            <i className="ti ti-checkbox text-[13px]" /> Save task
-          </button>
-          <button
-            onClick={() => submit(onSend)}
-            disabled={!task.trim()}
-            className="btn-accent ml-auto rounded-lg px-2.5 py-1.5 text-[11.5px] font-semibold disabled:opacity-40"
-          >
-            <i className="ti ti-send text-[13px]" /> Send to agent
-          </button>
-        </div>
-        {saved && <div className="mt-1 text-[11px] text-green">Saved to your notes ✓</div>}
-      </div>
 
       {/* Client questions */}
       <div>
@@ -457,8 +382,6 @@ function AgentSide({
         )}
         {hintsNote && <p className="mt-2 text-[11px] text-amber">{hintsNote}</p>}
       </div>
-
-      <AgentRuns compact />
     </div>
   )
 }

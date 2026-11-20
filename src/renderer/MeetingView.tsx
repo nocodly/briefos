@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import Markdown from './components/Markdown'
 import ShareMenu from './components/ShareMenu'
-import { AgentRuns, SendToAgentModal } from './components/Agent'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
 import { notesLanguageName } from './recording/meetingSession'
@@ -17,6 +16,7 @@ interface ActionItem {
   person: string
   task: string
   deadline: string | null
+  dueDate?: string | null
   priority: 'high' | 'medium' | 'low'
 }
 interface Summary {
@@ -70,7 +70,6 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
   const [meeting, setMeeting] = useState<Meeting | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<'brief' | 'transcript'>('brief')
-  const [agentTask, setAgentTask] = useState<string | null>(null)
   const [busy, setBusy] = useState('')
   const [toast, setToast] = useState<{ kind: 'ok' | 'err'; msg: string } | null>(null)
 
@@ -149,24 +148,16 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
       />
 
       <div className="px-8">
-        <ExportBar
-          busy={busy}
-          onCopy={() => runExport('Copy', () => invoke('export:clipboard', meeting.id))}
-          onPdf={() => runExport('PDF', () => invoke('export:pdf', { meetingId: meeting.id }))}
-          onNotion={() => runExport('Notion', () => invoke('export:notion', meeting.id))}
-          onSlack={() =>
-            runExport('Slack', async () => {
-              const webhookUrl = await invoke<string>('settings:get', 'slackWebhookUrl')
-              await invoke('export:slack', { meetingId: meeting.id, webhookUrl })
-            })
-          }
-          onEmail={() =>
-            runExport('Email', () =>
-              invoke('export:email', { meetingId: meeting.id, recipients: [] })
-            )
-          }
-          onRegenerate={regenerate}
-        />
+        <div className="flex justify-end py-4">
+          <button
+            onClick={regenerate}
+            disabled={!!busy}
+            className="text-text-3 hover:text-accent hover:bg-accent-soft rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
+          >
+            <i className={`ti ti-${busy === 'Regenerate' ? 'loader-2 animate-spin-slow' : 'refresh'} text-[14px]`} />
+            Regenerate
+          </button>
+        </div>
 
         {/* Tabs */}
         <div className="flex gap-1 border-b border-border mb-5">
@@ -184,7 +175,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
             (meeting.enhanced_notes ? (
               <div className="max-w-[820px]">
                 <Markdown source={meeting.enhanced_notes} />
-                <AgentActions items={s?.actionItems ?? []} onSend={setAgentTask} />
+                <TaskList items={s?.actionItems ?? []} meetingTitle={meeting.title} onToast={flash} />
                 {meeting.user_notes?.trim() && (
                   <details className="mt-6 text-[13px] text-text-3">
                     <summary className="cursor-pointer">My original notes</summary>
@@ -200,19 +191,6 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
           {tab === 'transcript' && <Transcript rows={meeting.transcript ?? []} />}
         </div>
       </div>
-
-      {agentTask !== null && (
-        <SendToAgentModal
-          task={agentTask}
-          context={{
-            title: meeting.title,
-            date: new Date(meeting.started_at).toLocaleDateString(),
-            notes: meeting.enhanced_notes ?? meeting.user_notes ?? '',
-            transcript: (meeting.transcript ?? []).map((r) => ({ speaker: r.speaker, text: r.text }))
-          }}
-          onClose={() => setAgentTask(null)}
-        />
-      )}
 
       {toast && (
         <div
@@ -252,7 +230,7 @@ function Hero({
     <div className="glass-dark mx-6 mt-4 rounded-panel px-8 py-7 text-white">
       <div className="mb-3 flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-1 text-[12px] text-white/50 transition-all hover:text-white">
-          <i className="ti ti-arrow-left text-[14px]" /> Meetings
+          <i className="ti ti-arrow-left text-[14px]" /> Calls
         </button>
         <ShareMenu meetingId={meeting.id} />
       </div>
@@ -286,58 +264,6 @@ function Hero({
         </span>
         <span className="px-2 py-0.5 rounded-full bg-white/10 capitalize">{meeting.type}</span>
       </div>
-    </div>
-  )
-}
-
-function ExportBar(props: {
-  busy: string
-  onCopy: () => void
-  onPdf: () => void
-  onNotion: () => void
-  onSlack: () => void
-  onEmail: () => void
-  onRegenerate: () => void
-}) {
-  const Btn = ({
-    icon,
-    label,
-    onClick
-  }: {
-    icon: string
-    label: string
-    onClick: () => void
-  }) => (
-    <button
-      onClick={onClick}
-      disabled={!!props.busy}
-      className="bg-surface hover:bg-accent-soft text-text-2 hover:text-accent border border-border hover:border-accent rounded-lg px-3.5 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
-    >
-      <i
-        className={`ti ti-${props.busy === label ? 'loader-2 animate-spin-slow' : icon} text-[14px]`}
-      />
-      {label}
-    </button>
-  )
-
-  return (
-    <div className="flex items-center gap-2 py-5 flex-wrap">
-      <Btn icon="copy" label="Copy" onClick={props.onCopy} />
-      <Btn icon="file-type-pdf" label="PDF" onClick={props.onPdf} />
-      <Btn icon="brand-notion" label="Notion" onClick={props.onNotion} />
-      <Btn icon="brand-slack" label="Slack" onClick={props.onSlack} />
-      <Btn icon="mail" label="Email" onClick={props.onEmail} />
-      <div className="flex-1" />
-      <button
-        onClick={props.onRegenerate}
-        disabled={!!props.busy}
-        className="text-text-3 hover:text-accent hover:bg-accent-soft rounded-lg px-3 py-2 text-[12px] flex items-center gap-1.5 transition-all disabled:opacity-50"
-      >
-        <i
-          className={`ti ti-${props.busy === 'Regenerate' ? 'loader-2 animate-spin-slow' : 'refresh'} text-[14px]`}
-        />
-        Regenerate
-      </button>
     </div>
   )
 }
@@ -446,88 +372,61 @@ function Brief({ summary }: { summary: Summary }) {
         )}
       </Card>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Card title="Sentiment" icon="mood-smile">
-          <SentimentBar sentiment={summary.sentiment} />
-        </Card>
-        <Card title="Keywords" icon="tags">
-          {summary.keywords && summary.keywords.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5">
-              {summary.keywords.map((k) => (
-                <span
-                  key={k}
-                  className="text-[11px] px-2.5 py-1 rounded-full bg-accent-soft text-text-2"
-                >
-                  {k}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[13px] text-text-3">None</p>
-          )}
-        </Card>
-      </div>
     </div>
   )
 }
 
-// Next steps → hand any of them (or a new task) to Claude Code / Codex.
-function AgentActions({ items, onSend }: { items: ActionItem[]; onSend: (task: string) => void }) {
-  const [custom, setCustom] = useState('')
+// Tasks from the call. A task with a date ("send the estimate by Friday")
+// goes to the calendar in one click.
+function TaskList({ items, meetingTitle, onToast }: { items: ActionItem[]; meetingTitle: string; onToast: (kind: 'ok' | 'err', msg: string) => void }) {
+  if (items.length === 0) return null
+  const add = async (a: ActionItem, target: 'google' | 'ics') => {
+    try {
+      await invoke('calendar:add', { title: a.task, date: a.dueDate, details: `From the call: ${meetingTitle}`, target })
+      if (target === 'ics') onToast('ok', 'Opened in your calendar app')
+    } catch (err) {
+      onToast('err', (err as Error).message)
+    }
+  }
   return (
     <div className="glass rounded-panel mt-8 p-5">
       <div className="flex items-center gap-2">
         <div className="w-8 h-8 rounded-lg bg-accent-soft flex items-center justify-center">
-          <i className="ti ti-robot text-[16px] text-accent" />
+          <i className="ti ti-checklist text-[16px] text-accent" />
         </div>
-        <div className="flex-1">
-          <div className="font-display font-bold text-[15px]">Hand it to your agent</div>
-          <div className="text-[11.5px] text-text-3">Claude Code or Codex does the follow-up — you approve every task.</div>
-        </div>
+        <div className="font-display font-bold text-[15px]">Tasks from this call</div>
       </div>
-      {items.length > 0 && (
-        <div className="mt-4 divide-y divide-border-soft">
-          {items.map((a, i) => (
-            <div key={i} className="flex items-center gap-3 py-2.5">
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] text-text">{a.task}</div>
-                <div className="text-[11px] text-text-3">
-                  {a.person}
-                  {a.deadline ? ` · ${a.deadline}` : ''}
-                </div>
+      <div className="mt-3 divide-y divide-border-soft">
+        {items.map((a, i) => (
+          <div key={i} className="flex items-center gap-3 py-2.5">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] text-text">{a.task}</div>
+              <div className="text-[11px] text-text-3">
+                {a.person}
+                {a.deadline ? ` · ${a.deadline}` : ''}
+                {a.dueDate ? ` · ${new Date(`${a.dueDate}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
               </div>
-              <button
-                onClick={() => onSend(a.task)}
-                className="flex-shrink-0 rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
-              >
-                <i className="ti ti-send text-[13px]" /> Send to agent
-              </button>
             </div>
-          ))}
-        </div>
-      )}
-      <form
-        className="mt-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (custom.trim()) {
-            onSend(custom.trim())
-            setCustom('')
-          }
-        }}
-      >
-        <input
-          value={custom}
-          onChange={(e) => setCustom(e.target.value)}
-          placeholder="Or ask anything… “Draft a follow-up email to the client”"
-          className="flex-1 rounded-xl border border-border bg-white/[.06] px-3 py-2 text-[13px] placeholder:text-text-4 focus:border-accent focus:outline-none"
-        />
-        <button disabled={!custom.trim()} className="btn-accent rounded-xl px-3.5 text-[12.5px] font-semibold disabled:opacity-40">
-          Send
-        </button>
-      </form>
-      <div className="mt-3">
-        <AgentRuns />
+            {a.dueDate && (
+              <div className="flex flex-shrink-0 items-center gap-1">
+                <button
+                  onClick={() => void add(a, 'google')}
+                  title="Add to Google Calendar"
+                  className="rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
+                >
+                  <i className="ti ti-calendar-plus text-[13px]" /> Add to calendar
+                </button>
+                <button
+                  onClick={() => void add(a, 'ics')}
+                  title="Outlook or Windows Calendar (.ics)"
+                  className="rounded-lg px-2 py-1.5 text-[11px] text-text-3 hover:text-text"
+                >
+                  Outlook
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -544,30 +443,6 @@ function List({ items, empty }: { items?: string[]; empty: string }) {
         </li>
       ))}
     </ul>
-  )
-}
-
-function SentimentBar({ sentiment }: { sentiment?: Summary['sentiment'] }) {
-  const s = sentiment || { positive: 0, neutral: 100, tense: 0 }
-  return (
-    <div>
-      <div className="flex h-2.5 rounded-full overflow-hidden border border-border">
-        {s.positive > 0 && <div className="bg-green" style={{ width: `${s.positive}%` }} />}
-        {s.neutral > 0 && <div className="bg-text-4" style={{ width: `${s.neutral}%` }} />}
-        {s.tense > 0 && <div className="bg-red" style={{ width: `${s.tense}%` }} />}
-      </div>
-      <div className="flex gap-4 mt-2 text-[11px] text-text-3">
-        <span>
-          <i className="ti ti-circle-filled text-green text-[9px]" /> Positive {s.positive}%
-        </span>
-        <span>
-          <i className="ti ti-circle-filled text-text-4 text-[9px]" /> Neutral {s.neutral}%
-        </span>
-        <span>
-          <i className="ti ti-circle-filled text-red text-[9px]" /> Tense {s.tense}%
-        </span>
-      </div>
-    </div>
   )
 }
 

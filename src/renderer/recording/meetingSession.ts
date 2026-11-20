@@ -370,7 +370,6 @@ function looksLikeQuestion(text: string): boolean {
 
 let hintsEnabled = true
 /** ISO code chosen in Settings ('' = detect automatically). */
-let meetingLanguage = ''
 
 /** ISO code → language name for the notes prompt. */
 export const MEETING_LANGUAGES: { code: string; name: string }[] = [
@@ -567,9 +566,8 @@ function myLanguageCode(): string {
   return raw.startsWith('fil') ? 'tl' : raw.slice(0, 2)
 }
 
-/** Fixed language per channel: the meeting language, or client = "Client speaks", you = your language. */
+/** Fixed language per channel: client = "The client speaks", you = "You speak on calls". */
 function channelLanguage(channel: 'me' | 'them'): string {
-  if (meetingLanguage) return meetingLanguage
   // You usually speak the call language too (not your native one).
   return channel === 'them' ? clientLanguage || 'en' : myCallLanguage || clientLanguage || 'en'
 }
@@ -931,7 +929,6 @@ export async function startMeeting_(templateId?: string): Promise<void> {
   const setting = <T,>(key: string, fallback: T) => invoke<T>('settings:get', key).then((v) => v ?? fallback).catch(() => fallback)
   hintsEnabled = (await setting<boolean>('replyHints', true)) !== false
   answerHints = (await setting<boolean>('answerHints', false)) === true
-  meetingLanguage = (await setting<string>('meetingLanguage', '')) || ''
   nativeLanguage = (await setting<string>('nativeLanguage', '')) || ''
   aboutMe = String((await setting<string>('aboutMe', '')) || '').slice(0, 2000)
   clientLanguage = String((await setting<string>('clientLanguage', 'en')) || 'en')
@@ -1072,8 +1069,9 @@ export async function stopMeeting(): Promise<void> {
 export async function enhanceCurrent(templateId?: string): Promise<void> {
   const { meetingId, serverId, userNotes, segments } = get()
   if (!meetingId || !serverId) return
-  // A call with "About this call" filled in is a client call → brief + estimate.
-  const tpl = templateId ?? (get().templateId === 'general' && get().callContext.trim() ? 'client-call' : get().templateId)
+  // Calls default to the client-call notes (brief, tasks with dates, follow-up
+  // email); empty sections are left out, so it also fits other calls.
+  const tpl = templateId ?? (get().templateId === 'general' ? 'client-call' : get().templateId)
   set({ status: 'enhancing', templateId: tpl })
   try {
     const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')

@@ -119,20 +119,29 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
       <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h1 className="font-display font-extrabold text-[24px] text-text">Meetings</h1>
+            <h1 className="font-display font-extrabold text-[24px] text-text">Calls</h1>
             <p className="text-[12px] text-text-3 mt-0.5">
-              {meetings.length} {meetings.length === 1 ? 'meeting' : 'meetings'}
+              {meetings.length} {meetings.length === 1 ? 'call' : 'calls'}
               {searching ? ' · search results' : ''}
             </p>
           </div>
           {usage && <UsageBadge usage={usage} />}
           <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={startRecording}
-              className="btn-accent rounded-lg px-4 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all active:scale-[.97]"
-            >
-              <i className="ti ti-microphone text-[15px]" /> New meeting
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('import')}
+                title="Recorded a call somewhere else? Import the audio or video and get the same notes."
+                className="rounded-lg border border-border px-3 py-2.5 text-[13px] font-medium text-text-2 hover:bg-bg-2 hover:text-text flex items-center gap-1.5 transition-all"
+              >
+                <i className="ti ti-upload text-[15px]" /> Import recording
+              </button>
+              <button
+                onClick={startRecording}
+                className="btn-accent rounded-lg px-4 py-2.5 text-[13px] font-medium flex items-center gap-1.5 transition-all active:scale-[.97]"
+              >
+                <i className="ti ti-microphone text-[15px]" /> Start call
+              </button>
+            </div>
             <span className="text-[10px] text-text-4 flex items-center gap-1">
               <i className="ti ti-keyboard text-[11px]" />
               <kbd className="font-mono bg-bg-2 border border-border rounded px-1 py-0.5 text-[9px]">Ctrl+Shift+B</kbd>
@@ -266,19 +275,19 @@ function EmptyState({ searching, onStart }: { searching: boolean; onStart: () =>
       <div className="w-14 h-14 rounded-panel bg-accent-soft flex items-center justify-center mx-auto mb-4">
         <i className="ti ti-microphone-2 text-[28px] text-accent" />
       </div>
-      <h3 className="font-display font-bold text-[17px] text-text mb-1">No meetings yet</h3>
+      <h3 className="font-display font-bold text-[17px] text-text mb-1">No calls yet</h3>
       <p className="text-[13px] text-text-3 mb-6 max-w-[320px] mx-auto">
         Join any call, press{' '}
         <kbd className="font-mono text-[11px] bg-bg-2 border border-border rounded px-1.5 py-0.5">
           Ctrl+Shift+B
         </kbd>{' '}
-        or click below to record your first meeting.
+        or click below to record your first call.
       </p>
       <button
         onClick={onStart}
         className="btn-accent rounded-lg px-5 py-2.5 text-[13px] font-medium inline-flex items-center gap-1.5 transition-all active:scale-[.97]"
       >
-        <i className="ti ti-microphone text-[15px]" /> New meeting
+        <i className="ti ti-microphone text-[15px]" /> Start call
       </button>
     </div>
   )

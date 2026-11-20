@@ -5,7 +5,6 @@ import { supabase } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
 import { openBillingPortal, openCheckout, usePrices, type Checkout } from './lib/billing'
 import { AGENT_NAMES, detectAgents, type AgentId, type AgentInfo } from './components/Agent'
-import { MEETING_LANGUAGES } from './recording/meetingSession'
 import { LanguageFields } from './components/LanguageFields'
 
 // ── Updater hook ─────────────────────────────────────────────────────────────
@@ -154,31 +153,50 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
           />
         </Panel>
 
+        <Panel title="During calls" icon="sparkles" desc="What the capsule shows while you talk.">
+          <AboutMe value={s.aboutMe} onSave={(v) => set('aboutMe', v)} />
+          <Toggle label="Offer to take notes when a call starts" value={s.detectCalls} onSave={(v) => set('detectCalls', v)} />
+          <Toggle label="Show a card when the client asks a question" value={s.replyHints} onSave={(v) => set('replyHints', v)} />
+          <Toggle
+            label="Cards also suggest what to mention (off — you answer in your own words)"
+            value={s.answerHints}
+            onSave={(v) => set('answerHints', v)}
+          />
+        </Panel>
+
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">
           <Text label="Start / stop hotkey" value={s.hotkeyRecord} saved={saved === 'hotkeyRecord'} onSave={(v) => set('hotkeyRecord', v)} placeholder="CmdOrCtrl+Shift+B" mono />
-          <div>
-            <label className="block text-[12px] font-medium text-text mb-1.5">Meeting language</label>
-            <select
-              value={s.meetingLanguage}
-              onChange={(e) => set('meetingLanguage', e.target.value)}
-              className="w-full rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[13px] text-text focus:border-accent focus:outline-none"
-            >
-              {MEETING_LANGUAGES.map((l) => (
-                <option key={l.code} value={l.code}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-text-3">
-              Used for the transcript and the AI notes. Choose your language if “Auto” picks the wrong one.
-            </p>
-          </div>
           <Toggle label="Launch at startup" value={s.launchAtStartup} onSave={(v) => set('launchAtStartup', v)} />
           <p className="text-[11px] text-text-3">Tip: use headphones for the cleanest "You / Them" separation.</p>
         </Panel>
 
         <Panel title="Data" icon="database" desc="Notes and transcripts are stored on this computer. Audio is never kept.">
-          <NumberField label="Delete meetings after (days)" value={s.retentionDays} saved={saved === 'retentionDays'} onSave={(v) => set('retentionDays', v)} />
+          <NumberField label="Delete calls after (days)" value={s.retentionDays} saved={saved === 'retentionDays'} onSave={(v) => set('retentionDays', v)} />
+        </Panel>
+
+        <Panel title="Advanced" icon="adjustments" desc="Optional extras. You don't need them for calls.">
+          <div className="grid gap-2">
+            {(
+              [
+                ['agent', 'robot', 'Coding agent', 'Send tasks from calls to Claude Code or Codex'],
+                ['integrations', 'plug-connected', 'Integrations', 'Notion, Slack, webhooks'],
+                ['period', 'chart-bar', 'Period reports', 'Summary across many calls']
+              ] as const
+            ).map(([to, icon, title, desc]) => (
+              <button
+                key={to}
+                onClick={() => navigate(to)}
+                className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5 text-left hover:bg-bg-2 transition-all"
+              >
+                <i className={`ti ti-${icon} text-[17px] text-text-3`} />
+                <span className="flex-1">
+                  <span className="block text-[12.5px] font-medium text-text">{title}</span>
+                  <span className="block text-[11px] text-text-3">{desc}</span>
+                </span>
+                <i className="ti ti-chevron-right text-[14px] text-text-4" />
+              </button>
+            ))}
+          </div>
         </Panel>
       </div>
     </div>
@@ -649,6 +667,25 @@ export function Toggle({
           }`}
         />
       </button>
+    </div>
+  )
+}
+
+function AboutMe({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [text, setText] = useState(value)
+  useEffect(() => setText(value), [value])
+  return (
+    <div>
+      <label className="mb-1.5 block text-[12px] font-medium text-text">About you (used on every call)</label>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => text !== value && onSave(text.slice(0, 2000))}
+        rows={3}
+        placeholder="e.g. Full-stack developer: Next.js, Node, AWS (Lambda, API Gateway), Stripe. Rate $45/h."
+        className="w-full resize-y rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[12.5px] leading-snug text-text placeholder:text-text-4 focus:border-accent focus:outline-none"
+      />
+      <p className="mt-1 text-[11px] text-text-3">Helps Minutama get your terms right and write a realistic estimate.</p>
     </div>
   )
 }

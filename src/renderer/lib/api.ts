@@ -110,7 +110,7 @@ export interface TranscriptLine {
 export interface EnhancedNotes {
   title: string
   notesMarkdown: string
-  actionItems: { text: string; owner?: string; due?: string }[]
+  actionItems: { text: string; owner?: string; due?: string; dueDate?: string }[]
   decisions: string[]
 }
 
@@ -122,7 +122,11 @@ export function enhanceNotes(input: {
   language?: string
   context?: string
 }): Promise<EnhancedNotes> {
-  return call<EnhancedNotes>('enhance-notes', JSON.stringify(input), true)
+  // The user's local date lets the AI turn "by Friday" into a real date.
+  const d = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} (${d.toLocaleDateString('en-US', { weekday: 'long' })})`
+  return call<EnhancedNotes>('enhance-notes', JSON.stringify({ ...input, today }), true)
 }
 
 // Mirrors supabase/functions/_shared/templates.ts (names only, for the picker).

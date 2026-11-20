@@ -219,7 +219,7 @@ export class BriefOSDatabase {
       title: string
       notesMarkdown: string
       templateId: string
-      actionItems: { text?: string; owner?: string; due?: string }[]
+      actionItems: { text?: string; owner?: string; due?: string; dueDate?: string }[]
       decisions: unknown[]
     }
   ): void {
@@ -231,6 +231,7 @@ export class BriefOSDatabase {
         person: a.owner === 'me' ? 'Me' : a.owner === 'them' ? 'Them' : a.owner || '',
         task: a.text!.trim(),
         deadline: a.due || null,
+        dueDate: typeof a.dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(a.dueDate) ? a.dueDate : null,
         priority: 'medium'
       }))
     const tx = this.db.transaction(() => {

@@ -208,7 +208,7 @@ export function registerIpcHandlers(): void {
         title: string
         notesMarkdown: string
         templateId: string
-        actionItems: { text?: string; owner?: string; due?: string }[]
+        actionItems: { text?: string; owner?: string; due?: string; dueDate?: string }[]
         decisions: unknown[]
       }
     ) => {
@@ -278,6 +278,49 @@ export function registerIpcHandlers(): void {
     const path = await exportNotesPdf(payload.meetingId, target, { transcript: Boolean(payload.transcript) })
     shell.showItemInFolder(path)
     return { path }
+  })
+  // "Add to calendar" for a task with a due date: Google Calendar in the
+  // browser (prefilled, the user presses Save) or an .ics file opened with the
+  // default calendar app (Outlook / Windows Calendar). All-day event.
+  handle('calendar:add', async (_e, p: { title?: string; date?: string; details?: string; target?: string }) => {
+    const title = String(p?.title ?? '').trim().slice(0, 200)
+    const date = String(p?.date ?? '')
+    const details = String(p?.details ?? '').slice(0, 1000)
+    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('This task has no date.')
+    const start = date.replace(/-/g, '')
+    const next = new Date(`${date}T12:00:00Z`)
+    next.setUTCDate(next.getUTCDate() + 1)
+    const end = next.toISOString().slice(0, 10).replace(/-/g, '')
+    if (p?.target === 'google') {
+      const url =
+        'https://calendar.google.com/calendar/render?action=TEMPLATE' +
+        `&text=${encodeURIComponent(title)}&dates=${start}/${end}&details=${encodeURIComponent(details)}`
+      await shell.openExternal(url)
+      return { ok: true }
+    }
+    const esc = (v: string) => v.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n')
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Minutama//Tasks//EN',
+      'BEGIN:VEVENT',
+      `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@minutama.com`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${start}`,
+      `DTEND;VALUE=DATE:${end}`,
+      `SUMMARY:${esc(title)}`,
+      `DESCRIPTION:${esc(details)}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n')
+    const { writeFile } = await import('node:fs/promises')
+    const { join } = await import('node:path')
+    const file = join(app.getPath('temp'), `minutama-task-${start}-${Date.now()}.ics`)
+    await writeFile(file, ics, 'utf8')
+    const err = await shell.openPath(file)
+    if (err) throw new Error('No calendar app found. Try Google Calendar instead.')
+    return { ok: true }
   })
   // Open the user's mail app with the notes as the message body.
   handle('export:emailDraft', async (_e, meetingId: string) => {

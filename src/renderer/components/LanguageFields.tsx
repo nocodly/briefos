@@ -18,13 +18,16 @@ const selectCls =
 
 export function LanguageFields({
   value,
-  onChange
+  onChange,
+  compact = false
 }: {
   value: LanguageValues
   onChange: <K extends keyof LanguageValues>(key: K, v: LanguageValues[K]) => void
+  /** Onboarding: only the two languages that matter; "you speak" stays = client. */
+  compact?: boolean
 }) {
   return (
-    <div className="space-y-3.5">
+    <div className={compact ? 'grid grid-cols-2 gap-3' : 'space-y-3.5'}>
       <Field label="Your language" hint="Translations of what the client says appear in this language.">
         <select value={value.nativeLanguage} onChange={(e) => onChange('nativeLanguage', e.target.value)} className={selectCls}>
           <option value="">My Windows language ({nativeLanguageName('')})</option>
@@ -44,16 +47,18 @@ export function LanguageFields({
           ))}
         </select>
       </Field>
-      <Field label="You speak on calls" hint="Your own lines are shown but not translated.">
-        <select value={value.myCallLanguage} onChange={(e) => onChange('myCallLanguage', e.target.value)} className={selectCls}>
-          <option value="">Same as the client</option>
-          {OPTIONS.map((l) => (
-            <option key={l.code} value={l.code}>
-              {l.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+      {!compact && (
+        <Field label="You speak on calls" hint="Your own lines are shown but not translated.">
+          <select value={value.myCallLanguage} onChange={(e) => onChange('myCallLanguage', e.target.value)} className={selectCls}>
+            <option value="">Same as the client</option>
+            {OPTIONS.map((l) => (
+              <option key={l.code} value={l.code}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
     </div>
   )
 }

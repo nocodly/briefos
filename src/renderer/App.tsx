@@ -310,29 +310,24 @@ function Sidebar({
           }`}
         >
           <i className="ti ti-microphone text-[16px]" />
-          New meeting
+          Start call
         </button>
-        <NavGroup label="Workspace" />
+        {/* Kept short on purpose: calls, tasks, settings. Agent, integrations and
+            period reports live under Settings → Advanced; import is on Calls. */}
         <NavItem
           icon="layout-list"
-          label="Meetings"
-          active={page === 'dashboard' || page === 'meeting'}
+          label="Calls"
+          active={page === 'dashboard' || page === 'meeting' || page === 'import'}
           onClick={() => navigate('dashboard')}
         />
         <NavItem icon="checklist" label="Tasks" active={page === 'tasks'} onClick={() => navigate('tasks')} />
-        <NavItem icon="chart-bar" label="Period Reports" active={page === 'period'} onClick={() => navigate('period')} />
-
-        <NavGroup label="Agent" />
-        <NavItem icon="sparkles" label="Agent" active={page === 'agent'} onClick={() => navigate('agent')} />
-        <NavItem icon="plug-connected" label="Integrations" active={page === 'integrations'} onClick={() => navigate('integrations')} />
-        <NavItem icon="file-import" label="Import" active={page === 'import'} onClick={() => navigate('import')} />
       </nav>
 
       <div className="p-2 border-t border-border-soft space-y-0.5">
         <NavItem
           icon="settings"
           label="Settings"
-          active={page === 'settings'}
+          active={page === 'settings' || page === 'agent' || page === 'integrations' || page === 'period'}
           onClick={() => navigate('settings')}
         />
         <NavItem
@@ -343,10 +338,6 @@ function Sidebar({
       </div>
     </aside>
   )
-}
-
-function NavGroup({ label }: { label: string }) {
-  return <div className="px-2.5 pb-1.5 pt-4 text-[10px] font-semibold uppercase tracking-[.14em] text-text-4">{label}</div>
 }
 
 // ── Global update toast (shown on every page) ──────────────────────────────
