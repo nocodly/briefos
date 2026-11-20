@@ -29,7 +29,7 @@ function fmtDuration(s: number): string {
 function fmtDate(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 const TYPE_STYLE: Record<string, string> = {
@@ -217,13 +217,15 @@ function MeetingCard({
             <span className="font-display font-bold text-[15px] text-text truncate">
               {meeting.title}
             </span>
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${
-                TYPE_STYLE[meeting.type] || TYPE_STYLE.other
-              }`}
-            >
-              {meeting.type}
-            </span>
+            {meeting.type && meeting.type !== 'other' && (
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full capitalize flex-shrink-0 ${
+                  TYPE_STYLE[meeting.type] || TYPE_STYLE.other
+                }`}
+              >
+                {meeting.type}
+              </span>
+            )}
           </div>
           {snippet && (
             <p

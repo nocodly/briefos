@@ -43,7 +43,26 @@ function clock(ms: number): string {
   return `${mm}:${ss}`
 }
 
-function systemPrompt(sections: string[], language?: string, extra?: string, today?: string): string {
+/** "2026-11-20 (Friday)" → the next 21 days with weekdays, so "by Friday" maps to a real date. */
+function upcomingDays(today?: string): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(today ?? '')
+  if (!m) return null
+  const start = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+  const days: string[] = []
+  for (let i = 0; i <= 21; i++) {
+    const d = new Date(start + i * 86_400_000)
+    const wd = d.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })
+    days.push(`${d.toISOString().slice(0, 10)} ${wd}${i === 0 ? ' (TODAY)' : i === 1 ? ' (tomorrow)' : ''}`)
+  }
+  return days.join('\n')
+}
+
+function systemPrompt(sections: string[], language?: string, extra?: string, today?: string, clientLanguage?: string): string {
+  const days = upcomingDays(today)
+  // The follow-up email is its own JSON field (the model kept dropping it as a
+  // markdown section); the server appends it to the notes.
+  const email = sections.includes('Follow-up email')
+  const mdSections = sections.filter((x) => x !== 'Follow-up email')
   return [
     ...(extra ? [extra, ''] : []),
     'You turn a person\'s rough meeting notes plus the meeting transcript into clean, useful notes.',
@@ -55,11 +74,14 @@ function systemPrompt(sections: string[], language?: string, extra?: string, tod
     '- Be concise and concrete: names, numbers, dates, commitments. No filler, no generic advice.',
     '- Never invent facts that are not in the notes or transcript. If something is unclear, omit it.',
     language
-      ? `- LANGUAGE: write EVERYTHING (title, headings, bullets, action items, decisions) in ${language}.`
+      ? `- LANGUAGE: write EVERYTHING (title, headings, bullets, action items, decisions) in ${language}` +
+        (clientLanguage && clientLanguage !== language
+          ? `, EXCEPT the follow-up email to the client, which is written in ${clientLanguage}.`
+          : '.')
       : '- LANGUAGE: first detect the main language of the TRANSCRIPT (and the user’s notes). Write EVERYTHING —' +
         ' title, section headings, bullets, action items, decisions — in that language. Never default to English' +
         ' unless the conversation was in English. If several languages were spoken, use the one spoken most.',
-    `- Use these sections as markdown "##" headings, in this order: ${sections.join(', ')}.`,
+    `- Use these sections as markdown "##" headings, in this order: ${mdSections.join(', ')}.`,
     '- The section headings MUST be translated into the output language too — e.g. for Ukrainian write',
     '  "## Підсумок", "## Ключові моменти", "## Рішення", "## Задачі", never "## Summary" or "## Action items".',
     '- If a section has no real content, OMIT the heading entirely. Never write "None", "N/A" or "None noted".',
@@ -70,18 +92,35 @@ function systemPrompt(sections: string[], language?: string, extra?: string, tod
     '  "notesMarkdown": string,',
     '  "actionItems": [{ "text": string, "owner": "me" | "them" | a name, "due": string (optional, as said),',
     '                    "dueDate": "YYYY-MM-DD" (optional) }],',
-    '  "decisions": [string] }',
+    email
+      ? '  "decisions": [string],\n' +
+        '  "followUpHeading": string (the words "Follow-up email" in the notes language),\n' +
+        '  "followUpEmail": string (REQUIRED, never empty: plain text, 4–8 short lines, see the follow-up email rules) }'
+      : '  "decisions": [string] }',
     '',
-    today
-      ? `"dueDate": the calendar date of the deadline when it is clear. TODAY is ${today}; resolve "tomorrow", ` +
-        '"Friday", "next Monday", "end of the week", "on the 25th" relative to TODAY (always a future date). ' +
-        'Omit dueDate when no deadline was said or it is vague ("soon", "later").'
+    days
+      ? '"dueDate": the calendar date of the deadline when it is clear. Pick it ONLY from this calendar ' +
+        '(a weekday name means the NEXT such day after today, e.g. said on a Friday "by Friday" = the Friday ' +
+        'one week later; "end of the week" = the coming Friday). Omit dueDate when no deadline was said or it ' +
+        `is vague ("soon", "later").\nCALENDAR:\n${days}`
       : 'Omit "dueDate".'
   ].join('\n')
 }
 
+/** Appends the follow-up email as a quoted block (the app shows it with a Copy button). */
+function withEmail(md: string, heading: unknown, email: unknown): string {
+  const text = typeof email === 'string' ? email.trim() : ''
+  if (!text) return md
+  const title = typeof heading === 'string' && heading.trim() ? heading.trim().slice(0, 60) : 'Follow-up email'
+  const quoted = text
+    .split('\n')
+    .map((l) => `> ${l.replace(/^>\s?/, '')}`.trimEnd())
+    .join('\n')
+  return `${md.trimEnd()}\n\n## ${title}\n${quoted}\n`
+}
+
 function parseResult(raw: string): EnhancedNotes {
-  let parsed: Partial<EnhancedNotes>
+  let parsed: Partial<EnhancedNotes> & { followUpEmail?: unknown; followUpHeading?: unknown }
   try {
     parsed = JSON.parse(raw)
   } catch {
@@ -89,7 +128,7 @@ function parseResult(raw: string): EnhancedNotes {
   }
   return {
     title: String(parsed.title ?? 'Meeting notes').slice(0, 120),
-    notesMarkdown: String(parsed.notesMarkdown ?? ''),
+    notesMarkdown: withEmail(String(parsed.notesMarkdown ?? ''), parsed.followUpHeading, parsed.followUpEmail),
     actionItems: Array.isArray(parsed.actionItems) ? parsed.actionItems.slice(0, 50) : [],
     decisions: Array.isArray(parsed.decisions) ? parsed.decisions.map(String).slice(0, 50) : []
   }
@@ -107,6 +146,8 @@ serve(async (req) => {
     context?: string
     /** User's local date, e.g. "2026-11-20 (Friday)", to resolve "by Friday". */
     today?: string
+    /** Language the client speaks, e.g. "English" — the follow-up email is written in it. */
+    clientLanguage?: string
   }
   try {
     body = await req.json()
@@ -162,7 +203,13 @@ serve(async (req) => {
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages: [
-        { role: 'system', content: systemPrompt(template.sections, body.language, template.instructions, String(body.today ?? '').slice(0, 40) || undefined) },
+        { role: 'system', content: systemPrompt(
+            template.sections,
+            body.language,
+            template.instructions,
+            String(body.today ?? '').slice(0, 40) || undefined,
+            String(body.clientLanguage ?? '').slice(0, 30) || undefined
+          ) },
         {
           role: 'user',
           content:

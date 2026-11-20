@@ -16,6 +16,7 @@ interface Task {
   task: string
   person: string
   deadline: string | null
+  dueDate?: string | null
   done: boolean
 }
 
@@ -64,7 +65,7 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
   const openCount = tasks?.filter((t) => !t.done).length ?? 0
 
   return (
-    <Page title="Tasks" subtitle={tasks ? `${openCount} open from ${new Set(tasks.map((t) => t.meetingId)).size} meetings` : 'Loading…'}>
+    <Page title="Tasks" subtitle={tasks ? `${openCount} open from ${new Set(tasks.map((t) => t.meetingId)).size} calls` : 'Loading…'}>
       <div className="flex gap-1 rounded-xl bg-white/[.04] p-1">
         {(
           [
@@ -92,7 +93,7 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
             <i className="ti ti-checklist text-[22px] text-accent" />
           </div>
           <div className="font-display text-[16px] font-bold">{filter === 'done' ? 'Nothing done yet' : 'No open tasks'}</div>
-          <p className="mt-1 text-[12.5px] text-text-3">Action items from your meetings appear here automatically.</p>
+          <p className="mt-1 text-[12.5px] text-text-3">Tasks from your calls appear here automatically.</p>
         </div>
       ) : (
         <div className="glass divide-y divide-border-soft overflow-hidden rounded-panel">
@@ -111,16 +112,35 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
                 <div className={`text-[13.5px] ${t.done ? 'text-text-3 line-through' : 'text-text'}`}>{t.task}</div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-text-3">
                   {t.person && <span className="font-medium text-text-2">{t.person}</span>}
-                  {t.deadline && (
+                  {(t.dueDate || t.deadline) && (
                     <span>
-                      <i className="ti ti-calendar text-[11px]" /> {t.deadline}
+                      <i className="ti ti-calendar text-[11px]" />{' '}
+                      {t.dueDate
+                        ? new Date(`${t.dueDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })
+                        : t.deadline}
                     </span>
                   )}
                   <button onClick={() => navigate('meeting', t.meetingId)} className="truncate hover:text-accent-ink">
-                    {t.meetingTitle} · {new Date(t.startedAt).toLocaleDateString()}
+                    {t.meetingTitle} · {new Date(t.startedAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                   </button>
                 </div>
               </div>
+              {!t.done && t.dueDate && (
+                <button
+                  onClick={() =>
+                    void invoke('calendar:add', {
+                      title: t.task,
+                      date: t.dueDate,
+                      details: `From the call: ${t.meetingTitle}`,
+                      target: 'google'
+                    }).catch(() => {})
+                  }
+                  title="Add to Google Calendar"
+                  className="flex-shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink"
+                >
+                  <i className="ti ti-calendar-plus text-[12px]" /> Add to calendar
+                </button>
+              )}
               {!t.done && (
                 <button
                   onClick={() => void openAgent(t)}
@@ -134,16 +154,15 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
         </div>
       )}
 
-      <div>
-        <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
-          <i className="ti ti-robot text-[14px] text-accent" /> Agent activity
-        </div>
-        {runCount === 0 ? (
-          <p className="text-[12px] text-text-3">Tasks you send to Claude Code or Codex show up here with their results.</p>
-        ) : (
+      {/* Only for people who use the (advanced) coding agent. */}
+      {runCount > 0 && (
+        <div>
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
+            <i className="ti ti-robot text-[14px] text-accent" /> Agent activity
+          </div>
           <AgentRuns compact />
-        )}
-      </div>
+        </div>
+      )}
 
       {agentTask && context && (
         <SendToAgentModal

@@ -36,9 +36,11 @@ export const TEMPLATES: Record<string, Template> = {
       '- Estimate draft: a markdown table "Task | Rough hours" built ONLY from the scope discussed, plus a',
       '  total row. Mark it clearly as a draft for the freelancer to edit. Base hours on typical effort; if the',
       '  scope is too vague to estimate, say so instead of a table.',
-      '- Follow-up email: a short, friendly, ready-to-send email from "Me" to the client that confirms scope,',
-      '  price/budget (only if agreed), deadlines and next steps. Write the email in the language the CLIENT',
-      '  spoke, even if the rest of the notes is in another language. Put it in a markdown blockquote.',
+      '- Deadlines: every date or deadline that was said ("by Friday", "next week"), with who does what.',
+      '- Follow-up email (JSON field "followUpEmail", always filled): a short, friendly, ready-to-send email from',
+      '  "Me" to the client that thanks them, confirms what was discussed, the next step and any deadline.',
+      '  Price only if agreed. Write it in the language the CLIENT spoke, even if the notes are in another language.',
+      '  Plain text with a greeting and a sign-off line "Best regards," — no markdown.',
       '- Never invent prices, dates or promises that were not said.'
     ].join('\n')
   },

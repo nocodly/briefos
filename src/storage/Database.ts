@@ -123,6 +123,7 @@ export class BriefOSDatabase {
     task: string
     person: string
     deadline: string | null
+    dueDate: string | null
     done: boolean
   }[] {
     const rows = this.db
@@ -151,6 +152,7 @@ export class BriefOSDatabase {
           task: a.task,
           person: a.person ?? '',
           deadline: a.deadline ?? null,
+          dueDate: a.dueDate ?? null,
           done: done.get(`${r.id}::${a.task}`) ?? false
         })
       }

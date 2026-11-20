@@ -168,7 +168,7 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
             className="px-4 py-1.5 rounded-lg btn-accent text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60"
           >
             <i className={`ti ${s.status === 'starting' ? 'ti-loader-2 animate-spin-slow' : 'ti-microphone'} text-[15px]`} />
-            {s.status === 'starting' ? 'Starting…' : hasSession ? 'New meeting' : 'Start notes'}
+            {s.status === 'starting' ? 'Starting…' : hasSession ? 'New call' : 'Start call'}
           </button>
         )}
 

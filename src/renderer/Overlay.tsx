@@ -247,6 +247,8 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
   const follow = useRef(true)
   const [following, setFollowing] = useState(true)
   const lines = live.lines
+  // "Ask AI" stays visible on the client's latest line, so it's easy to find.
+  const lastClientId = [...lines].reverse().find((l) => l.speaker !== 'me' && l.text.trim())?.id
 
   // Always keep the newest words in view: every frame, glide the scroll toward
   // the bottom (also while a line is still being typed). Stops only when the
@@ -297,7 +299,7 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
         ) : (
           <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
             {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} large={large} />
+              <CaptionLine key={l.id} line={l} large={large} pinned={l.id === lastClientId} />
             ))}
           </div>
         )}
@@ -401,7 +403,7 @@ function AskPanel({ ask, large }: { ask: AskState; large: boolean }) {
 
 type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
-function CaptionLine({ line, large }: { line: CaptionLineData; large: boolean }) {
+function CaptionLine({ line, large, pinned = false }: { line: CaptionLineData; large: boolean; pinned?: boolean }) {
   const client = line.speaker !== 'me'
   return (
     <div className="group relative animate-caption-in">
@@ -413,7 +415,7 @@ function CaptionLine({ line, large }: { line: CaptionLineData; large: boolean })
           <button
             onClick={() => void invoke('capsule:ask', { line: line.text })}
             title="Ask AI what this means and what to answer"
-            className="ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale opacity-0 transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100"
+            className={`ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100 ${pinned ? 'opacity-100' : 'opacity-0'}`}
           >
             <i className="ti ti-sparkles text-[11px]" /> Ask AI
           </button>

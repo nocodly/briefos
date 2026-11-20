@@ -59,7 +59,8 @@ function createMainWindow(): BrowserWindow {
 
   win.once('ready-to-show', () => {
     console.log('[main] main window ready-to-show')
-    win.show()
+    // Started with Windows: stay in the tray and wait for a call.
+    if (!process.argv.includes('--hidden')) win.show()
   })
 
   // Never leave a black window: if the renderer dies, end the recording state
@@ -292,6 +293,11 @@ if (!gotLock) {
     // Dark window frame/title bar to match the dark UI.
     nativeTheme.themeSource = 'dark'
     mainWindow = createMainWindow()
+    // Start with Windows (default on): the app must be running to offer notes
+    // when a call starts. Starts hidden in the tray.
+    if (app.isPackaged) {
+      app.setLoginItemSettings({ openAtLogin: getSetting('launchAtStartup') !== false, args: ['--hidden'] })
+    }
     // Load the capsule in the background so the first call opens it instantly.
     setTimeout(() => createOverlayWindow(), 1500)
 

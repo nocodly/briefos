@@ -397,6 +397,14 @@ export const MEETING_LANGUAGES: { code: string; name: string }[] = [
 export function notesLanguageName(code: string | null | undefined): string | undefined {
   return code ? LANGUAGE_NAMES[code] : undefined
 }
+
+/** Notes are written in your language; the follow-up email in the client's. */
+export async function notesLanguages(): Promise<{ language?: string; clientLanguage?: string }> {
+  const all = await invoke<{ nativeLanguage?: string; clientLanguage?: string }>('settings:getAll').catch(() => null)
+  const raw = (all?.nativeLanguage || navigator.language || 'en').toLowerCase()
+  const code = raw.startsWith('fil') ? 'tl' : raw.slice(0, 2)
+  return { language: notesLanguageName(code), clientLanguage: notesLanguageName(all?.clientLanguage || 'en') }
+}
 const LANGUAGE_NAMES: Record<string, string> = {
   uk: 'Ukrainian', en: 'English', de: 'German', ru: 'Russian', pl: 'Polish',
   es: 'Spanish', fr: 'French', it: 'Italian', pt: 'Portuguese', hi: 'Hindi', bn: 'Bengali',
@@ -1049,6 +1057,22 @@ export async function stopMeeting(): Promise<void> {
   }
 
   await waitForDrain()
+  // Nothing was said and nothing written (a mis-click, a test): don't keep an
+  // empty "Untitled meeting" in the list.
+  if (meetingId && get().segments.length === 0 && !get().userNotes.trim()) {
+    await invoke('meetings:delete', meetingId).catch(() => {})
+    set({
+      status: 'idle',
+      meetingId: null,
+      serverId: null,
+      enhanced: null,
+      hints: [],
+      live: [],
+      error: 'Nothing was said, so this call was not saved.'
+    })
+    console.log('[session] empty call discarded', meetingId)
+    return
+  }
   // Persist the de-duplicated transcript (live appends may include echoes
   // that were removed later).
   if (meetingId) {
@@ -1074,13 +1098,15 @@ export async function enhanceCurrent(templateId?: string): Promise<void> {
   const tpl = templateId ?? (get().templateId === 'general' ? 'client-call' : get().templateId)
   set({ status: 'enhancing', templateId: tpl })
   try {
-    const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
+    // Notes in your language (like the live translation); the follow-up email
+    // in the language the client speaks.
     const result = await enhanceNotes({
       meetingId: serverId,
       templateId: tpl,
       userNotes,
       transcript: segments.map(({ speaker, startMs, text }) => ({ speaker, startMs, text })),
-      language: notesLanguageName(lang),
+      language: notesLanguageName(myLanguageCode()),
+      clientLanguage: notesLanguageName(clientLanguage || 'en'),
       context: contextForAI() || undefined
     })
     await invoke('notes:saveEnhanced', { meetingId, templateId: tpl, ...result })

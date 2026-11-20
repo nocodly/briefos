@@ -121,6 +121,8 @@ export function enhanceNotes(input: {
   transcript: TranscriptLine[]
   language?: string
   context?: string
+  /** Language the client speaks — the follow-up email is written in it. */
+  clientLanguage?: string
 }): Promise<EnhancedNotes> {
   // The user's local date lets the AI turn "by Friday" into a real date.
   const d = new Date()

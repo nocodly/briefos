@@ -97,14 +97,14 @@ const en: Copy = {
     title: 'How it works',
     items: [
       { title: 'Before the call', text: 'Paste the job post or your proposal. Minutama learns the project, so “Lambda” means AWS and “Next” means Next.js.' },
-      { title: 'During the call', text: 'Every question appears in a small card: the client’s exact words and the same question in your language.' },
+      { title: 'During the call', text: 'Live captions show what the client says, translated into your language. Not sure what to answer? Click Ask AI on any line.' },
       { title: 'After the call', text: 'Get the project brief, a draft estimate with hours, open points to clarify and a follow-up email ready to send.' }
     ]
   },
   after: {
     eyebrow: 'After the call',
     title: 'From call to scoped project in a minute',
-    sub: 'Developers can also send the agreed scope to Claude Code or Codex as tasks, and approve each one before it runs.',
+    sub: 'Tasks with a deadline (“send the estimate by Friday”) go to your calendar in one click.',
     tabs: ['Project brief', 'Estimate draft', 'Follow-up email'],
     note: 'Example output. Your estimate is a draft you edit before sending.'
   },
@@ -142,7 +142,7 @@ const en: Copy = {
       name: 'Pro',
       tagline: 'For freelancers with calls every week.',
       cta: 'Start free, upgrade in the app',
-      features: ['25 hours of calls a month', 'Up to 200 question cards per call', 'Estimate draft and follow-up email', 'Send tasks to Claude Code / Codex', 'Share as PDF, Notion, Slack']
+      features: ['25 hours of calls a month', 'Up to 200 question cards per call', 'Estimate draft and follow-up email', 'Ask AI on any line of the call', 'Share as PDF, Notion, Slack']
     },
     max: {
       name: 'Pro Max',
@@ -225,14 +225,14 @@ const es: Copy = {
     title: 'Cómo funciona',
     items: [
       { title: 'Antes de la llamada', text: 'Pega la oferta o tu propuesta. Minutama aprende el proyecto, así “Lambda” significa AWS y “Next” significa Next.js.' },
-      { title: 'Durante la llamada', text: 'Cada pregunta aparece en una tarjeta: las palabras exactas del cliente y la misma pregunta en tu idioma.' },
+      { title: 'Durante la llamada', text: 'Subtítulos en vivo con lo que dice el cliente, traducido a tu idioma. ¿No sabes qué responder? Pulsa Ask AI en cualquier frase.' },
       { title: 'Después de la llamada', text: 'Recibe el brief del proyecto, un presupuesto con horas, los puntos por aclarar y un email de seguimiento listo para enviar.' }
     ]
   },
   after: {
     eyebrow: 'Después de la llamada',
     title: 'De la llamada a un proyecto definido en un minuto',
-    sub: 'Los desarrolladores también pueden enviar el alcance acordado a Claude Code o Codex como tareas y aprobar cada una antes de ejecutarla.',
+    sub: 'Las tareas con fecha (“enviar el presupuesto el viernes”) van a tu calendario con un clic.',
     tabs: ['Brief del proyecto', 'Presupuesto', 'Email de seguimiento'],
     note: 'Ejemplo. Tu presupuesto es un borrador que editas antes de enviarlo.'
   },
@@ -270,7 +270,7 @@ const es: Copy = {
       name: 'Pro',
       tagline: 'Para freelancers con llamadas cada semana.',
       cta: 'Empieza gratis, mejora en la app',
-      features: ['25 horas de llamadas al mes', 'Hasta 200 tarjetas por llamada', 'Presupuesto y email de seguimiento', 'Envía tareas a Claude Code / Codex', 'Comparte en PDF, Notion, Slack']
+      features: ['25 horas de llamadas al mes', 'Hasta 200 tarjetas por llamada', 'Presupuesto y email de seguimiento', 'Ask AI en cualquier frase de la llamada', 'Comparte en PDF, Notion, Slack']
     },
     max: {
       name: 'Pro Max',
@@ -353,14 +353,14 @@ const pt: Copy = {
     title: 'Como funciona',
     items: [
       { title: 'Antes da chamada', text: 'Cole a vaga ou sua proposta. O Minutama aprende o projeto, então “Lambda” significa AWS e “Next” significa Next.js.' },
-      { title: 'Durante a chamada', text: 'Cada pergunta aparece em um cartão: as palavras exatas do cliente e a mesma pergunta no seu idioma.' },
+      { title: 'Durante a chamada', text: 'Legendas ao vivo com o que o cliente diz, traduzidas para o seu idioma. Não sabe o que responder? Clique em Ask AI em qualquer frase.' },
       { title: 'Depois da chamada', text: 'Receba o briefing do projeto, um orçamento com horas, os pontos a esclarecer e um e-mail de follow-up pronto para enviar.' }
     ]
   },
   after: {
     eyebrow: 'Depois da chamada',
     title: 'Da chamada ao projeto definido em um minuto',
-    sub: 'Desenvolvedores também podem enviar o escopo combinado ao Claude Code ou Codex como tarefas e aprovar cada uma antes de rodar.',
+    sub: 'Tarefas com prazo (“enviar o orçamento até sexta”) vão para o seu calendário com um clique.',
     tabs: ['Briefing do projeto', 'Orçamento', 'E-mail de follow-up'],
     note: 'Exemplo. Seu orçamento é um rascunho que você edita antes de enviar.'
   },
@@ -398,7 +398,7 @@ const pt: Copy = {
       name: 'Pro',
       tagline: 'Para freelancers com chamadas toda semana.',
       cta: 'Comece grátis, faça upgrade no app',
-      features: ['25 horas de chamadas por mês', 'Até 200 cartões por chamada', 'Orçamento e e-mail de follow-up', 'Envie tarefas ao Claude Code / Codex', 'Compartilhe em PDF, Notion, Slack']
+      features: ['25 horas de chamadas por mês', 'Até 200 cartões por chamada', 'Orçamento e e-mail de follow-up', 'Ask AI em qualquer frase da chamada', 'Compartilhe em PDF, Notion, Slack']
     },
     max: {
       name: 'Pro Max',

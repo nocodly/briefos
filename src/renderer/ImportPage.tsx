@@ -3,7 +3,7 @@ import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { ApiError, enhanceNotes, startMeeting, TEMPLATE_OPTIONS } from './lib/api'
 import { parseTranscript, speakersOf } from './lib/transcriptImport'
-import { notesLanguageName } from './recording/meetingSession'
+import { notesLanguages } from './recording/meetingSession'
 import { Page, SoonBadge } from './components/Page'
 
 // =============================================================================
@@ -61,7 +61,7 @@ export default function ImportPage({ navigate }: { navigate: NavigateFn }) {
       await invoke('notes:replaceTranscript', { meetingId, segments: rows })
 
       setBusy('Writing notes…')
-      const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
+      const langs = await notesLanguages()
       const isMe = (n: string) => Boolean(me) && n.trim().toLowerCase() === me.trim().toLowerCase()
       const result = await enhanceNotes({
         meetingId: server.meetingId,
@@ -72,7 +72,7 @@ export default function ImportPage({ navigate }: { navigate: NavigateFn }) {
           startMs: s.startMs,
           text: s.name && !isMe(s.name) ? `${s.name}: ${s.text}` : s.text
         })),
-        language: notesLanguageName(lang)
+        ...langs
       })
       await invoke('notes:saveEnhanced', { meetingId, templateId, ...result })
       const last = segments[segments.length - 1]

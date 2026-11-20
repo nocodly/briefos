@@ -4,7 +4,7 @@ import Markdown from './components/Markdown'
 import ShareMenu from './components/ShareMenu'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
-import { notesLanguageName } from './recording/meetingSession'
+import { notesLanguages } from './recording/meetingSession'
 
 // =============================================================================
 // MeetingView — the Meeting Brief page. Loads a meeting (summary + transcript)
@@ -63,7 +63,9 @@ function fmtClock(ms: number): string {
 }
 function fmtDate(iso: string): string {
   const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export default function MeetingView({ id, navigate }: { id: string | null; navigate: NavigateFn }) {
@@ -114,7 +116,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
       // Minutama (they carry a server meeting id).
       if (!meeting.server_id) throw new Error('This older meeting cannot be regenerated.')
       const templateId = meeting.template_id || 'general'
-      const lang = await invoke<string>('settings:get', 'meetingLanguage').catch(() => '')
+      const langs = await notesLanguages()
       const result = await enhanceNotes({
         meetingId: meeting.server_id,
         templateId,
@@ -124,7 +126,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
           startMs: r.start_ms,
           text: r.text
         })),
-        language: notesLanguageName(lang)
+        ...langs
       })
       await invoke('notes:saveEnhanced', { meetingId: meeting.id, templateId, ...result })
       await load()
@@ -262,7 +264,9 @@ function Hero({
         <span className="flex items-center gap-1">
           <i className="ti ti-language text-[14px]" /> {(meeting.language || 'en').toUpperCase()}
         </span>
-        <span className="px-2 py-0.5 rounded-full bg-white/10 capitalize">{meeting.type}</span>
+        {meeting.type && meeting.type !== 'other' && (
+          <span className="px-2 py-0.5 rounded-full bg-white/10 capitalize">{meeting.type}</span>
+        )}
       </div>
     </div>
   )
@@ -404,7 +408,7 @@ function TaskList({ items, meetingTitle, onToast }: { items: ActionItem[]; meeti
               <div className="text-[11px] text-text-3">
                 {a.person}
                 {a.deadline ? ` · ${a.deadline}` : ''}
-                {a.dueDate ? ` · ${new Date(`${a.dueDate}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
+                {a.dueDate ? ` · ${new Date(`${a.dueDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
               </div>
             </div>
             {a.dueDate && (

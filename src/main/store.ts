@@ -67,7 +67,7 @@ const DEFAULTS: AppSettings = {
   microphoneDevice: 'default',
   systemAudioDevice: 'virtual-audio-capturer',
   micOnly: false,
-  launchAtStartup: false,
+  launchAtStartup: true,
   hotkeyRecord: 'CmdOrCtrl+Shift+B',
   retentionDays: 90,
   plan: 'trial',
@@ -112,7 +112,7 @@ export function setSetting<K extends keyof AppSettings>(key: K, value: AppSettin
   store.set(key, value)
   // Side effects for settings that touch the OS.
   if (key === 'launchAtStartup') {
-    app.setLoginItemSettings({ openAtLogin: Boolean(value) })
+    app.setLoginItemSettings({ openAtLogin: Boolean(value), args: ['--hidden'] })
   }
 }
 
