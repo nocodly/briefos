@@ -8,12 +8,9 @@ import { LogoMark } from './components/Logo'
 // (src/main/Capsule.ts); the window height follows this content (capsule:fit).
 //
 //   prompt     a call app took the mic → "Call on Zoom · Take notes?"
-//   recording  compact bar (logo, timer, waves, pause/stop, agent toggle) and
-//              the agent panel:
-//                - live reply hint ("They asked … → you could say …")
-//                - task box → ✓ save to notes / ✦ send to your agent
-//                - send asks to confirm, then shows the agent working and the
-//                  result right here — no need to open the main window.
+//   recording  compact bar (logo, timer, waves, pause/stop, size, collapse) and
+//              the call panel: live captions + translation, "Ask AI" on any
+//              line, and the client's question card. Nothing else during a call.
 // =============================================================================
 
 interface ReplyHint {
@@ -61,12 +58,6 @@ type Action = 'start' | 'dismiss' | 'open' | 'clearHint' | 'toggle' | 'size' | '
 // Drag the capsule by its body; anything clickable opts out.
 const drag = { WebkitAppRegion: 'drag' } as unknown as React.CSSProperties
 const noDrag = { WebkitAppRegion: 'no-drag' } as unknown as React.CSSProperties
-
-const QUICK_TASKS = {
-  all: 'Do the follow-up for this meeting: go through every action item, decision and promise made so far and complete what you can with your tools. Then list what you did and what still needs me.',
-  calendar:
-    'Find every date, time and deadline agreed in this meeting so far. Add each one to my calendar if you have a calendar tool; otherwise create a file minutama-events.ics in the working folder with all of them. Then list them.'
-}
 
 function formatClock(ms: number): string {
   const total = Math.floor(ms / 1000)
@@ -226,37 +217,9 @@ function AgentPanel({
   large: boolean
   ask: AskState | null
 }) {
-  const [text, setText] = useState('')
-  const [confirm, setConfirm] = useState<string | null>(null)
-  const [agentName, setAgentName] = useState('Claude Code')
-  const [flash, setFlash] = useState<string | null>(null)
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    invoke<string>('settings:get', 'agentProvider')
-      .then((v) => setAgentName(v === 'codex' ? 'Codex' : 'Claude Code'))
-      .catch(() => {})
-  }, [])
-
-  const say = (msg: string) => {
-    setFlash(msg)
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => setFlash(null), 2500)
-  }
-
-  const save = async () => {
-    const t = text.trim()
-    if (!t) return
-    await invoke('capsule:task', { text: t, send: false }).catch(() => {})
-    setText('')
-    say('Saved to your notes ✓')
-  }
-
-  const send = async (task: string) => {
-    setConfirm(null)
-    await invoke('capsule:task', { text: task, send: true }).catch((e) => say((e as Error).message))
-  }
-
+  // During a call the capsule shows only the conversation: live captions with
+  // translation, "Ask AI" on any line, and the client's question card. Tasks,
+  // dates and agents are handled after the call, in the meeting notes.
   return (
     <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
       {/* Same tree whether the chat is open or not, so the captions never re-mount (and re-type). */}
@@ -268,84 +231,13 @@ function AgentPanel({
         )}
         {ask && <AskPanel ask={ask} large={large && Boolean(live && live.status !== 'off')} />}
       </div>
-      {hint ? (
-        <QuestionCardView hint={hint} />
-      ) : (
-        !run &&
-        !confirm &&
-        !(live && live.lines.length) && (
-          <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/40">
-            <i className="ti ti-sparkles text-[12px] text-accent" /> {notice ?? 'Listening for the client’s questions…'}
-          </div>
-        )
-      )}
-
-      {run && !confirm && <RunCard run={run} />}
-
-      {confirm !== null ? (
-        <div className="rounded-[12px] border border-white/10 bg-white/[.05] p-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">Send to {agentName}?</div>
-          <div className="mt-1 line-clamp-3 text-[12.5px] leading-snug text-white">{confirm}</div>
-          <div className="mt-1 text-[10.5px] text-white/40">With this meeting’s notes and transcript.</div>
-          <div className="mt-2 flex justify-end gap-1.5">
-            <button
-              onClick={() => {
-                setText(confirm)
-                setConfirm(null)
-              }}
-              className="rounded-lg px-2.5 py-1 text-[11.5px] text-white/60 hover:bg-white/10 hover:text-white"
-            >
-              Cancel
-            </button>
-            <button onClick={() => void send(confirm)} className="btn-accent flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11.5px] font-semibold">
-              <i className="ti ti-send text-[12px]" /> Send
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-1 rounded-[12px] border border-white/10 bg-white/[.05] p-1 pl-2.5 focus-within:border-accent/50">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== 'Enter' || !text.trim()) return
-              if (e.ctrlKey || e.metaKey) {
-                setConfirm(text.trim())
-                setText('')
-              } else void save()
-            }}
-            placeholder={flash ?? 'Tell your agent…'}
-            className="min-w-0 flex-1 bg-transparent text-[12px] text-white outline-none placeholder:text-white/35"
-          />
-          <button
-            onClick={() => void save()}
-            disabled={!text.trim()}
-            title="Save as a task in your notes (Enter)"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-white/60 hover:bg-white/10 hover:text-white disabled:opacity-30"
-          >
-            <i className="ti ti-checkbox text-[14px]" />
-          </button>
-          <button
-            onClick={() => {
-              setConfirm(text.trim())
-              setText('')
-            }}
-            disabled={!text.trim()}
-            title={`Send to ${agentName} (Ctrl+Enter)`}
-            className="btn-accent flex h-7 w-7 items-center justify-center rounded-lg disabled:opacity-30"
-          >
-            <i className="ti ti-send text-[13px]" />
-          </button>
+      {hint && <QuestionCardView hint={hint} />}
+      {notice && !hint && (
+        <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/45">
+          <i className="ti ti-info-circle text-[12px] text-accent" /> {notice}
         </div>
       )}
-
-      {confirm === null && !text && (
-        <div className="flex flex-wrap gap-1.5">
-          <Chip icon="help-circle" label="Last question" onClick={() => void invoke('capsule:quick', 'lastQuestion')} />
-          <Chip icon="send" label={`All to ${agentName.split(' ')[0]}`} onClick={() => setConfirm(QUICK_TASKS.all)} />
-          <Chip icon="calendar-plus" label="Dates → calendar" onClick={() => setConfirm(QUICK_TASKS.calendar)} />
-        </div>
-      )}
+      {run && <RunCard run={run} />}
     </div>
   )
 }
@@ -623,17 +515,6 @@ function QuestionCardView({ hint }: { hint: ReplyHint }) {
         </div>
       )}
     </div>
-  )
-}
-
-function Chip({ icon, label, onClick }: { icon: string; label: string; onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[.04] px-2.5 py-1 text-[11px] text-white/70 hover:border-accent/50 hover:bg-accent/10 hover:text-white"
-    >
-      <i className={`ti ti-${icon} text-[12px] text-accent`} /> {label}
-    </button>
   )
 }
 

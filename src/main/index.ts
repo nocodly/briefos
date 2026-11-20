@@ -136,18 +136,26 @@ function createMainWindow(): BrowserWindow {
 
 // Reveal helper: showInactive (don't steal focus from the meeting) + pin above
 // fullscreen apps via the 'screen-saver' always-on-top level.
-function revealOverlay(win: BrowserWindow): void {
+export function revealOverlay(win: BrowserWindow): void {
   if (win.isDestroyed()) return
   win.showInactive()
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 }
 
+/** True once overlay.html has loaded (the capsule can render right away). */
+let overlayLoaded = false
+export function isOverlayLoaded(): boolean {
+  return overlayLoaded && Boolean(overlayWindow && !overlayWindow.isDestroyed())
+}
+
+/**
+ * The capsule window is created once (hidden) and kept warm, so a call opens it
+ * instantly at its final size. Capsule.ts decides when to show it: only after
+ * the content has rendered and reported its height — no thin bar that grows.
+ */
 export function createOverlayWindow(): BrowserWindow {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    revealOverlay(overlayWindow)
-    return overlayWindow
-  }
+  if (overlayWindow && !overlayWindow.isDestroyed()) return overlayWindow
 
   console.log('[main] creating overlay window')
 
@@ -187,9 +195,8 @@ export function createOverlayWindow(): BrowserWindow {
 
   // Reveal on ready-to-show, with did-finish-load as a fallback because
   // transparent frameless windows don't always emit ready-to-show on Windows.
-  win.once('ready-to-show', () => revealOverlay(win))
   win.webContents.once('did-finish-load', () => {
-    revealOverlay(win)
+    overlayLoaded = true
     pushCapsuleState()
   })
 
@@ -201,17 +208,18 @@ export function createOverlayWindow(): BrowserWindow {
 
   win.on('closed', () => {
     overlayWindow = null
+    overlayLoaded = false
   })
 
   overlayWindow = win
   return win
 }
 
+/** Hide the capsule but keep the window loaded for the next call. */
 export function closeOverlayWindow(): void {
-  if (overlayWindow && !overlayWindow.isDestroyed()) {
-    console.log('[main] closing overlay window')
-    overlayWindow.close()
-    overlayWindow = null
+  if (overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
+    console.log('[main] hiding overlay window')
+    overlayWindow.hide()
   }
 }
 
@@ -284,6 +292,8 @@ if (!gotLock) {
     // Dark window frame/title bar to match the dark UI.
     nativeTheme.themeSource = 'dark'
     mainWindow = createMainWindow()
+    // Load the capsule in the background so the first call opens it instantly.
+    setTimeout(() => createOverlayWindow(), 1500)
 
     // Tray owns the Start/Stop menu; pass a callback so it can reflect state.
     createTray({

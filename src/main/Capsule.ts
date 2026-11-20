@@ -1,5 +1,5 @@
 import { screen, type BrowserWindow } from 'electron'
-import { createOverlayWindow, closeOverlayWindow, getOverlayWindow } from './index'
+import { createOverlayWindow, closeOverlayWindow, getOverlayWindow, isOverlayLoaded, revealOverlay } from './index'
 import { getSetting, setSetting } from './store'
 
 // =============================================================================
@@ -109,12 +109,37 @@ let userSpot: { right: number; y: number } | null = null
 let largeSpot: { x: number; y: number } | null = null
 const tracked = new WeakSet<BrowserWindow>()
 
+/** The capsule is about to appear: show it once the new content has its size. */
+let revealPending = false
+let revealTimer: NodeJS.Timeout | null = null
+let shownMode: CapsuleState['mode'] = 'hidden'
+
+function revealWhenReady(win: BrowserWindow): void {
+  if (!revealPending) return
+  revealPending = false
+  if (revealTimer) clearTimeout(revealTimer)
+  revealTimer = null
+  revealOverlay(win)
+}
+
 function apply(): void {
   if (state.mode === 'hidden') {
+    revealPending = false
+    shownMode = 'hidden'
     closeOverlayWindow()
     return
   }
   const win = createOverlayWindow()
+  if (shownMode !== state.mode) {
+    // New mode (prompt → recording, or first show): wait for the renderer to
+    // report the new height, so the window appears at its final size.
+    shownMode = state.mode
+    if (!win.isVisible()) {
+      revealPending = true
+      if (revealTimer) clearTimeout(revealTimer)
+      revealTimer = setTimeout(() => revealWhenReady(win), isOverlayLoaded() ? 250 : 2500)
+    }
+  }
   if (!tracked.has(win)) {
     tracked.add(win)
     // Remember the spot after a drag; keep the right edge as the anchor so the
@@ -157,9 +182,12 @@ function apply(): void {
 /** The capsule renderer reports its content height; resize the window to fit. */
 export function fitCapsule(height: number): void {
   const h = Math.round(Math.min(Math.max(height, MIN_HEIGHT), 1400))
-  if (Math.abs(h - contentHeight) < 2) return
-  contentHeight = h
-  if (state.mode !== 'hidden') apply()
+  if (Math.abs(h - contentHeight) >= 2) {
+    contentHeight = h
+    if (state.mode !== 'hidden') apply()
+  }
+  const win = getOverlayWindow()
+  if (win && state.mode !== 'hidden' && h > MIN_HEIGHT) revealWhenReady(win)
 }
 
 export function getCapsule(): CapsuleState {
