@@ -582,7 +582,8 @@ export function registerIpcHandlers(): void {
     return { ok: true }
   })
   handle('updater:install', async () => {
-    autoUpdater.quitAndInstall()
+    // Silent install + relaunch: one click, no installer wizard.
+    autoUpdater.quitAndInstall(true, true)
     return { ok: true }
   })
 

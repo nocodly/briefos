@@ -57,5 +57,7 @@ export function initAutoUpdater(): void {
 /** Manually trigger install + restart (e.g. from a renderer "Restart now" button). */
 export function quitAndInstall(): void {
   console.log('[updater] quit and install')
-  autoUpdater.quitAndInstall()
+  // Silent install (no installer wizard), then start the app again. The
+  // download was already differential (blockmap), so this takes seconds.
+  autoUpdater.quitAndInstall(true, true)
 }

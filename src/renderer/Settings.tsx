@@ -456,7 +456,7 @@ function UpdateBanner({ updater }: { updater: ReturnType<typeof useUpdater> }) {
             <i className="ti ti-circle-check text-[15px]" />
             Update ready{version ? ` — v${version}` : ''}
           </div>
-          <p className="text-[11px] text-text-3">Restart the app to apply the update.</p>
+          <p className="text-[11px] text-text-3">Updates in a few seconds and opens again.</p>
         </div>
         <button
           onClick={install}

@@ -400,7 +400,7 @@ function UpdateToast() {
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-text">New version ready{version ? ` — v${version}` : ''}</div>
-              <div className="text-[11px] text-text-3 mt-0.5">Restart Minutama to apply the update</div>
+              <div className="text-[11px] text-text-3 mt-0.5">Updates in a few seconds and opens again</div>
             </div>
             <button
               onClick={() => installRef.current('updater:install')}
