@@ -21,6 +21,50 @@ export interface LiveEvents {
   onStatus: (status: 'connecting' | 'live' | 'failed' | 'stopped') => void
 }
 
+/**
+ * Echo gate for the mic channel. With speakers (no headphones) the client's
+ * voice plays out loud and the mic hears it again; without a gate it shows up
+ * as "You" lines and is transcribed twice. The loopback channel is the exact
+ * reference of what plays: while it is active, mic audio only counts as the
+ * user speaking when it is clearly louder than the echo we expect. The echo
+ * level (speaker → mic coupling) is learned during the call.
+ */
+export class EchoGate {
+  private far: { at: number; rms: number }[] = []
+  private lastFarVoice = -1e9
+  /** Mic level / loopback level while only the client speaks (learned). */
+  private coupling = 1.2
+
+  /** Loopback (client) level, called for every frame of the 'them' channel. */
+  far_(rms: number): void {
+    const now = performance.now()
+    this.far.push({ at: now, rms })
+    while (this.far.length && now - this.far[0].at > 250) this.far.shift()
+    if (rms >= VOICE_RMS) this.lastFarVoice = now
+  }
+
+  /** True when this mic frame is only the client's voice coming back. */
+  isEcho(micRms: number): boolean {
+    const now = performance.now()
+    // Client silent for a while (plus room reverb tail): the mic is the user.
+    if (now - this.lastFarVoice > 300) return false
+    let farMax = 0
+    for (const f of this.far) if (f.rms > farMax) farMax = f.rms
+    if (farMax < VOICE_RMS * 0.5) return false
+    const expected = this.coupling * farMax
+    const ratio = micRms / farMax
+    // Learn the coupling: drop fast, rise slowly and only towards echo-like
+    // levels — the user talking over the client (much louder) teaches nothing.
+    if (micRms >= 0.001) {
+      if (ratio < this.coupling) this.coupling = this.coupling * 0.8 + ratio * 0.2
+      else if (ratio < this.coupling * 2.2) this.coupling = this.coupling * 0.99 + ratio * 0.01
+      this.coupling = Math.min(3, Math.max(0.02, this.coupling))
+    }
+    // The user talking over the client is much louder than the echo.
+    return micRms < Math.max(VOICE_RMS, expected * 2.5)
+  }
+}
+
 const RATE = 24_000
 const SEND_EVERY_SAMPLES = 2_400 // 100 ms
 const VOICE_RMS = 0.012
@@ -59,7 +103,9 @@ export class LiveTranscriber {
   constructor(
     private stream: MediaStream,
     private getSecret: () => Promise<string>,
-    private events: LiveEvents
+    private events: LiveEvents,
+    /** 'far': this is the loopback channel, feed the gate. 'near': the mic, gated by it. */
+    private echo?: { gate: EchoGate; role: 'far' | 'near' }
   ) {}
 
   async start(): Promise<void> {
@@ -209,7 +255,15 @@ export class LiveTranscriber {
     for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
     const rms = Math.sqrt(sum / input.length)
     const now = performance.now()
-    if (rms >= VOICE_RMS) {
+    if (this.echo?.role === 'far') this.echo.gate.far_(rms)
+    else if (this.echo?.role === 'near' && this.echo.gate.isEcho(rms)) {
+      // Only the client's voice from the speakers: send silence instead, so it
+      // is neither transcribed as "You" nor counted as the user speaking.
+      input = new Float32Array(input.length)
+      sum = 0
+    }
+    const level = sum ? rms : 0
+    if (level >= VOICE_RMS) {
       if (!this.voicedSinceCommit) this.turnStartedAt = now
       this.voicedSinceCommit = true
       this.lastVoiceAt = now

@@ -13,7 +13,7 @@ import {
   type StartMeetingResult
 } from '../lib/api'
 import { ChannelRecorder, type AudioChunk } from './ChannelRecorder'
-import { LiveTranscriber } from './LiveTranscriber'
+import { EchoGate, LiveTranscriber } from './LiveTranscriber'
 import { track } from '../lib/track'
 
 // =============================================================================
@@ -313,7 +313,11 @@ async function runJob(job: Job): Promise<void> {
 // ─── Capture ────────────────────────────────────────────────────────────────
 async function getMic(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    // autoGainControl is OFF on purpose: Chromium's AGC changes the Windows
+    // microphone volume itself, for every app. During a call that fought the
+    // call app's own gain/echo control (Zoom, Meet, Teams…), and the other side
+    // started to hear themselves. We only read the mic; the call app owns it.
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false },
     video: false
   })
 }
@@ -823,7 +827,7 @@ function saveLiveSegment(id: string, speaker: 'me' | 'them', text: string): void
   }
 }
 
-function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: string): LiveTranscriber {
+function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: string, gate?: EchoGate): LiveTranscriber {
   return new LiveTranscriber(
     stream,
     async () =>
@@ -862,15 +866,19 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
         pushLiveToCapsule()
         if (st === 'failed') console.warn('[live] gave up — falling back to chunk transcription')
       }
-    }
+    },
+    gate && { gate, role: channel === 'them' ? 'far' : 'near' }
   )
 }
 
 async function startLive(system: MediaStream | null, mic: MediaStream): Promise<void> {
   const serverId = get().serverId
   if (!serverId) return
-  if (system) transcribers.them = makeTranscriber('them', system, serverId)
-  transcribers.me = makeTranscriber('me', mic, serverId)
+  // The loopback channel tells the mic channel when the client is speaking, so
+  // their voice coming back through the speakers is not transcribed as "You".
+  const gate = system ? new EchoGate() : undefined
+  if (system) transcribers.them = makeTranscriber('them', system, serverId, gate)
+  transcribers.me = makeTranscriber('me', mic, serverId, gate)
   for (const [ch, t] of Object.entries(transcribers)) {
     try {
       await t!.start()
