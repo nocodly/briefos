@@ -105,7 +105,9 @@ export class LiveTranscriber {
     private getSecret: () => Promise<string>,
     private events: LiveEvents,
     /** 'far': this is the loopback channel, feed the gate. 'near': the mic, gated by it. */
-    private echo?: { gate: EchoGate; role: 'far' | 'near' }
+    private echo?: { gate: EchoGate; role: 'far' | 'near' },
+    /** Silence that ends a turn (shorter = the final text arrives sooner). */
+    private pauseMs = PAUSE_MS
   ) {}
 
   async start(): Promise<void> {
@@ -288,7 +290,7 @@ export class LiveTranscriber {
 
     if (
       this.voicedSinceCommit &&
-      (now - this.lastVoiceAt >= PAUSE_MS || now - this.turnStartedAt >= MAX_TURN_MS)
+      (now - this.lastVoiceAt >= this.pauseMs || now - this.turnStartedAt >= MAX_TURN_MS)
     ) {
       this.commit()
     }

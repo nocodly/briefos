@@ -581,7 +581,7 @@ function Sentence({
             </div>
           ))}
         {translation ? (
-          <div className={`animate-caption-in leading-snug transition-all duration-500 ${showSource ? 'mt-0.5' : ''} ${mode === 'translation' ? (big ? 'text-[19px] text-white' : 'text-[15px] text-white/55') : `${trSize} ${trColor}`}`}>
+          <div className={`animate-caption-in leading-snug transition-all duration-500 ${speaking ? 'opacity-60' : ''} ${showSource ? 'mt-0.5' : ''} ${mode === 'translation' ? (big ? 'text-[19px] text-white' : 'text-[15px] text-white/55') : `${trSize} ${trColor}`}`}>
             {translation}
           </div>
         ) : (

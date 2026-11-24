@@ -762,6 +762,9 @@ interface Unit {
   ctrl: AbortController | null
 }
 interface ItemUnits {
+  /** Early translation of the sentence still being spoken (dimmed until final). */
+  early: { src: string; tr: string | null; ctrl: AbortController | null; done: boolean } | null
+  earlyTimer: ReturnType<typeof setTimeout> | null
   units: Unit[]
   /** Character offset in the item text where the next unit starts. */
   cut: number
@@ -822,9 +825,12 @@ function publishUnits(itemId: string): void {
   const st = itemUnits.get(itemId)
   if (!st) return
   const tail = st.text.slice(st.cut).trim()
+  // The sentence being spoken may already carry an early translation (it is
+  // for the words heard so far; the final one replaces it).
+  const early = st.early && tail && norm(tail).startsWith(norm(st.early.src)) ? st.early.tr : null
   const parts = [
     ...st.units.map((u) => ({ text: u.src, translation: u.tr })),
-    ...(tail ? [{ text: tail, translation: null, live: true }] : [])
+    ...(tail ? [{ text: tail, translation: early, live: true }] : [])
   ]
   const joined = st.units.map((u) => u.tr ?? '').filter(Boolean).join(' ')
   const translation = joined || null
@@ -892,7 +898,7 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
 
   let st = itemUnits.get(itemId)
   if (!st) {
-    st = { units: [], cut: 0, text: '' }
+    st = { units: [], cut: 0, text: '', early: null, earlyTimer: null }
     itemUnits.set(itemId, st)
   }
   const before = st.units.map((u) => u.src).join(' ')
@@ -917,11 +923,68 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
   const [fresh, used] = splitUnits(text.slice(st.cut), final)
   st.cut += used
   for (const src of fresh) {
+    // Reuse the early translation when the finished sentence is what it covered.
+    const e = st.early
+    if (e && e.done && e.tr && norm(e.src) === norm(src)) {
+      st.units.push({ src, tr: e.tr, ctrl: null })
+      st.early = null
+      continue
+    }
     const unit: Unit = { src, tr: null, ctrl: null }
     st.units.push(unit)
     translateUnit(itemId, unit)
   }
+  if (fresh.length) {
+    st.early?.ctrl?.abort()
+    st.early = null
+  }
+  scheduleEarly(itemId, st, final)
   publishUnits(itemId)
+}
+
+/**
+ * Don't wait for the sentence to be closed: once the client pauses for a
+ * moment (300 ms without new words) — or 6 more words came in — translate the
+ * words heard so far. Shown dimmed under the sentence being spoken; when the
+ * sentence is final its translation takes over (reused if nothing changed).
+ */
+function scheduleEarly(itemId: string, st: ItemUnits, final: boolean): void {
+  if (st.earlyTimer) clearTimeout(st.earlyTimer)
+  st.earlyTimer = null
+  const tail = st.text.slice(st.cut).trim()
+  if (final || wordCount(tail) < 3 || !needsTranslation(tail)) return
+  const run = () => {
+    st.earlyTimer = null
+    const now = st.text.slice(st.cut).trim()
+    if (!now || (st.early && norm(st.early.src) === norm(now))) return
+    st.early?.ctrl?.abort()
+    const serverId = get().serverId
+    if (!serverId) return
+    const ctrl = new AbortController()
+    const early: NonNullable<ItemUnits['early']> = { src: now, tr: st.early?.tr ?? null, ctrl, done: false }
+    st.early = early
+    const before = st.units.slice(-2).map((u) => u.src).join(' ')
+    translateLineStream(
+      { meetingId: serverId, text: now, target: nativeLanguageName(nativeLanguage), context: before || undefined },
+      (soFar) => {
+        if (ctrl.signal.aborted || st.early !== early) return
+        early.tr = soFar
+        publishUnits(itemId)
+      },
+      ctrl.signal
+    )
+      .then((tr) => {
+        if (st.early !== early) return
+        early.tr = tr ?? null
+        early.done = true
+        early.ctrl = null
+        publishUnits(itemId)
+      })
+      .catch(() => {})
+  }
+  const grown = st.early ? wordCount(tail) - wordCount(st.early.src) : wordCount(tail)
+  if (grown >= 6) run()
+  else st.earlyTimer = setTimeout(run, 300)
 }
 
 function isEcho(text: string): boolean {
@@ -993,7 +1056,10 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
         if (st === 'failed') console.warn('[live] gave up — falling back to chunk transcription')
       }
     },
-    gate && { gate, role: channel === 'them' ? 'far' : 'near' }
+    gate && { gate, role: channel === 'them' ? 'far' : 'near' },
+    // The client's turn closes after 450 ms of silence (you: 650 ms), so their
+    // last sentence is final — and translated — sooner.
+    channel === 'them' ? 450 : 650
   )
 }
 
@@ -1019,7 +1085,11 @@ function resetLive(): void {
   liveStartMs.clear()
   processedSentences.clear()
   itemTranslation.clear()
-  itemUnits.forEach((st) => st.units.forEach((u) => u.ctrl?.abort()))
+  itemUnits.forEach((st) => {
+    st.units.forEach((u) => u.ctrl?.abort())
+    st.early?.ctrl?.abort()
+    if (st.earlyTimer) clearTimeout(st.earlyTimer)
+  })
   itemUnits.clear()
   trLatency.first.length = 0
   trLatency.done.length = 0
