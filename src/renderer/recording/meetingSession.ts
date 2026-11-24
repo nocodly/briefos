@@ -52,6 +52,9 @@ export interface LiveLine {
   text: string
   translation: string | null
   final: boolean
+  /** Client lines: each finished sentence with its own translation (never
+   *  rewritten), plus the sentence still being spoken (translation null). */
+  parts?: { text: string; translation: string | null; live?: boolean }[]
 }
 
 interface SessionState {
@@ -745,16 +748,120 @@ function pushLiveToCapsule(): void {
     capsuleTimer = null
     const lines = get()
       .live.slice(-10)
-      .map(({ id, speaker, text, translation, final }) => ({ id, speaker, text, translation, final }))
+      .map(({ id, speaker, text, translation, final, parts }) => ({ id, speaker, text, translation, final, parts }))
     void invoke('capsule:live', { lines, status: get().liveStatus }).catch(() => {})
   }, 80)
 }
 
-// Translation runs WHILE the client speaks: at every clause boundary (or every
-// few words) the line so far is re-translated and streamed in; the final text
-// gets one last pass. Older in-flight requests for the line are aborted.
-const translateState = new Map<string, { words: number; at: number; ctrl: AbortController | null }>()
+// Translation runs sentence by sentence while the client speaks: as soon as a
+// sentence ends it is translated ONCE and never rewritten, so the translation
+// only grows (no jumping text). Very short sentences ("Okay.") join the next
+// one; a long sentence with no end yet is cut at a comma. The sentence still
+// being spoken is shown as text only until it ends.
+interface Unit {
+  src: string
+  tr: string | null
+  ctrl: AbortController | null
+}
+interface ItemUnits {
+  units: Unit[]
+  /** Character offset in the item text where the next unit starts. */
+  cut: number
+  text: string
+}
+const itemUnits = new Map<string, ItemUnits>()
 const itemTranslation = new Map<string, string>()
+const MIN_UNIT_WORDS = 4
+const CLAUSE_CUT_WORDS = 14
+
+const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length
+const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+/** Cut finished units off `rest`; returns [units, consumed chars]. */
+function splitUnits(rest: string, final: boolean): [string[], number] {
+  const out: string[] = []
+  let pos = 0
+  for (;;) {
+    const tail = rest.slice(pos)
+    if (!tail.trim()) break
+    // Sentence ends (followed by a space or at the end of the text so far —
+    // the recognizer streams punctuation with the last word).
+    const ends: number[] = []
+    const re = /[.!?…]+(?=\s|$)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(tail))) ends.push(m.index + m[0].length)
+    let take = -1
+    for (const end of ends) {
+      if (wordCount(tail.slice(0, end)) >= MIN_UNIT_WORDS) {
+        take = end
+        break
+      }
+    }
+    if (take < 0 && !final && wordCount(tail) >= CLAUSE_CUT_WORDS) {
+      // A long sentence still going: cut at the last comma after 6+ words.
+      const comma = tail.lastIndexOf(', ')
+      if (comma > 0 && wordCount(tail.slice(0, comma)) >= 6) take = comma + 1
+    }
+    if (take < 0) {
+      if (final) take = tail.length
+      else break
+    }
+    const unit = tail.slice(0, take).trim()
+    if (unit) out.push(unit)
+    pos += take
+    while (pos < rest.length && /\s/.test(rest[pos])) pos++
+  }
+  return [out, pos]
+}
+
+function publishUnits(itemId: string): void {
+  const st = itemUnits.get(itemId)
+  if (!st) return
+  const tail = st.text.slice(st.cut).trim()
+  const parts = [
+    ...st.units.map((u) => ({ text: u.src, translation: u.tr })),
+    ...(tail ? [{ text: tail, translation: null, live: true }] : [])
+  ]
+  const joined = st.units.map((u) => u.tr ?? '').filter(Boolean).join(' ')
+  const translation = joined || null
+  if (translation) itemTranslation.set(itemId, translation)
+  if (get().live.some((l) => l.id === itemId)) upsertLive(itemId, 'them', { parts, translation })
+  if (translation && get().segments.some((sg) => sg.id === itemId)) {
+    set({ segments: get().segments.map((sg) => (sg.id === itemId ? { ...sg, translation } : sg)) })
+  }
+}
+
+function translateUnit(itemId: string, unit: Unit): void {
+  const serverId = get().serverId
+  if (!serverId || !needsTranslation(unit.src)) return
+  const st = itemUnits.get(itemId)
+  const idx = st ? st.units.indexOf(unit) : -1
+  // Context: the two sentences before (this line or the previous client line).
+  const before = st && idx > 0 ? st.units.slice(Math.max(0, idx - 2), idx).map((u) => u.src) : []
+  const prevLine =
+    before.length > 0
+      ? before.join(' ')
+      : get()
+          .live.filter((l) => l.speaker === 'them' && l.id !== itemId && l.final)
+          .slice(-1)[0]?.text
+  const ctrl = new AbortController()
+  unit.ctrl = ctrl
+  translateLineStream(
+    { meetingId: serverId, text: unit.src, target: nativeLanguageName(nativeLanguage), context: prevLine?.slice(-300) },
+    () => {},
+    ctrl.signal
+  )
+    .then((tr) => {
+      if (ctrl.signal.aborted) return
+      unit.ctrl = null
+      // Shown in one piece once the sentence is translated (no typing).
+      unit.tr = tr ?? null
+      publishUnits(itemId)
+    })
+    .catch((err) => {
+      if ((err as Error).name !== 'AbortError') console.warn('[live] translation failed', (err as Error).message)
+    })
+}
 
 function handleClientText(itemId: string, text: string, final: boolean): void {
   // Question cards: as soon as a question ends.
@@ -765,43 +872,38 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
   }
   processedSentences.set(itemId, Math.max(done, sentences.length))
 
-  if (!needsTranslation(text)) return
-  const words = text.split(/\s+/).filter(Boolean).length
-  const st = translateState.get(itemId) ?? { words: 0, at: 0, ctrl: null }
-  const grown = words - st.words
-  const clause = /[,.;:!?…]$/.test(text.trim())
-  const due = final || (grown >= 2 && clause) || grown >= 5 || (grown >= 1 && Date.now() - st.at > 1200)
-  if (!due || (!final && words < 2)) return
-  st.ctrl?.abort()
-  const ctrl = new AbortController()
-  translateState.set(itemId, { words, at: Date.now(), ctrl })
-  void translateItem(itemId, text, ctrl, final)
-}
-
-async function translateItem(itemId: string, text: string, ctrl: AbortController, final: boolean): Promise<void> {
-  const serverId = get().serverId
-  if (!serverId) return
-  const prevLine = get()
-    .live.filter((l) => l.speaker === 'them' && l.id !== itemId && l.final)
-    .slice(-1)[0]?.text
-  const apply = (t: string) => {
-    if (ctrl.signal.aborted) return
-    itemTranslation.set(itemId, t)
-    if (get().live.some((l) => l.id === itemId)) upsertLive(itemId, 'them', { translation: t })
-    if (get().segments.some((sg) => sg.id === itemId)) {
-      set({ segments: get().segments.map((sg) => (sg.id === itemId ? { ...sg, translation: t } : sg)) })
-    }
+  let st = itemUnits.get(itemId)
+  if (!st) {
+    st = { units: [], cut: 0, text: '' }
+    itemUnits.set(itemId, st)
   }
-  try {
-    await translateLineStream(
-      { meetingId: serverId, text, target: nativeLanguageName(nativeLanguage), context: prevLine },
-      apply,
-      ctrl.signal
-    )
-    if (final) translateState.delete(itemId)
-  } catch (err) {
-    if ((err as Error).name !== 'AbortError') console.warn('[live] translation failed', (err as Error).message)
+  const before = st.units.map((u) => u.src).join(' ')
+  if (!text.startsWith(st.text.slice(0, st.cut)) && norm(text).indexOf(norm(before)) !== 0) {
+    // The final transcript differs from what was streamed: rebuild the units
+    // and keep translations of sentences that did not change.
+    const old = st.units
+    const [srcs] = splitUnits(text, true)
+    st.units = srcs.map((src) => {
+      const same = old.find((u) => norm(u.src) === norm(src))
+      return same ?? { src, tr: null, ctrl: null }
+    })
+    old.forEach((u) => !st!.units.includes(u) && u.ctrl?.abort())
+    st.cut = text.length
+    st.text = text
+    st.units.forEach((u) => u.tr === null && !u.ctrl && translateUnit(itemId, u))
+    publishUnits(itemId)
+    return
   }
+  st.text = text
+  if (st.cut > text.length) st.cut = text.length
+  const [fresh, used] = splitUnits(text.slice(st.cut), final)
+  st.cut += used
+  for (const src of fresh) {
+    const unit: Unit = { src, tr: null, ctrl: null }
+    st.units.push(unit)
+    translateUnit(itemId, unit)
+  }
+  publishUnits(itemId)
 }
 
 function isEcho(text: string): boolean {
@@ -899,8 +1001,8 @@ function resetLive(): void {
   liveStartMs.clear()
   processedSentences.clear()
   itemTranslation.clear()
-  translateState.forEach((st) => st.ctrl?.abort())
-  translateState.clear()
+  itemUnits.forEach((st) => st.units.forEach((u) => u.ctrl?.abort()))
+  itemUnits.clear()
   recentThem.length = 0
   themActiveUntil = 0
   meLiveOk = false

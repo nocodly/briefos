@@ -41,7 +41,14 @@ interface CapsuleState {
   notice: string | null
   large?: boolean
   live?: {
-    lines: { id: string; speaker: 'me' | 'them'; text: string; translation: string | null; final: boolean }[]
+    lines: {
+      id: string
+      speaker: 'me' | 'them'
+      text: string
+      translation: string | null
+      final: boolean
+      parts?: { text: string; translation: string | null; live?: boolean }[]
+    }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
   ask?: AskState | null
@@ -247,6 +254,21 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
   const follow = useRef(true)
   const [following, setFollowing] = useState(true)
   const lines = live.lines
+  const [mode, setModeState] = useState<CaptionMode>(() => {
+    try {
+      return localStorage.getItem('captionMode') === 'translation' ? 'translation' : 'both'
+    } catch {
+      return 'both'
+    }
+  })
+  const setMode = (m: CaptionMode) => {
+    setModeState(m)
+    try {
+      localStorage.setItem('captionMode', m)
+    } catch {
+      /* private storage off */
+    }
+  }
   // "Ask AI" stays visible on the client's latest line, so it's easy to find.
   const lastClientId = [...lines].reverse().find((l) => l.speaker !== 'me' && l.text.trim())?.id
 
@@ -279,6 +301,7 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
       <div className="flex items-center gap-1.5 px-4 pt-2.5 text-[10px] font-semibold uppercase tracking-[.1em] text-white/45">
         <span className={`h-1.5 w-1.5 rounded-full ${live.status === 'live' ? 'animate-pulse-dot bg-green' : 'bg-amber'}`} />
         {live.status === 'live' ? 'Live' : live.status === 'failed' ? 'Live captions off' : 'Connecting…'}
+        <ModeSwitch mode={mode} onChange={setMode} />
       </div>
       <div
         ref={box}
@@ -299,7 +322,7 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
         ) : (
           <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
             {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} large={large} pinned={l.id === lastClientId} />
+              <CaptionLine key={l.id} line={l} large={large} pinned={l.id === lastClientId} mode={mode} />
             ))}
           </div>
         )}
@@ -403,8 +426,106 @@ function AskPanel({ ask, large }: { ask: AskState; large: boolean }) {
 
 type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
-function CaptionLine({ line, large, pinned = false }: { line: CaptionLineData; large: boolean; pinned?: boolean }) {
+type CaptionMode = 'both' | 'translation'
+
+/** "Both" = sentence + translation; "Translation" = only the translation. */
+function ModeSwitch({ mode, onChange }: { mode: CaptionMode; onChange: (m: CaptionMode) => void }) {
+  return (
+    <div className="ml-auto flex rounded-full bg-white/[.06] p-0.5 normal-case tracking-normal">
+      {(
+        [
+          ['both', 'Both'],
+          ['translation', 'Translation']
+        ] as const
+      ).map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${mode === id ? 'bg-white/[.12] text-white' : 'text-white/45 hover:text-white/75'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A client line as sentence pairs: each finished sentence (small, calm) with
+ * its translation right under it (large). A translation appears in one piece
+ * once its sentence is done and never changes; only the sentence still being
+ * spoken is typed out — one moving place at a time.
+ */
+function SentencePairs({ parts, large, mode, final }: { parts: NonNullable<CaptionLineData['parts']>; large: boolean; mode: CaptionMode; final: boolean }) {
+  return (
+    <div className={`mt-1 flex flex-col ${large ? 'gap-3' : 'gap-2'}`}>
+      {parts.map((p, i) => {
+        const speaking = Boolean(p.live) && !final
+        const showSource = mode === 'both' || !p.translation
+        return (
+          <div key={i}>
+            {showSource &&
+              (speaking ? (
+                // Only the sentence being spoken is typed out.
+                <SmoothText
+                  text={p.text}
+                  typing
+                  className={`leading-relaxed ${mode === 'translation' ? 'text-white/40' : 'text-white/60'} ${
+                    large ? 'text-[14.5px]' : 'text-[12.5px]'
+                  }`}
+                />
+              ) : (
+                <div
+                  className={`leading-relaxed ${mode === 'translation' ? 'text-white/40' : 'text-white/60'} ${
+                    large ? 'text-[14.5px]' : 'text-[12.5px]'
+                  }`}
+                >
+                  {p.text}
+                </div>
+              ))}
+            {p.translation ? (
+              <div
+                className={`animate-caption-in border-l-2 border-[#5EC8F2]/60 pl-3 font-medium leading-relaxed text-[#BFE9FF] ${
+                  showSource ? 'mt-1' : ''
+                } ${large ? 'text-[18px]' : 'text-[14px]'}`}
+              >
+                {p.translation}
+              </div>
+            ) : (
+              !speaking && (
+                <div className="mt-1 flex gap-1 pl-3" aria-label="Translating">
+                  {[0, 1, 2].map((d) => (
+                    <span key={d} className="h-1 w-1 animate-pulse rounded-full bg-[#5EC8F2]/60" style={{ animationDelay: `${d * 150}ms` }} />
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function CaptionLine({ line, large, pinned = false, mode }: { line: CaptionLineData; large: boolean; pinned?: boolean; mode: CaptionMode }) {
   const client = line.speaker !== 'me'
+  if (client && line.parts && line.parts.length > 0) {
+    return (
+      <div className="group relative animate-caption-in">
+        <div className="flex items-center gap-2">
+          <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-accent-pale">Client</div>
+          <button
+            onClick={() => void invoke('capsule:ask', { line: line.text })}
+            title="Ask AI what this means and what to answer"
+            className={`ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100 ${pinned ? 'opacity-100' : 'opacity-0'}`}
+          >
+            <i className="ti ti-sparkles text-[11px]" /> Ask AI
+          </button>
+        </div>
+        <SentencePairs parts={line.parts} large={large} mode={mode} final={line.final} />
+      </div>
+    )
+  }
   return (
     <div className="group relative animate-caption-in">
       <div className="flex items-center gap-2">

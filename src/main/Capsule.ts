@@ -65,6 +65,8 @@ export interface CapsuleLiveLine {
   text: string
   translation: string | null
   final: boolean
+  /** Sentence → translation pairs (client lines). */
+  parts?: { text: string; translation: string | null; live?: boolean }[]
 }
 
 export interface CapsuleAgentRun {

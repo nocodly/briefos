@@ -500,13 +500,24 @@ export function registerIpcHandlers(): void {
   })
   handle('capsule:live', async (_e, payload: { lines?: unknown; status?: string }) => {
     const lines = (Array.isArray(payload?.lines) ? payload.lines : []).slice(-10).map((l, i) => {
-      const x = l as { id?: unknown; speaker?: unknown; text?: unknown; translation?: unknown; final?: unknown }
+      const x = l as { id?: unknown; speaker?: unknown; text?: unknown; translation?: unknown; final?: unknown; parts?: unknown }
+      const parts = Array.isArray(x.parts)
+        ? x.parts.slice(-12).map((p) => {
+            const y = p as { text?: unknown; translation?: unknown; live?: unknown }
+            return {
+              text: String(y.text ?? '').slice(0, 600),
+              translation: typeof y.translation === 'string' ? y.translation.slice(0, 800) : null,
+              live: Boolean(y.live)
+            }
+          })
+        : undefined
       return {
         id: String(x.id ?? i).slice(0, 80),
         speaker: x.speaker === 'me' ? ('me' as const) : ('them' as const),
         text: String(x.text ?? '').slice(-400),
         translation: typeof x.translation === 'string' ? x.translation.slice(-500) : null,
-        final: Boolean(x.final)
+        final: Boolean(x.final),
+        parts
       }
     })
     const st = ['off', 'connecting', 'live', 'failed'].includes(String(payload?.status)) ? String(payload?.status) : 'off'
