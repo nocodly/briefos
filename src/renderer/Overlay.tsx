@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { invoke, subscribe } from './lib/ipc'
 import { LogoMark } from './components/Logo'
 
@@ -41,6 +41,7 @@ interface CapsuleState {
   agentRun: AgentRun | null
   notice: string | null
   large?: boolean
+  captionsH?: number
   live?: {
     lines: {
       id: string
@@ -217,7 +218,15 @@ export default function Overlay() {
         </div>
       )}
 
-      {cap.expanded && <AgentPanel hint={cap.hint} run={cap.agentRun} notice={cap.notice} live={cap.live} large={Boolean(cap.large)} ask={cap.ask ?? null} />}
+      {cap.expanded && <AgentPanel
+          hint={cap.hint}
+          run={cap.agentRun}
+          notice={cap.notice}
+          live={cap.live}
+          large={Boolean(cap.large)}
+          ask={cap.ask ?? null}
+          captionsH={cap.captionsH ?? (cap.large ? 460 : 300)}
+        />}
     </Shell>
   )
 }
@@ -230,7 +239,8 @@ function AgentPanel({
   notice,
   live,
   large,
-  ask
+  ask,
+  captionsH
 }: {
   hint: ReplyHint | null
   run: AgentRun | null
@@ -238,20 +248,21 @@ function AgentPanel({
   live?: CapsuleState['live']
   large: boolean
   ask: AskState | null
+  captionsH: number
 }) {
   // During a call the capsule shows only the conversation: live captions with
   // translation, "Ask AI" on any line, and the client's question card. Tasks,
   // dates and agents are handled after the call, in the meeting notes.
   return (
-    <div className="flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
+    <div className="relative flex flex-col gap-2 border-t border-white/[.07] px-2.5 pb-2.5 pt-2" style={noDrag}>
       {/* Same tree whether the chat is open or not, so the captions never re-mount (and re-type). */}
       <div className={large ? 'flex gap-2' : 'flex flex-col gap-2'}>
         {live && live.status !== 'off' && (
           <div className="min-w-0 flex-1">
-            <LiveCaptions live={live} large={large} compact={!large && Boolean(ask)} hint={hint} />
+            <LiveCaptions live={live} large={large} height={!large && ask ? Math.min(200, captionsH) : captionsH} hint={hint} />
           </div>
         )}
-        {ask && <AskPanel ask={ask} large={large && Boolean(live && live.status !== 'off')} />}
+        {ask && <AskPanel ask={ask} large={large && Boolean(live && live.status !== 'off')} height={captionsH + 43} />}
       </div>
       {/* With live captions the question is marked inside them (with its term); the separate card is only for calls without captions. */}
       {hint && !(live && live.status !== 'off') && <QuestionCardView hint={hint} />}
@@ -261,6 +272,59 @@ function AgentPanel({
         </div>
       )}
       {run && <RunCard run={run} />}
+      <ResizeGrip captionsH={captionsH} />
+    </div>
+  )
+}
+
+/**
+ * Drag the bottom-right corner to make the capsule bigger or smaller (width +
+ * captions height); double-click to go back to the default size. Remembered
+ * for the next calls.
+ */
+function ResizeGrip({ captionsH }: { captionsH: number }) {
+  const start = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
+  const frame = useRef(0)
+  const latest = useRef<{ w: number; h: number } | null>(null)
+
+  const send = (done: boolean) => {
+    if (!latest.current) return
+    void invoke('capsule:resize', { ...latest.current, done }).catch(() => {})
+  }
+  return (
+    <div
+      role="separator"
+      aria-label="Resize"
+      title="Drag to resize · double-click to reset"
+      onPointerDown={(e) => {
+        e.preventDefault()
+        e.currentTarget.setPointerCapture(e.pointerId)
+        start.current = { x: e.screenX, y: e.screenY, w: window.innerWidth, h: captionsH }
+      }}
+      onPointerMove={(e) => {
+        const s = start.current
+        if (!s) return
+        latest.current = { w: s.w + (e.screenX - s.x), h: s.h + (e.screenY - s.y) }
+        if (!frame.current) {
+          frame.current = requestAnimationFrame(() => {
+            frame.current = 0
+            send(false)
+          })
+        }
+      }}
+      onPointerUp={(e) => {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+        if (start.current) send(true)
+        start.current = null
+        latest.current = null
+      }}
+      onDoubleClick={() => void invoke('capsule:resize', { reset: true }).catch(() => {})}
+      className="absolute bottom-1 right-1 z-20 flex h-5 w-5 cursor-nwse-resize items-end justify-end p-0.5 text-white/30 hover:text-white/70"
+      style={noDrag}
+    >
+      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+        <path d="M9 1L1 9M9 5L5 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
     </div>
   )
 }
@@ -268,12 +332,12 @@ function AgentPanel({
 function LiveCaptions({
   live,
   large,
-  compact = false,
+  height,
   hint
 }: {
   live: NonNullable<CapsuleState['live']>
   large: boolean
-  compact?: boolean
+  height: number
   hint: ReplyHint | null
 }) {
   const box = useRef<HTMLDivElement>(null)
@@ -351,7 +415,8 @@ function LiveCaptions({
         }}
         onMouseDown={() => setFollow(false)}
         onMouseUp={(e) => atBottom(e.currentTarget) && setFollow(true)}
-        className={`caption-scroll overflow-y-auto px-4 pb-4 pt-2 ${large ? 'h-[460px]' : compact ? 'h-[200px]' : 'h-[300px]'}`}
+        style={{ height }}
+        className="caption-scroll overflow-y-auto px-4 pb-4 pt-2"
       >
         {lines.length === 0 ? (
           <div className="pt-2 text-[13px] text-white/35">Words appear here as people speak.</div>
@@ -384,7 +449,7 @@ function LiveCaptions({
  * "Ask AI" mini chat: the picked line, the AI answer (streams in) and a box for
  * follow-up questions. Lives next to the captions so the call can go on.
  */
-function AskPanel({ ask, large }: { ask: AskState; large: boolean }) {
+function AskPanel({ ask, large, height }: { ask: AskState; large: boolean; height: number }) {
   const [text, setText] = useState('')
   const box = useRef<HTMLDivElement>(null)
   const busy = ask.status === 'thinking' || ask.status === 'answering'
@@ -404,8 +469,9 @@ function AskPanel({ ask, large }: { ask: AskState; large: boolean }) {
 
   return (
     <div
+      style={large ? { height } : undefined}
       className={`flex flex-col rounded-[14px] border border-accent/30 bg-[#1A1210]/60 animate-caption-in ${
-        large ? 'h-[503px] w-[300px] flex-none' : 'h-[240px]'
+        large ? 'w-[300px] flex-none' : 'h-[240px]'
       }`}
     >
       <div className="flex items-center gap-1.5 px-3.5 pt-2.5 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-pale">
@@ -556,8 +622,8 @@ function Sentence({
 }) {
   const question = /\?\s*$/.test(text.trim())
   const term = hintFor(text, hint)
-  const srcSize = big ? (large ? 'text-[19px]' : 'text-[15px]') : large ? 'text-[15px]' : 'text-[13px]'
-  const trSize = big ? (large ? 'text-[17px]' : 'text-[14px]') : large ? 'text-[14px]' : 'text-[12.5px]'
+  const srcSize = large ? 'text-[17px]' : 'text-[14px]'
+  const trSize = large ? 'text-[16px]' : 'text-[13.5px]'
   const srcColor = big ? 'text-white' : 'text-white/55'
   const trColor = big ? 'text-[#8FD8F7]' : 'text-[#8FD8F7]/55'
   const showSource = mode === 'both' || !translation
@@ -576,14 +642,17 @@ function Sentence({
           (speaking ? (
             <LiveWords text={text} className={`font-medium leading-snug ${srcSize} ${mode === 'translation' ? 'text-white/45' : srcColor}`} />
           ) : (
-            <div className={`font-medium leading-snug transition-all duration-500 ${srcSize} ${mode === 'translation' ? 'text-white/45' : srcColor}`}>
+            <div className={`font-medium leading-snug transition-colors duration-700 ${srcSize} ${mode === 'translation' ? 'text-white/45' : srcColor}`}>
               {text}
             </div>
           ))}
         {translation ? (
-          <div className={`animate-caption-in leading-snug transition-all duration-500 ${speaking ? 'opacity-60' : ''} ${showSource ? 'mt-0.5' : ''} ${mode === 'translation' ? (big ? 'text-[19px] text-white' : 'text-[15px] text-white/55') : `${trSize} ${trColor}`}`}>
-            {translation}
-          </div>
+          <RevealText
+            text={translation}
+            className={`animate-caption-in leading-snug transition-[color,opacity] duration-700 ${speaking ? 'opacity-60' : ''} ${showSource ? 'mt-0.5' : ''} ${
+              mode === 'translation' ? `${large ? 'text-[18px]' : 'text-[15px]'} ${big ? 'text-white' : 'text-white/55'}` : `${trSize} ${trColor}`
+            }`}
+          />
         ) : (
           !speaking && (
             <div className="mt-1 flex gap-1" aria-label="Translating">
@@ -614,7 +683,66 @@ function Sentence({
   )
 }
 
-function CaptionLine({
+/**
+ * Streamed translation text arrives in bursts of a few words. Reveal it at a
+ * steady, fast pace (catches up within ~0.3 s) so it flows instead of jumping.
+ * Never shows less than before; a replaced text that doesn't continue the
+ * shown one appears at once.
+ */
+function RevealText({ text, className }: { text: string; className: string }) {
+  const [shown, setShown] = useState(0)
+  const target = useRef(text)
+  const shownRef = useRef(0)
+  const prevText = useRef(text)
+
+  // A new version that doesn't continue what is on screen appears at once.
+  useLayoutEffect(() => {
+    const onScreen = prevText.current.slice(0, shownRef.current)
+    if (!text.startsWith(onScreen)) {
+      shownRef.current = text.length
+      setShown(text.length)
+    }
+    target.current = text
+    prevText.current = text
+  }, [text])
+
+  useEffect(() => {
+    let raf = 0
+    let last = performance.now()
+    const step = (now: number) => {
+      const dt = Math.min(50, now - last)
+      last = now
+      const goal = target.current.length
+      const n = shownRef.current
+      if (n < goal) {
+        // ~90 chars/s, faster when far behind: catches up within ~0.3 s.
+        const next = Math.min(goal, n + Math.max(1, Math.round(((goal - n) / 6 + 1.5) * (dt / 16))))
+        shownRef.current = next
+        setShown(next)
+      }
+      raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+
+  return <div className={className}>{text.slice(0, Math.min(shown, text.length))}</div>
+}
+
+const CaptionLine = memo(CaptionLineView, (a, b) =>
+  a.large === b.large &&
+  a.mode === b.mode &&
+  a.calm === b.calm &&
+  a.newest === b.newest &&
+  a.hint === b.hint &&
+  a.line.text === b.line.text &&
+  a.line.final === b.line.final &&
+  a.line.translation === b.line.translation &&
+  JSON.stringify(a.line.parts) === JSON.stringify(b.line.parts) &&
+  (a.line.parts ?? [{}]).every((_, i) => a.fresh.has(`${a.line.id}#${i}`) === b.fresh.has(`${b.line.id}#${i}`))
+)
+
+function CaptionLineView({
   line,
   large,
   mode,

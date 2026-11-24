@@ -748,7 +748,7 @@ function pushLiveToCapsule(): void {
       .live.slice(-10)
       .map(({ id, speaker, text, translation, final, parts }) => ({ id, speaker, text, translation, final, parts }))
     void invoke('capsule:live', { lines, status: get().liveStatus }).catch(() => {})
-  }, 80)
+  }, 40)
 }
 
 // Translation runs sentence by sentence while the client speaks: as soon as a

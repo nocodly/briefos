@@ -30,6 +30,8 @@ import {
   showHint,
   toggleCapsuleExpanded,
   toggleCapsuleLarge,
+  resizeCapsule,
+  resetCapsuleSize,
   type ReplyHint
 } from './Capsule'
 import { agentWorkdir, cancelAgentRun, detectAgents, startAgentRun, type AgentId } from './AgentRunner'
@@ -597,6 +599,11 @@ export function registerIpcHandlers(): void {
       status: status as 'thinking' | 'answering' | 'done' | 'failed',
       error: typeof x.error === 'string' ? x.error.slice(0, 200) : null
     })
+    return { ok: true }
+  })
+  handle('capsule:resize', async (_e, p: { w?: number; h?: number; done?: boolean; reset?: boolean }) => {
+    if (p?.reset) resetCapsuleSize()
+    else if (Number.isFinite(p?.w) && Number.isFinite(p?.h)) resizeCapsule(Number(p.w), Number(p.h), Boolean(p.done))
     return { ok: true }
   })
   handle('capsule:fit', async (_e, height: number) => {

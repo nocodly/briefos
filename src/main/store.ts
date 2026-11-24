@@ -52,6 +52,9 @@ export interface AppSettings {
   myCallLanguage: string
   /** Recording capsule opens as the big centred reading view. */
   capsuleLarge: boolean
+  /** Size the user dragged the capsule to (width + captions height), per view. */
+  capsuleSizeLarge: { w: number; h: number } | null
+  capsuleSizeSmall: { w: number; h: number } | null
   /** Question cards also suggest what to mention (opt-in). */
   answerHints: boolean
   /** Who the user is: services, stack, rates — background for every call. */
@@ -93,6 +96,8 @@ const DEFAULTS: AppSettings = {
   clientLanguage: 'en',
   myCallLanguage: '',
   capsuleLarge: true,
+  capsuleSizeLarge: null,
+  capsuleSizeSmall: null,
   answerHints: false,
   aboutMe: '',
   calendarIcsUrl: ''

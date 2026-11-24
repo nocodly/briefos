@@ -46,6 +46,8 @@ export interface CapsuleState {
   notice: string | null
   /** Large reading view: a big window in the middle of the screen. */
   large: boolean
+  /** Captions area height (px) — the user can drag the capsule bigger/smaller. */
+  captionsH: number
   /** Live captions of the client: last lines with translations. */
   live: { lines: CapsuleLiveLine[]; status: 'off' | 'connecting' | 'live' | 'failed' }
   /** "Ask AI" mini chat about a caption line (null = closed). */
@@ -89,6 +91,7 @@ let state: CapsuleState = {
   agentRun: null,
   notice: null,
   large: true,
+  captionsH: 460,
   live: { lines: [], status: 'off' },
   ask: null
 }
@@ -100,7 +103,61 @@ const MARGIN = 16
 function widthFor(s: CapsuleState, workWidth: number): number {
   if (s.mode === 'prompt') return 316
   if (!s.expanded) return 252
+  const custom = sizeFor(s.large)
+  if (custom) return Math.min(Math.max(custom.w, MIN_W), workWidth - 2 * MARGIN)
   return s.large ? Math.min(820, workWidth - 2 * MARGIN) : 440
+}
+
+const MIN_W = 380
+const MIN_CAPTIONS_H = 140
+const DEFAULT_CAPTIONS_H = { large: 460, small: 300 }
+/** Size the user chose for this view (null = default). */
+function sizeFor(large: boolean): { w: number; h: number } | null {
+  return (large ? sizeLarge : sizeSmall) ?? null
+}
+let sizeLarge: { w: number; h: number } | null = null
+let sizeSmall: { w: number; h: number } | null = null
+let sizesLoaded = false
+function loadSizes(): void {
+  if (sizesLoaded) return
+  sizesLoaded = true
+  sizeLarge = (getSetting('capsuleSizeLarge') as { w: number; h: number } | null) ?? null
+  sizeSmall = (getSetting('capsuleSizeSmall') as { w: number; h: number } | null) ?? null
+}
+function captionsHFor(large: boolean): number {
+  return sizeFor(large)?.h ?? (large ? DEFAULT_CAPTIONS_H.large : DEFAULT_CAPTIONS_H.small)
+}
+
+/**
+ * The user drags the capsule's corner: new width and captions height. The
+ * top-left corner stays where it is. `done` saves the size for next calls.
+ */
+export function resizeCapsule(w: number, h: number, done: boolean): void {
+  if (state.mode !== 'recording' || !state.expanded) return
+  const win = getOverlayWindow()
+  if (!win || win.isDestroyed()) return
+  const b = win.getBounds()
+  const wa = screen.getDisplayMatching(b).workArea
+  const width = Math.round(Math.min(Math.max(w, MIN_W), wa.width - 2 * MARGIN))
+  const captionsH = Math.round(Math.min(Math.max(h, MIN_CAPTIONS_H), wa.height - 260))
+  const size = { w: width, h: captionsH }
+  if (state.large) {
+    sizeLarge = size
+    largeSpot = { x: b.x, y: b.y }
+  } else {
+    sizeSmall = size
+    userSpot = { right: b.x + width, y: b.y }
+  }
+  if (done) setSetting(state.large ? 'capsuleSizeLarge' : 'capsuleSizeSmall', size)
+  setCapsule({ captionsH })
+}
+
+/** Double-click on the corner: back to the default size. */
+export function resetCapsuleSize(): void {
+  if (state.large) sizeLarge = null
+  else sizeSmall = null
+  setSetting(state.large ? 'capsuleSizeLarge' : 'capsuleSizeSmall', null)
+  setCapsule({ captionsH: captionsHFor(state.large) })
 }
 function isLarge(s: CapsuleState): boolean {
   return s.mode === 'recording' && s.expanded && s.large
@@ -259,7 +316,7 @@ export function setCapsuleAsk(ask: CapsuleAsk | null): void {
 /** Switch between the big centred reading view and the small side capsule. */
 export function toggleCapsuleLarge(): void {
   setSetting('capsuleLarge', !state.large)
-  setCapsule({ large: !state.large, expanded: true })
+  setCapsule({ large: !state.large, expanded: true, captionsH: captionsHFor(!state.large) })
 }
 
 export function toggleCapsuleExpanded(): void {
@@ -307,7 +364,10 @@ export function capsuleOnCallEnd(): void {
 }
 
 export function capsuleOnRecordingStart(): void {
+  loadSizes()
+  const large = getSetting('capsuleLarge') !== false
   setCapsule({
+    captionsH: captionsHFor(large),
     event: null, mode: 'recording', callEnded: false, hint: null, expanded: true, large: getSetting('capsuleLarge') !== false })
 }
 
