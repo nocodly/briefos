@@ -131,7 +131,7 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
             </p>
           </div>
           {usage && <UsageBadge usage={usage} />}
-          <div className="flex flex-col items-end gap-1">
+          <div className="flex flex-col items-end gap-2.5">
             <div className="flex items-center gap-2">
               <button
                 onClick={startTest}
