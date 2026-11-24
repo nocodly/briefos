@@ -14,6 +14,7 @@ const MODEL = Deno.env.get('TRANSLATE_MODEL') ?? 'gpt-4.1-mini'
 
 // Warm-instance caches: skip the auth + ownership round-trips on every line.
 const owned = new Map<string, string>() // meetingId → userId
+let usePriority = (Deno.env.get('TRANSLATE_PRIORITY') ?? 'on') !== 'off'
 const tokens = new Map<string, { userId: string; until: number }>()
 
 async function userIdFor(req: Request): Promise<string> {
@@ -50,13 +51,18 @@ serve(async (req) => {
     owned.set(meetingId, userId)
   }
 
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  // Priority processing: lower, steadier latency for the live translation (a
+  // sentence costs fractions of a cent either way). Falls back to the default
+  // tier if the account or model doesn't support it.
+  const call = (priority: boolean) =>
+    fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
       temperature: 0,
       max_tokens: 400,
+      ...(priority ? { service_tier: 'priority' } : {}),
       stream: Boolean(body.stream),
       messages: [
         {
@@ -71,6 +77,14 @@ serve(async (req) => {
       ]
     })
   })
+  const t0 = Date.now()
+  let res = await call(usePriority)
+  if (usePriority && res.status === 400) {
+    console.warn('[translate-line] priority tier refused, using default:', (await res.text()).slice(0, 160))
+    usePriority = false
+    res = await call(false)
+  }
+  console.log('[translate-line] openai headers in', Date.now() - t0, 'ms', usePriority ? '(priority)' : '')
   if (!res.ok || !res.body) {
     console.error('[translate-line] openai error', res.status, (await res.text()).slice(0, 200))
     throw new ApiError(502, 'ai_failed', 'Translation failed.')

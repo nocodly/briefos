@@ -770,9 +770,15 @@ interface ItemUnits {
   text: string
 }
 const itemUnits = new Map<string, ItemUnits>()
+/** Translation speed in this call: request → first words / full sentence (ms). */
+const trLatency = { first: [] as number[], done: [] as number[] }
+const median = (xs: number[]) => (xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]) : null)
 const itemTranslation = new Map<string, string>()
 const MIN_UNIT_WORDS = 4
-const CLAUSE_CUT_WORDS = 14
+// A long sentence is translated in parts: cut at a comma once 9+ words are
+// waiting (with 5+ before the comma), so the first half doesn't wait for the end.
+const CLAUSE_CUT_WORDS = 9
+const CLAUSE_MIN_WORDS = 5
 
 const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length
 const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
@@ -800,7 +806,7 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
     if (take < 0 && !final && wordCount(tail) >= CLAUSE_CUT_WORDS) {
       // A long sentence still going: cut at the last comma after 6+ words.
       const comma = tail.lastIndexOf(', ')
-      if (comma > 0 && wordCount(tail.slice(0, comma)) >= 6) take = comma + 1
+      if (comma > 0 && wordCount(tail.slice(0, comma)) >= CLAUSE_MIN_WORDS) take = comma + 1
     }
     if (take < 0) {
       if (final) take = tail.length
@@ -846,16 +852,30 @@ function translateUnit(itemId: string, unit: Unit): void {
           .slice(-1)[0]?.text
   const ctrl = new AbortController()
   unit.ctrl = ctrl
+  const t0 = performance.now()
+  let first = 0
   translateLineStream(
     { meetingId: serverId, text: unit.src, target: nativeLanguageName(nativeLanguage), context: prevLine?.slice(-300) },
-    () => {},
+    // Streams into this sentence's own slot: the text only grows at its end,
+    // nothing above it moves or changes.
+    (soFar) => {
+      if (ctrl.signal.aborted) return
+      if (!first) {
+        first = performance.now() - t0
+        trLatency.first.push(first)
+      }
+      unit.tr = soFar
+      publishUnits(itemId)
+    },
     ctrl.signal
   )
     .then((tr) => {
       if (ctrl.signal.aborted) return
       unit.ctrl = null
-      // Shown in one piece once the sentence is translated (no typing).
       unit.tr = tr ?? null
+      const done = performance.now() - t0
+      trLatency.done.push(done)
+      console.log(`[live] translated in ${Math.round(first)} ms (first words) / ${Math.round(done)} ms (full):`, unit.src.slice(0, 60))
       publishUnits(itemId)
     })
     .catch((err) => {
@@ -1003,6 +1023,8 @@ function resetLive(): void {
   itemTranslation.clear()
   itemUnits.forEach((st) => st.units.forEach((u) => u.ctrl?.abort()))
   itemUnits.clear()
+  trLatency.first.length = 0
+  trLatency.done.length = 0
   recentThem.length = 0
   themActiveUntil = 0
   meLiveOk = false
@@ -1131,7 +1153,10 @@ export async function stopMeeting(): Promise<void> {
   track('meeting_finished', {
     minutes: Math.round(durationMs / 60_000),
     cards: s.hints.length,
-    unanswered: s.hints.filter((h) => !h.answered).length
+    unanswered: s.hints.filter((h) => !h.answered).length,
+    trFirstMs: median(trLatency.first),
+    trDoneMs: median(trLatency.done),
+    trCount: trLatency.done.length
   })
   activeBaseMs = durationMs
   activeSince = null

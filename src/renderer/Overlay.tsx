@@ -289,6 +289,9 @@ function LiveCaptions({
     parts.forEach((_, i) => clientParts.push(`${l.id}#${i}`))
   }
   const fresh = new Set(clientParts.slice(-3))
+  // Ask AI is pinned on ONE sentence only: the newest client line's question
+  // (or its newest finished sentence).
+  const lastClient = [...lines].reverse().find((l) => l.speaker !== 'me' && l.text.trim())
 
   // Always keep the newest words in view: every frame, glide the scroll toward
   // the bottom (also while a line is still being typed). Stops only when the
@@ -340,7 +343,7 @@ function LiveCaptions({
         ) : (
           <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
             {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} large={large} mode={mode} fresh={fresh} calm={following} hint={hint} />
+              <CaptionLine key={l.id} line={l} large={large} mode={mode} fresh={fresh} calm={following} hint={hint} newest={l.id === lastClient?.id} />
             ))}
           </div>
         )}
@@ -602,7 +605,8 @@ function CaptionLine({
   mode,
   fresh,
   calm,
-  hint
+  hint,
+  newest
 }: {
   line: CaptionLineData
   large: boolean
@@ -611,6 +615,7 @@ function CaptionLine({
   /** Following the newest words: older sentences calm down. False while scrolled up. */
   calm: boolean
   hint: ReplyHint | null
+  newest: boolean
 }) {
   // Your own lines: one quiet line on the right — you know what you said.
   if (line.speaker === 'me') {
@@ -641,7 +646,7 @@ function CaptionLine({
             big={!calm || fresh.has(`${line.id}#${i}`)}
             large={large}
             hint={hint}
-            pinAsk={fresh.has(`${line.id}#${i}`) && i === pinned}
+            pinAsk={newest && i === pinned}
           />
         ))}
       </div>
