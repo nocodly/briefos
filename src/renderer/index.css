@@ -144,6 +144,24 @@ body.overlay {
 .animate-caption-in {
   animation: caption-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
+/* Task ticked: the check pops in. */
+@keyframes check-pop {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.25);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-check-pop {
+  animation: check-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
 /* Each newly recognized word fades in (fast, so it never lags behind speech). */
 @keyframes word-in {
   from {

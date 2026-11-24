@@ -214,6 +214,11 @@ export function demoCall(): Promise<{ secret: string; model: string }> {
   return call<{ secret: string; model: string }>('demo-call', '{}', true)
 }
 
+/** "Help us improve Minutama" form → stored + emailed to the team. */
+export function sendFeedback(input: { name?: string; rating?: number; message: string; appVersion?: string }): Promise<{ ok: boolean; emailed: boolean }> {
+  return call<{ ok: boolean; emailed: boolean }>('feedback', JSON.stringify(input), true)
+}
+
 /** Stripe Customer Portal: cancel, switch plan, card, invoices. */
 export function billingPortal(): Promise<{ url: string; login?: boolean }> {
   return call<{ url: string; login?: boolean }>('billing-portal', '{}', true)

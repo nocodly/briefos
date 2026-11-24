@@ -339,6 +339,11 @@ export function registerIpcHandlers(): void {
     const { testCalendar } = await import('./CalendarWatcher')
     return testCalendar(link)
   })
+  // "Contact us" in the menu: a new email to the team in the user's mail app.
+  handle('app:contact', async () => {
+    await shell.openExternal(`mailto:hello@minutama.com?subject=${encodeURIComponent(`Minutama ${app.getVersion()}`)}`)
+    return { ok: true }
+  })
   // Share one task to a messenger or mail: opens the app's own share screen
   // (you pick the chat there). Only these fixed targets — never a URL from the renderer.
   handle('share:task', async (_e, p: { target?: string; text?: string; subject?: string }) => {

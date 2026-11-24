@@ -16,6 +16,7 @@ import { addTaskToNotes, askAi, closeAsk, handleRecordingCommand, hintNow, setCa
 import { invoke, subscribe } from './lib/ipc'
 import { supabase, getProfile } from './lib/supabaseClient'
 import { Logo, LogoMark } from './components/Logo'
+import FeedbackPage from './FeedbackPage'
 import { buildAgentPrompt, initAgentEvents, SendToAgentModal, useAgentRuns, type AgentId } from './components/Agent'
 
 export type Page =
@@ -28,6 +29,7 @@ export type Page =
   | 'integrations'
   | 'import'
   | 'settings'
+  | 'feedback'
   | 'onboarding'
 
 export interface NavigateFn {
@@ -250,6 +252,7 @@ export default function App() {
         {page === 'integrations' && <Integrations navigate={navigate} />}
         {page === 'import' && <ImportPage navigate={navigate} />}
         {page === 'settings' && <Settings navigate={navigate} />}
+        {page === 'feedback' && <FeedbackPage />}
       </main>
       {isProcessing && <Processing step={processingStep} />}
       {errorMsg && (
@@ -321,9 +324,22 @@ function Sidebar({
           onClick={() => navigate('dashboard')}
         />
         <NavItem icon="checklist" label="Tasks" active={page === 'tasks'} onClick={() => navigate('tasks')} />
+
+        {/* What's coming — and a nudge to tell us what to build. */}
+        <button
+          onClick={() => navigate('feedback')}
+          className="mt-4 w-full rounded-xl border border-dashed border-accent/30 bg-accent-soft/40 px-3 py-2.5 text-left transition-all hover:border-accent/60"
+        >
+          <div className="flex items-center gap-1.5 text-[11.5px] font-semibold text-accent-ink">
+            <i className="ti ti-sparkles text-[13px]" /> New features in development
+          </div>
+          <div className="mt-0.5 text-[11px] leading-snug text-text-3">Tell us what you need next</div>
+        </button>
       </nav>
 
       <div className="p-2 border-t border-border-soft space-y-0.5">
+        <NavItem icon="message-heart" label="Feedback" active={page === 'feedback'} onClick={() => navigate('feedback')} />
+        <NavItem icon="mail" label="Contact us" onClick={() => void invoke('app:contact').catch(() => {})} />
         <NavItem
           icon="settings"
           label="Settings"

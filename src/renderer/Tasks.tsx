@@ -20,7 +20,9 @@ interface Task {
   done: boolean
 }
 
-type Filter = 'open' | 'mine' | 'done' | 'all'
+type Filter = 'open' | 'done' | 'all'
+
+const keyOf = (t: Task) => `${t.meetingId}::${t.task}`
 
 export default function Tasks({ navigate }: { navigate: NavigateFn }) {
   const [tasks, setTasks] = useState<Task[] | null>(null)
@@ -33,16 +35,40 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
   }, [])
   useEffect(load, [load])
 
+  // Ticking a task: the green check pops in, the row stays a moment so you
+  // see it, then slides away (Open view). Each task animates on its own.
+  const [ticking, setTicking] = useState<Set<string>>(new Set())
+  const [leaving, setLeaving] = useState<Set<string>>(new Set())
   const toggle = async (t: Task) => {
-    setTasks((cur) => cur?.map((x) => (x === t ? { ...x, done: !x.done } : x)) ?? null)
-    await invoke('tasks:setDone', { meetingId: t.meetingId, task: t.task, done: !t.done }).catch(load)
+    const k = keyOf(t)
+    if (ticking.has(k)) return
+    const done = !t.done
+    void invoke('tasks:setDone', { meetingId: t.meetingId, task: t.task, done }).catch(load)
+    if (done && filter === 'open') {
+      setTicking((s) => new Set(s).add(k))
+      setTimeout(() => setLeaving((s) => new Set(s).add(k)), 700)
+      setTimeout(() => {
+        setTasks((cur) => cur?.map((x) => (keyOf(x) === k ? { ...x, done: true } : x)) ?? null)
+        setTicking((s) => {
+          const n = new Set(s)
+          n.delete(k)
+          return n
+        })
+        setLeaving((s) => {
+          const n = new Set(s)
+          n.delete(k)
+          return n
+        })
+      }, 1050)
+      return
+    }
+    setTasks((cur) => cur?.map((x) => (keyOf(x) === k ? { ...x, done } : x)) ?? null)
   }
 
   const shown = useMemo(() => {
     const all = tasks ?? []
     if (filter === 'open') return all.filter((t) => !t.done)
     if (filter === 'done') return all.filter((t) => t.done)
-    if (filter === 'mine') return all.filter((t) => !t.done && /^(me|я|i)$/i.test(t.person.trim()))
     return all
   }, [tasks, filter])
 
@@ -54,7 +80,6 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
         {(
           [
             ['open', 'Open'],
-            ['mine', 'Mine'],
             ['done', 'Done'],
             ['all', 'All']
           ] as const
@@ -81,19 +106,28 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
         </div>
       ) : (
         <div className="glass divide-y divide-border-soft overflow-hidden rounded-panel">
-          {shown.map((t, i) => (
-            <div key={`${t.meetingId}-${i}`} className="group flex items-start gap-3 px-4 py-3 hover:bg-white/[.03]">
+          {shown.map((t) => {
+            const k = keyOf(t)
+            const checked = t.done || ticking.has(k)
+            const gone = leaving.has(k)
+            return (
+            <div
+              key={k}
+              className={`group grid transition-all duration-300 ease-out ${gone ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}
+            >
+            <div className="overflow-hidden">
+            <div className="flex items-start gap-3 px-4 py-3 hover:bg-white/[.03]">
               <button
                 onClick={() => void toggle(t)}
                 title={t.done ? 'Mark as open' : 'Mark as done'}
-                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border ${
-                  t.done ? 'border-green bg-green text-white' : 'border-border hover:border-accent'
+                className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md border transition-colors duration-200 ${
+                  checked ? 'border-green bg-green text-white' : 'border-border hover:border-green/70'
                 }`}
               >
-                {t.done && <i className="ti ti-check text-[12px]" />}
+                {checked && <i key={String(ticking.has(k))} className="ti ti-check animate-check-pop text-[12px]" />}
               </button>
               <div className="min-w-0 flex-1">
-                <div className={`text-[13.5px] ${t.done ? 'text-text-3 line-through' : 'text-text'}`}>{t.task}</div>
+                <div className={`text-[13.5px] transition-colors duration-300 ${checked ? 'text-text-3 line-through' : 'text-text'}`}>{t.task}</div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-text-3">
                   {t.person && <span className="font-medium text-text-2">{t.person}</span>}
                   {(t.dueDate || t.deadline) && (
@@ -109,9 +143,12 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
                   </button>
                 </div>
               </div>
-              {!t.done && <TaskShare task={t} />}
+              {!checked && <TaskShare task={t} />}
             </div>
-          ))}
+            </div>
+            </div>
+            )
+          })}
         </div>
       )}
 
