@@ -233,12 +233,13 @@ function AgentPanel({
       <div className={large ? 'flex gap-2' : 'flex flex-col gap-2'}>
         {live && live.status !== 'off' && (
           <div className="min-w-0 flex-1">
-            <LiveCaptions live={live} large={large} compact={!large && Boolean(ask)} />
+            <LiveCaptions live={live} large={large} compact={!large && Boolean(ask)} hint={hint} />
           </div>
         )}
         {ask && <AskPanel ask={ask} large={large && Boolean(live && live.status !== 'off')} />}
       </div>
-      {hint && <QuestionCardView hint={hint} />}
+      {/* With live captions the question is marked inside them (with its term); the separate card is only for calls without captions. */}
+      {hint && !(live && live.status !== 'off') && <QuestionCardView hint={hint} />}
       {notice && !hint && (
         <div className="flex items-center gap-1.5 px-0.5 text-[11px] text-white/45">
           <i className="ti ti-info-circle text-[12px] text-accent" /> {notice}
@@ -249,7 +250,17 @@ function AgentPanel({
   )
 }
 
-function LiveCaptions({ live, large, compact = false }: { live: NonNullable<CapsuleState['live']>; large: boolean; compact?: boolean }) {
+function LiveCaptions({
+  live,
+  large,
+  compact = false,
+  hint
+}: {
+  live: NonNullable<CapsuleState['live']>
+  large: boolean
+  compact?: boolean
+  hint: ReplyHint | null
+}) {
   const box = useRef<HTMLDivElement>(null)
   const follow = useRef(true)
   const [following, setFollowing] = useState(true)
@@ -269,8 +280,15 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
       /* private storage off */
     }
   }
-  // "Ask AI" stays visible on the client's latest line, so it's easy to find.
-  const lastClientId = [...lines].reverse().find((l) => l.speaker !== 'me' && l.text.trim())?.id
+  // Focus: the newest client sentences are big and bright; older ones calm
+  // down. Scrolled up to read history → everything is in full colour again.
+  const clientParts: string[] = []
+  for (const l of lines) {
+    if (l.speaker === 'me') continue
+    const parts = l.parts?.length ? l.parts : [{ text: l.text, translation: l.translation }]
+    parts.forEach((_, i) => clientParts.push(`${l.id}#${i}`))
+  }
+  const fresh = new Set(clientParts.slice(-3))
 
   // Always keep the newest words in view: every frame, glide the scroll toward
   // the bottom (also while a line is still being typed). Stops only when the
@@ -322,7 +340,7 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
         ) : (
           <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
             {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} large={large} pinned={l.id === lastClientId} mode={mode} />
+              <CaptionLine key={l.id} line={l} large={large} mode={mode} fresh={fresh} calm={following} hint={hint} />
             ))}
           </div>
         )}
@@ -335,9 +353,11 @@ function LiveCaptions({ live, large, compact = false }: { live: NonNullable<Caps
           ↓ Latest
         </button>
       )}
-      <div className="border-t border-white/[.06] px-4 py-1.5 text-[10.5px] text-white/35">
-        AI transcription and translation can contain mistakes. Check important details yourself.
-      </div>
+      {lines.length === 0 && (
+        <div className="border-t border-white/[.06] px-4 py-1.5 text-[10.5px] text-white/35">
+          AI transcription and translation can contain mistakes. Check important details yourself.
+        </div>
+      )}
     </div>
   )
 }
@@ -428,7 +448,7 @@ type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
 type CaptionMode = 'both' | 'translation'
 
-/** "Both" = sentence + translation; "Translation" = only the translation. */
+/** "Both" = the client's words + translation; "Translation" = only the translation. */
 function ModeSwitch({ mode, onChange }: { mode: CaptionMode; onChange: (m: CaptionMode) => void }) {
   return (
     <div className="ml-auto flex rounded-full bg-white/[.06] p-0.5 normal-case tracking-normal">
@@ -450,158 +470,181 @@ function ModeSwitch({ mode, onChange }: { mode: CaptionMode; onChange: (m: Capti
   )
 }
 
+const wordsOf = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').split(/\s+/).filter(Boolean)
+/** The question card for this sentence (same words), to show its term inline. */
+function hintFor(text: string, hint: ReplyHint | null): ReplyHint | null {
+  if (!hint?.term || !hint.termExplanation) return null
+  const a = new Set(wordsOf(text))
+  const b = wordsOf(hint.question)
+  if (!b.length) return null
+  return b.filter((w) => a.has(w)).length / b.length >= 0.6 ? hint : null
+}
+
 /**
- * A client line as sentence pairs: each finished sentence (small, calm) with
- * its translation right under it (large). A translation appears in one piece
- * once its sentence is done and never changes; only the sentence still being
- * spoken is typed out — one moving place at a time.
+ * Words appear the moment they are recognized (no letter-by-letter typing that
+ * falls behind fast speakers); each new word fades in, the newest is orange.
  */
-function SentencePairs({ parts, large, mode, final }: { parts: NonNullable<CaptionLineData['parts']>; large: boolean; mode: CaptionMode; final: boolean }) {
+function LiveWords({ text, className }: { text: string; className: string }) {
+  const seen = useRef(0)
+  const words = text.split(/(\s+)/)
+  const count = words.filter((w) => w.trim()).length
+  const from = seen.current
+  useEffect(() => {
+    seen.current = count
+  })
+  let n = 0
   return (
-    <div className={`mt-1 flex flex-col ${large ? 'gap-3' : 'gap-2'}`}>
-      {parts.map((p, i) => {
-        const speaking = Boolean(p.live) && !final
-        const showSource = mode === 'both' || !p.translation
+    <div className={className}>
+      {words.map((w, i) => {
+        if (!w.trim()) return w
+        n++
+        const isNew = n > from
+        const newest = n === count
         return (
-          <div key={i}>
-            {showSource &&
-              (speaking ? (
-                // Only the sentence being spoken is typed out.
-                <SmoothText
-                  text={p.text}
-                  typing
-                  className={`leading-relaxed ${mode === 'translation' ? 'text-white/40' : 'text-white/60'} ${
-                    large ? 'text-[14.5px]' : 'text-[12.5px]'
-                  }`}
-                />
-              ) : (
-                <div
-                  className={`leading-relaxed ${mode === 'translation' ? 'text-white/40' : 'text-white/60'} ${
-                    large ? 'text-[14.5px]' : 'text-[12.5px]'
-                  }`}
-                >
-                  {p.text}
-                </div>
-              ))}
-            {p.translation ? (
-              <div
-                className={`animate-caption-in border-l-2 border-[#5EC8F2]/60 pl-3 font-medium leading-relaxed text-[#BFE9FF] ${
-                  showSource ? 'mt-1' : ''
-                } ${large ? 'text-[18px]' : 'text-[14px]'}`}
-              >
-                {p.translation}
-              </div>
-            ) : (
-              !speaking && (
-                <div className="mt-1 flex gap-1 pl-3" aria-label="Translating">
-                  {[0, 1, 2].map((d) => (
-                    <span key={d} className="h-1 w-1 animate-pulse rounded-full bg-[#5EC8F2]/60" style={{ animationDelay: `${d * 150}ms` }} />
-                  ))}
-                </div>
-              )
-            )}
-          </div>
+          <span key={i} className={`${isNew ? 'animate-word-in' : ''} ${newest ? 'text-[#FFB59C]' : ''}`}>
+            {w}
+          </span>
         )
       })}
+      <span className="caption-caret" aria-hidden="true" />
     </div>
   )
 }
 
-function CaptionLine({ line, large, pinned = false, mode }: { line: CaptionLineData; large: boolean; pinned?: boolean; mode: CaptionMode }) {
-  const client = line.speaker !== 'me'
-  if (client && line.parts && line.parts.length > 0) {
-    return (
-      <div className="group relative animate-caption-in">
-        <div className="flex items-center gap-2">
-          <div className="text-[10px] font-semibold uppercase tracking-[.12em] text-accent-pale">Client</div>
-          <button
-            onClick={() => void invoke('capsule:ask', { line: line.text })}
-            title="Ask AI what this means and what to answer"
-            className={`ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100 ${pinned ? 'opacity-100' : 'opacity-0'}`}
-          >
-            <i className="ti ti-sparkles text-[11px]" /> Ask AI
-          </button>
-        </div>
-        <SentencePairs parts={line.parts} large={large} mode={mode} final={line.final} />
-      </div>
-    )
-  }
+/**
+ * One client sentence: their words (bright — you speak this language on the
+ * call) with the translation right under it. Questions get a "?" mark and the
+ * hard term explained. Newest sentences are big; older ones calm down unless
+ * you scrolled up to read.
+ */
+function Sentence({
+  text,
+  translation,
+  speaking,
+  mode,
+  big,
+  large,
+  hint,
+  pinAsk
+}: {
+  text: string
+  translation: string | null
+  speaking: boolean
+  mode: CaptionMode
+  big: boolean
+  large: boolean
+  hint: ReplyHint | null
+  pinAsk: boolean
+}) {
+  const question = /\?\s*$/.test(text.trim())
+  const term = hintFor(text, hint)
+  const srcSize = big ? (large ? 'text-[19px]' : 'text-[15px]') : large ? 'text-[15px]' : 'text-[13px]'
+  const trSize = big ? (large ? 'text-[17px]' : 'text-[14px]') : large ? 'text-[14px]' : 'text-[12.5px]'
+  const srcColor = big ? 'text-white' : 'text-white/55'
+  const trColor = big ? 'text-[#8FD8F7]' : 'text-[#8FD8F7]/55'
+  const showSource = mode === 'both' || !translation
   return (
-    <div className="group relative animate-caption-in">
-      <div className="flex items-center gap-2">
-        <div className={`text-[10px] font-semibold uppercase tracking-[.12em] ${client ? 'text-accent-pale' : 'text-[#9DB7FF]'}`}>
-          {client ? 'Client' : 'You'}
-        </div>
-        {line.text.trim() && (
-          <button
-            onClick={() => void invoke('capsule:ask', { line: line.text })}
-            title="Ask AI what this means and what to answer"
-            className={`ml-auto flex items-center gap-1 rounded-full border border-accent/40 bg-accent/15 px-2 py-0.5 text-[10.5px] font-semibold text-accent-pale transition-opacity duration-150 hover:bg-accent/30 focus:opacity-100 group-hover:opacity-100 ${pinned ? 'opacity-100' : 'opacity-0'}`}
-          >
-            <i className="ti ti-sparkles text-[11px]" /> Ask AI
-          </button>
+    <div className="group/s relative flex gap-2 transition-colors duration-500">
+      <span
+        className={`mt-[3px] flex h-[18px] w-[18px] flex-none items-center justify-center rounded-full text-[11px] font-bold ${
+          question ? 'bg-amber/20 text-amber' : 'invisible'
+        }`}
+        aria-hidden={!question}
+      >
+        ?
+      </span>
+      <div className="min-w-0 flex-1">
+        {showSource &&
+          (speaking ? (
+            <LiveWords text={text} className={`font-medium leading-snug ${srcSize} ${mode === 'translation' ? 'text-white/45' : srcColor}`} />
+          ) : (
+            <div className={`font-medium leading-snug transition-all duration-500 ${srcSize} ${mode === 'translation' ? 'text-white/45' : srcColor}`}>
+              {text}
+            </div>
+          ))}
+        {translation ? (
+          <div className={`animate-caption-in leading-snug transition-all duration-500 ${showSource ? 'mt-0.5' : ''} ${mode === 'translation' ? (big ? 'text-[19px] text-white' : 'text-[15px] text-white/55') : `${trSize} ${trColor}`}`}>
+            {translation}
+          </div>
+        ) : (
+          !speaking && (
+            <div className="mt-1 flex gap-1" aria-label="Translating">
+              {[0, 1, 2].map((d) => (
+                <span key={d} className="h-1 w-1 animate-pulse rounded-full bg-[#5EC8F2]/60" style={{ animationDelay: `${d * 150}ms` }} />
+              ))}
+            </div>
+          )
+        )}
+        {term && (
+          <div className={`mt-1 text-[12px] leading-snug ${big ? 'text-white/70' : 'text-white/40'}`}>
+            <span className="font-semibold text-amber">{term.term}</span> — {term.termExplanation}
+          </div>
         )}
       </div>
-      <SmoothText
-        text={line.text}
-        typing={!line.final}
-        className={`mt-1 leading-relaxed ${large ? 'text-[16px]' : 'text-[13px]'} ${client ? 'text-white/80' : 'text-white/90'}`}
-      />
-      {client && line.translation && (
-        <div className={`mt-2 border-l-2 border-[#5EC8F2]/60 pl-3 ${large ? 'ml-1' : ''}`}>
-          <SmoothText
-            text={line.translation}
-            typing={false}
-            className={`font-medium leading-relaxed text-[#BFE9FF] ${large ? 'text-[18px]' : 'text-[14px]'}`}
-          />
-        </div>
+      {!speaking && (
+        <button
+          onClick={() => void invoke('capsule:ask', { line: text })}
+          title="Ask AI what this means and what to answer"
+          className={`flex h-fit flex-none items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-white shadow-[0_2px_10px_rgba(255,106,61,.35)] transition-opacity duration-150 hover:brightness-110 focus:opacity-100 group-hover/s:opacity-100 ${
+            pinAsk ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <i className="ti ti-sparkles text-[11px]" /> Ask AI
+        </button>
       )}
     </div>
   )
 }
 
-/**
- * Writes the text out at a calm reading pace (about 22 letters a second) and
- * only speeds up when far behind, so the eyes can follow. The newest letters
- * glow orange and an orange caret leads while the line is still being spoken.
- */
-function SmoothText({ text, typing, className }: { text: string; typing: boolean; className?: string }) {
-  const [shown, setShown] = useState(0)
-  const target = useRef(text)
-  target.current = text
-
-  useEffect(() => {
-    let raf = 0
-    let last = performance.now()
-    let pos = 0
-    const step = (now: number) => {
-      const dt = Math.min(64, now - last)
-      last = now
-      const goal = target.current.length
-      if (pos > goal) pos = goal
-      const behind = goal - pos
-      if (behind > 0) {
-        // 22 letters/s; gently faster only when more than ~3 s behind.
-        const speed = 0.022 + Math.max(0, behind - 66) * 0.0015
-        pos = Math.min(goal, pos + speed * dt)
-        setShown(Math.floor(pos))
-      }
-      raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  const visible = text.slice(0, shown)
-  const writing = typing || shown < text.length
-  // While writing, the newest letters glow orange; once done they settle.
-  const settled = writing ? visible.slice(0, Math.max(0, visible.length - 4)) : visible
-  const fresh = writing ? visible.slice(settled.length) : ''
+function CaptionLine({
+  line,
+  large,
+  mode,
+  fresh,
+  calm,
+  hint
+}: {
+  line: CaptionLineData
+  large: boolean
+  mode: CaptionMode
+  fresh: Set<string>
+  /** Following the newest words: older sentences calm down. False while scrolled up. */
+  calm: boolean
+  hint: ReplyHint | null
+}) {
+  // Your own lines: one quiet line on the right — you know what you said.
+  if (line.speaker === 'me') {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] truncate rounded-[10px] bg-white/[.05] px-2.5 py-1 text-[12px] text-white/45" title={line.text}>
+          <span className="font-semibold text-[#9DB7FF]/70">You:</span> {line.text}
+        </div>
+      </div>
+    )
+  }
+  const parts = line.parts?.length ? line.parts : [{ text: line.text, translation: line.translation, live: !line.final }]
+  // Ask AI stays visible on the newest finished question (or newest sentence).
+  const finished = parts.map((p, i) => ({ p, i })).filter(({ p }) => !(p.live && !line.final))
+  const pinned = ([...finished].reverse().find(({ p }) => /\?\s*$/.test(p.text.trim())) ?? finished[finished.length - 1])?.i
+  const lineFresh = parts.some((_, i) => fresh.has(`${line.id}#${i}`))
   return (
-    <div className={className}>
-      {settled}
-      {fresh && <span className="text-[#FFB59C]">{fresh}</span>}
-      {writing && <span className="caption-caret" aria-hidden="true" />}
+    <div className={`animate-caption-in border-l-2 pl-2.5 transition-colors duration-500 ${lineFresh || !calm ? 'border-accent/70' : 'border-white/15'}`}>
+      <div className={`mb-1 text-[10px] font-semibold uppercase tracking-[.12em] ${lineFresh || !calm ? 'text-accent-pale' : 'text-white/35'}`}>Client</div>
+      <div className={`flex flex-col ${large ? 'gap-2.5' : 'gap-1.5'}`}>
+        {parts.map((p, i) => (
+          <Sentence
+            key={i}
+            text={p.text}
+            translation={p.translation}
+            speaking={Boolean(p.live) && !line.final}
+            mode={mode}
+            big={!calm || fresh.has(`${line.id}#${i}`)}
+            large={large}
+            hint={hint}
+            pinAsk={fresh.has(`${line.id}#${i}`) && i === pinned}
+          />
+        ))}
+      </div>
     </div>
   )
 }

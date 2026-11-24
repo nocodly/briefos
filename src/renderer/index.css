@@ -144,6 +144,20 @@ body.overlay {
 .animate-caption-in {
   animation: caption-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
+/* Each newly recognized word fades in (fast, so it never lags behind speech). */
+@keyframes word-in {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.animate-word-in {
+  animation: word-in 0.18s ease-out both;
+}
 @keyframes caret-glow {
   0%,
   100% {
