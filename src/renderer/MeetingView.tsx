@@ -140,7 +140,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
   const s = meeting.summary
 
   return (
-    <div className="min-h-screen bg-bg font-body text-text">
+    <div className="min-h-screen font-body text-text">
       <Hero
         meeting={meeting}
         onTitleSave={async (title) => {
@@ -466,7 +466,7 @@ function NoSummary({ onGenerate, busy }: { onGenerate: () => void; busy: boolean
 
 function Centered({ icon, text, spin }: { icon: string; text: string; spin?: boolean }) {
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-3 text-text-3">
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-text-3">
       <i className={`ti ti-${icon} text-[28px] ${spin ? 'animate-spin-slow' : ''}`} />
       <span className="text-[13px]">{text}</span>
     </div>

@@ -126,8 +126,8 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
 
 
   return (
-    <div className="min-h-screen bg-bg font-body text-text">
-      <div className="sticky top-0 z-10 bg-paper/80 backdrop-blur border-b border-border px-8 py-5 flex items-center justify-between">
+    <div className="min-h-screen font-body text-text">
+      <div className="px-8 pt-5 pb-2 flex items-center justify-between">
         <h1 className="font-display font-extrabold text-[24px] text-text">Settings</h1>
         <button
           onClick={() => navigate('dashboard')}

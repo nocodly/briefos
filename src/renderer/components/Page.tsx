@@ -14,7 +14,7 @@ export function Page({
 }) {
   return (
     <div className="min-h-full font-body text-text">
-      <div className="sticky top-0 z-10 border-b border-border-soft bg-paper/80 px-8 py-5 backdrop-blur">
+      <div className="px-8 pt-5 pb-2">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-[24px] font-extrabold">{title}</h1>

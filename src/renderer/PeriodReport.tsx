@@ -188,7 +188,7 @@ export default function PeriodReport() {
   }
 
   return (
-    <div className="min-h-screen bg-bg font-body text-text">
+    <div className="min-h-screen font-body text-text">
       {/* Period picker bar */}
       <div className="sticky top-3 z-10 glass-dark mx-6 mt-3 rounded-panel px-8 py-5">
         <h1 className="font-display font-extrabold text-[22px] text-white mb-3">
