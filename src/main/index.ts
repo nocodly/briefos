@@ -8,7 +8,8 @@ import { enforceRetention } from '@storage/FileManager'
 import { getSetting } from './store'
 import { reportRecordingState, sendRecordingCommand } from './RecordingRelay'
 import { startCallDetector } from './CallDetector'
-import { capsuleOnCallEnd, capsuleOnCallStart, pushCapsuleState } from './Capsule'
+import { capsuleOnCallEnd, capsuleOnCallStart, capsuleOnEventSoon, getCapsule, pushCapsuleState } from './Capsule'
+import { startCalendarWatcher } from './CalendarWatcher'
 
 // Load .env in development (production reads keys from electron-store).
 if (!app.isPackaged) {
@@ -53,7 +54,9 @@ function createMainWindow(): BrowserWindow {
       sandbox: false,
       // Recording runs in this renderer even while the window is hidden in the
       // tray — never throttle its timers / MediaRecorder.
-      backgroundThrottling: false
+      backgroundThrottling: false,
+      // The test call plays the AI client's voice as soon as it connects.
+      autoplayPolicy: 'no-user-gesture-required'
     }
   })
 
@@ -336,6 +339,14 @@ if (!gotLock) {
       { onCallStart: capsuleOnCallStart, onCallEnd: capsuleOnCallEnd },
       () => getSetting('detectCalls') !== false
     )
+    // Calendar: prompt 5 min before a call, and give the call its context.
+    startCalendarWatcher({
+      getUrl: () => String(getSetting('calendarIcsUrl') || ''),
+      isRecording: () => getCapsule().mode === 'recording',
+      onSoon: (ev) => {
+        if (getSetting('detectCalls') !== false) capsuleOnEventSoon(ev)
+      }
+    })
 
     // Auto-update from GitHub Releases (no-op in dev).
     if (app.isPackaged) {

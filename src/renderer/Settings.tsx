@@ -60,6 +60,7 @@ interface SettingsState {
   myCallLanguage: string
   answerHints: boolean
   aboutMe: string
+  calendarIcsUrl: string
 }
 
 const DEFAULTS: SettingsState = {
@@ -78,7 +79,8 @@ const DEFAULTS: SettingsState = {
   clientLanguage: 'en',
   myCallLanguage: '',
   answerHints: false,
-  aboutMe: ''
+  aboutMe: '',
+  calendarIcsUrl: ''
 }
 
 /** Load + save app settings (shared by Settings, Agent and Integrations pages). */
@@ -151,6 +153,14 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
             value={{ nativeLanguage: s.nativeLanguage, clientLanguage: s.clientLanguage, myCallLanguage: s.myCallLanguage }}
             onChange={(k, v) => set(k, v)}
           />
+        </Panel>
+
+        <Panel
+          title="Calendar"
+          icon="calendar-event"
+          desc="Minutama reminds you 5 minutes before a call and reads the event description, so the AI knows what the call is about."
+        >
+          <CalendarLink value={s.calendarIcsUrl} />
         </Panel>
 
         <Panel title="During calls" icon="sparkles" desc="What the capsule shows while you talk.">
@@ -686,6 +696,68 @@ function AboutMe({ value, onSave }: { value: string; onSave: (v: string) => void
         className="w-full resize-y rounded-xl border border-border bg-white/[.06] px-3 py-2.5 text-[12.5px] leading-snug text-text placeholder:text-text-4 focus:border-accent focus:outline-none"
       />
       <p className="mt-1 text-[11px] text-text-3">Helps Minutama get your terms right and write a realistic estimate.</p>
+    </div>
+  )
+}
+
+/** Private iCal link: read on this computer only, never sent to our servers. */
+function CalendarLink({ value }: { value: string }) {
+  const [url, setUrl] = useState(value)
+  const [status, setStatus] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => setUrl(value), [value])
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      const r = await invoke<{ ok: boolean; count: number; next: { title: string; start: number } | null; error: string | null }>(
+        'calendar:test',
+        url.trim()
+      )
+      if (!url.trim()) setStatus(null)
+      else if (!r.ok) setStatus({ ok: false, text: r.error ?? 'Could not read this calendar.' })
+      else
+        setStatus({
+          ok: true,
+          text: r.next
+            ? `Connected · next: ${r.next.title}, ${new Date(r.next.start).toLocaleString('en-US', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}`
+            : 'Connected · no calls in the next 24 hours'
+        })
+    } catch (err) {
+      setStatus({ ok: false, text: (err as Error).message })
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-[12px] font-medium text-text">Calendar link (iCal)</label>
+      <div className="flex gap-2">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && void save()}
+          placeholder="https://calendar.google.com/calendar/ical/…/basic.ics"
+          className="min-w-0 flex-1 rounded-xl border border-border bg-white/[.06] px-3 py-2.5 font-mono text-[12px] text-text placeholder:text-text-4 focus:border-accent focus:outline-none"
+        />
+        <button onClick={() => void save()} disabled={busy} className="btn-accent rounded-xl px-3.5 text-[12.5px] font-semibold disabled:opacity-50">
+          {busy ? 'Checking…' : url.trim() ? 'Connect' : 'Save'}
+        </button>
+      </div>
+      {status && <p className={`mt-1.5 text-[11.5px] ${status.ok ? 'text-green' : 'text-red'}`}>{status.text}</p>}
+      <details className="mt-2 text-[11.5px] leading-relaxed text-text-3">
+        <summary className="cursor-pointer text-text-2">Where do I find it?</summary>
+        <p className="mt-1">
+          <b className="text-text-2">Google Calendar:</b> Settings → click your calendar on the left → “Integrate calendar” →
+          copy <i>Secret address in iCal format</i>.
+        </p>
+        <p className="mt-1">
+          <b className="text-text-2">Outlook:</b> Settings → Calendar → Shared calendars → Publish a calendar → “Can view all
+          details” → copy the ICS link.
+        </p>
+        <p className="mt-1">Tip: put the job post or project notes into the event description — Minutama reads it before the call.</p>
+      </details>
     </div>
   )
 }

@@ -325,6 +325,20 @@ export function registerIpcHandlers(): void {
     if (err) throw new Error('No calendar app found. Try Google Calendar instead.')
     return { ok: true }
   })
+  // Calendar (iCal link): the event a call belongs to, and a link check for Settings.
+  handle('calendar:current', async () => {
+    const { currentEvent } = await import('./CalendarWatcher')
+    const ev = currentEvent()
+    return ev ? { title: ev.title, start: ev.start, description: ev.description, location: ev.location } : null
+  })
+  handle('calendar:test', async (_e, url: string) => {
+    const link = String(url ?? '').trim()
+    if (link && !/^(https|webcal):\/\//i.test(link)) throw new Error('Paste the iCal link (it starts with https://).')
+    setSetting('calendarIcsUrl', link)
+    if (!link) return { ok: true, count: 0, next: null, error: null }
+    const { testCalendar } = await import('./CalendarWatcher')
+    return testCalendar(link)
+  })
   // Share one task to a messenger or mail: opens the app's own share screen
   // (you pick the chat there). Only these fixed targets — never a URL from the renderer.
   handle('share:task', async (_e, p: { target?: string; text?: string; subject?: string }) => {

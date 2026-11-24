@@ -9,11 +9,13 @@ import {
   transcribeChunk,
   translateLineStream,
   askAiStream,
+  demoCall,
   type EnhancedNotes,
   type StartMeetingResult
 } from '../lib/api'
 import { ChannelRecorder, type AudioChunk } from './ChannelRecorder'
 import { EchoGate, LiveTranscriber } from './LiveTranscriber'
+import { DemoCaller } from './DemoCaller'
 import { track } from '../lib/track'
 
 // =============================================================================
@@ -542,10 +544,6 @@ async function requestHint(force: boolean, heardAt: number | null): Promise<void
     hintInFlight = false
     const next = pendingHeardAt
     pendingHeardAt = null
-  if (contextOwner !== null) {
-    set({ callContext: '' })
-    contextOwner = null
-  }
     if (next !== null) void requestHint(false, next)
   }
 }
@@ -1040,9 +1038,23 @@ export function addTaskToNotes(task: string): void {
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-export async function startMeeting_(templateId?: string): Promise<void> {
+export async function startMeeting_(templateId?: string, opts: { context?: string } = {}): Promise<void> {
   const s = get()
   if (s.status !== 'idle') return
+  // A new call starts with an empty "About this call" — unless the user typed
+  // it before starting, or it comes from the calendar / the test call.
+  if (contextOwner !== null) {
+    set({ callContext: '' })
+    contextOwner = null
+  }
+  if (opts.context) set({ callContext: opts.context.slice(0, 6000) })
+  else if (!get().callContext.trim()) {
+    const ev = await invoke<{ title: string; description: string; location: string } | null>('calendar:current').catch(() => null)
+    if (ev) {
+      set({ callContext: [`Calendar: ${ev.title}`, ev.description].filter(Boolean).join('\n').slice(0, 6000) })
+      console.log('[session] context from calendar:', ev.title)
+    }
+  }
   if (!ChannelRecorder.isSupported()) {
     set({ error: 'Audio recording is not supported on this device.' })
     return
@@ -1148,6 +1160,11 @@ export function resumeMeeting(): void {
 export async function stopMeeting(): Promise<void> {
   const s = get()
   if (s.status !== 'recording' && s.status !== 'paused') return
+  if (demo) {
+    const d = demo
+    demo = null
+    d.stop()
+  }
   console.log('[session] stopping')
   const durationMs = timeline()
   track('meeting_finished', {
@@ -1299,3 +1316,42 @@ export function handleRecordingCommand(cmd: 'start' | 'stop' | 'pause' | 'resume
 }
 
 export { startMeeting_ as startMeetingSession }
+
+// ─── Test call with an AI client ────────────────────────────────────────────
+// Starts a normal recording, then connects "Anna" (OpenAI Realtime voice). Her
+// voice is captured from the speakers like any client on Zoom, so captions,
+// translation, question cards, Ask AI and the notes all work as on a real call.
+
+let demo: DemoCaller | null = null
+
+export async function startTestCall(): Promise<void> {
+  if (get().status !== 'idle') return
+  let creds: { secret: string; model: string }
+  try {
+    creds = await demoCall()
+  } catch (err) {
+    set({ error: (err as Error).message })
+    return
+  }
+  await startMeeting_('client-call', {
+    context:
+      'Test call: Anna Weber, owner of a small coffee shop in Berlin, wants a website with an online menu, ' +
+      'table reservations and opening hours. Budget about $2,000, launch in the first week of December.'
+  })
+  if (get().status !== 'recording') return
+  track('demo_call_started', {})
+  demo = new DemoCaller({
+    onStatus: (st, message) => {
+      if (st === 'failed' && message) set({ error: message })
+      if ((st === 'ended' || st === 'failed') && demo) {
+        demo = null
+        if (get().status === 'recording' || get().status === 'paused') void stopMeeting()
+      }
+    }
+  })
+  await demo.start(creds.secret, creds.model)
+}
+
+export function isTestCall(): boolean {
+  return demo !== null
+}

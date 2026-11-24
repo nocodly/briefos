@@ -34,6 +34,7 @@ interface AgentRun {
 interface CapsuleState {
   mode: 'hidden' | 'prompt' | 'recording'
   app: string | null
+  event?: { title: string; start: number; hasNotes: boolean } | null
   callEnded: boolean
   hint: ReplyHint | null
   expanded: boolean
@@ -126,8 +127,22 @@ export default function Overlay() {
             <span className="absolute -right-1 -top-1 h-3 w-3 animate-pulse-dot rounded-full bg-green ring-[3px] ring-[#121317]" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[12.5px] font-semibold leading-tight text-white">Call on {cap.app ?? 'your computer'}</div>
-            <div className="mt-0.5 text-[11px] text-white/50">Take notes?</div>
+            {cap.event ? (
+              <>
+                <div className="truncate text-[12.5px] font-semibold leading-tight text-white" title={cap.event.title}>
+                  {cap.event.title}
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-white/50">
+                  {new Date(cap.event.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {cap.event.hasNotes ? ' · context from your calendar ready' : ' · take notes?'}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="truncate text-[12.5px] font-semibold leading-tight text-white">Call on {cap.app ?? 'your computer'}</div>
+                <div className="mt-0.5 text-[11px] text-white/50">Take notes?</div>
+              </>
+            )}
           </div>
           <button
             onClick={() => act('start')}

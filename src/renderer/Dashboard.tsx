@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
-import { startMeetingSession, useMeetingSession } from './recording/meetingSession'
+import { startMeetingSession, startTestCall, useMeetingSession } from './recording/meetingSession'
 import { invoke } from './lib/ipc'
 import { getUsage, type UsageInfo } from './lib/usage'
 
@@ -102,6 +102,11 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
     navigate('live')
     if (useMeetingSession.getState().status === 'idle') void startMeetingSession()
   }
+  // A short practice call with an AI client — see everything work before a real call.
+  const startTest = () => {
+    navigate('live')
+    if (useMeetingSession.getState().status === 'idle') void startTestCall()
+  }
 
   const remove = async (id: string) => {
     try {
@@ -128,6 +133,13 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
           {usage && <UsageBadge usage={usage} />}
           <div className="flex flex-col items-end gap-1">
             <div className="flex items-center gap-2">
+              <button
+                onClick={startTest}
+                title="A 3–5 minute practice call with an AI client (Anna). Speak English with her and watch captions, translation and Ask AI work."
+                className="rounded-lg border border-accent/40 px-3 py-2.5 text-[13px] font-medium text-accent-ink hover:bg-accent-soft flex items-center gap-1.5 transition-all"
+              >
+                <i className="ti ti-headset text-[15px]" /> Test call
+              </button>
               <button
                 onClick={() => navigate('import')}
                 title="Recorded a call somewhere else? Import the audio or video and get the same notes."
@@ -172,7 +184,7 @@ export default function Dashboard({ navigate }: { navigate: NavigateFn }) {
         {loading ? (
           <Centered icon="loader-2" text="Loading meetings…" spin />
         ) : meetings.length === 0 ? (
-          <EmptyState searching={searching} onStart={startRecording} />
+          <EmptyState searching={searching} onStart={startRecording} onTest={startTest} />
         ) : (
           <div className="space-y-2.5">
             {meetings.map((m) => (
@@ -270,7 +282,7 @@ function MeetingCard({
   )
 }
 
-function EmptyState({ searching, onStart }: { searching: boolean; onStart: () => void }) {
+function EmptyState({ searching, onStart, onTest }: { searching: boolean; onStart: () => void; onTest?: () => void }) {
   if (searching) return <Centered icon="search-off" text="No meetings match your search" />
   return (
     <div className="glass rounded-panel p-12 text-center">
@@ -291,6 +303,15 @@ function EmptyState({ searching, onStart }: { searching: boolean; onStart: () =>
       >
         <i className="ti ti-microphone text-[15px]" /> Start call
       </button>
+      {onTest && (
+        <div className="mt-4 text-[12.5px] text-text-3">
+          or{' '}
+          <button onClick={onTest} className="font-medium text-accent-ink underline underline-offset-2">
+            try a test call with an AI client
+          </button>{' '}
+          — no real call needed
+        </div>
+      )}
     </div>
   )
 }

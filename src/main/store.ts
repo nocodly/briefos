@@ -56,6 +56,8 @@ export interface AppSettings {
   answerHints: boolean
   /** Who the user is: services, stack, rates — background for every call. */
   aboutMe: string
+  /** Private iCal link of the user's calendar (read on this computer only). */
+  calendarIcsUrl: string
 }
 
 const DEFAULTS: AppSettings = {
@@ -92,7 +94,8 @@ const DEFAULTS: AppSettings = {
   myCallLanguage: '',
   capsuleLarge: true,
   answerHints: false,
-  aboutMe: ''
+  aboutMe: '',
+  calendarIcsUrl: ''
 }
 
 // encryptionKey obfuscates the on-disk JSON (electron-store uses AES-256-CBC).

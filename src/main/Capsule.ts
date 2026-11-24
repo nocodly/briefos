@@ -33,6 +33,8 @@ export interface CapsuleState {
   mode: 'hidden' | 'prompt' | 'recording'
   /** Call app that holds the mic (prompt) or was detected for this meeting. */
   app: string | null
+  /** Calendar event the prompt is about ("Call with Anna at 15:00"). */
+  event?: { title: string; start: number; hasNotes: boolean } | null
   /** The call app released the mic while we are still recording. */
   callEnded: boolean
   hint: ReplyHint | null
@@ -281,13 +283,21 @@ export function pushCapsuleState(): void {
 /** App whose prompt the user dismissed (or whose call they stopped noting). */
 let dismissedApp: string | null = null
 
+/** 5 minutes before a calendar event: offer to take notes, with its context ready. */
+export function capsuleOnEventSoon(ev: { title: string; start: number; description: string }): void {
+  if (state.mode !== 'hidden') return
+  setCapsule({ mode: 'prompt', app: null, event: { title: ev.title, start: ev.start, hasNotes: Boolean(ev.description.trim()) } })
+}
+
 export function capsuleOnCallStart(app: string): void {
   if (state.mode === 'recording') {
     setCapsule({ app, callEnded: false })
     return
   }
   if (dismissedApp === app) return
-  setCapsule({ mode: 'prompt', app })
+  // Keep the calendar event only if this call is around its time.
+  const ev = state.event && Math.abs(Date.now() - state.event.start) < 20 * 60 * 1000 ? state.event : null
+  setCapsule({ mode: 'prompt', app, event: ev })
 }
 
 export function capsuleOnCallEnd(): void {
@@ -297,7 +307,8 @@ export function capsuleOnCallEnd(): void {
 }
 
 export function capsuleOnRecordingStart(): void {
-  setCapsule({ mode: 'recording', callEnded: false, hint: null, expanded: true, large: getSetting('capsuleLarge') !== false })
+  setCapsule({
+    event: null, mode: 'recording', callEnded: false, hint: null, expanded: true, large: getSetting('capsuleLarge') !== false })
 }
 
 export function capsuleOnRecordingStop(): void {
@@ -309,5 +320,5 @@ export function capsuleOnRecordingStop(): void {
 /** User closed the "Start notes?" prompt for this call. */
 export function capsuleDismiss(): void {
   if (state.app) dismissedApp = state.app
-  setCapsule({ mode: 'hidden' })
+  setCapsule({ mode: 'hidden', event: null })
 }

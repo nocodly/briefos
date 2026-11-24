@@ -209,6 +209,11 @@ export async function askAiStream(
   return text.trim()
 }
 
+/** Short-lived secret for the "Test call" with the AI client (OpenAI Realtime voice). */
+export function demoCall(): Promise<{ secret: string; model: string }> {
+  return call<{ secret: string; model: string }>('demo-call', '{}', true)
+}
+
 /** Stripe Customer Portal: cancel, switch plan, card, invoices. */
 export function billingPortal(): Promise<{ url: string; login?: boolean }> {
   return call<{ url: string; login?: boolean }>('billing-portal', '{}', true)

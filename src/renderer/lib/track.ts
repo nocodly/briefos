@@ -14,6 +14,7 @@ type EventName =
   | 'notes_ready'
   | 'card_shown'
   | 'ask_ai'
+  | 'demo_call_started'
   | 'checkout_opened'
   | 'portal_opened'
   | 'agent_task'

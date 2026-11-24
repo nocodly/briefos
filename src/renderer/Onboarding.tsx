@@ -146,6 +146,13 @@ function RecordStep() {
           </button>
         </div>
       )}
+      <div className="mt-4 flex items-start gap-2.5 rounded-card border border-accent/30 bg-accent-soft px-3 py-2.5 text-[12.5px] leading-relaxed text-text-2">
+        <i className="ti ti-headset mt-0.5 text-[16px] text-accent" />
+        <span>
+          No call today? After setup press <b className="text-text">Test call</b> — a short practice call with an AI
+          client, so you see everything work first.
+        </span>
+      </div>
       <p className="mt-3 text-[11.5px] text-text-3">Tip: headphones give the cleanest captions.</p>
     </div>
   )
