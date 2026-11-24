@@ -760,6 +760,18 @@ interface Unit {
   src: string
   tr: string | null
   ctrl: AbortController | null
+  /** tr is the early translation kept on screen until the final one is ready. */
+  placeholder?: boolean
+}
+
+/**
+ * Rule for every translation on screen: it never disappears and never gets
+ * shorter. A new version replaces it only once it is at least as long, or
+ * when it is complete.
+ */
+function keepOrReplace(shown: string | null, next: string, complete: boolean): string {
+  if (!shown || complete || next.length >= shown.length) return next
+  return shown
 }
 interface ItemUnits {
   /** Early translation of the sentence still being spoken (dimmed until final). */
@@ -827,7 +839,7 @@ function publishUnits(itemId: string): void {
   const tail = st.text.slice(st.cut).trim()
   // The sentence being spoken may already carry an early translation (it is
   // for the words heard so far; the final one replaces it).
-  const early = st.early && tail && norm(tail).startsWith(norm(st.early.src)) ? st.early.tr : null
+  const early = st.early && tail ? st.early.tr : null
   const parts = [
     ...st.units.map((u) => ({ text: u.src, translation: u.tr })),
     ...(tail ? [{ text: tail, translation: early, live: true }] : [])
@@ -868,7 +880,9 @@ function translateUnit(itemId: string, unit: Unit): void {
         first = performance.now() - t0
         trLatency.first.push(first)
       }
-      unit.tr = soFar
+      const next = keepOrReplace(unit.tr, soFar, false)
+      if (next === unit.tr) return
+      unit.tr = next
       publishUnits(itemId)
     },
     ctrl.signal
@@ -876,7 +890,8 @@ function translateUnit(itemId: string, unit: Unit): void {
     .then((tr) => {
       if (ctrl.signal.aborted) return
       unit.ctrl = null
-      unit.tr = tr ?? null
+      unit.placeholder = false
+      unit.tr = tr ?? unit.tr
       const done = performance.now() - t0
       trLatency.done.push(done)
       console.log(`[live] translated in ${Math.round(first)} ms (first words) / ${Math.round(done)} ms (full):`, unit.src.slice(0, 60))
@@ -907,14 +922,14 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
     // and keep translations of sentences that did not change.
     const old = st.units
     const [srcs] = splitUnits(text, true)
-    st.units = srcs.map((src) => {
+    st.units = srcs.map((src, i) => {
       const same = old.find((u) => norm(u.src) === norm(src))
-      return same ?? { src, tr: null, ctrl: null }
+      return same ?? { src, tr: old[i]?.tr ?? null, ctrl: null, placeholder: Boolean(old[i]?.tr) }
     })
     old.forEach((u) => !st!.units.includes(u) && u.ctrl?.abort())
     st.cut = text.length
     st.text = text
-    st.units.forEach((u) => u.tr === null && !u.ctrl && translateUnit(itemId, u))
+    st.units.forEach((u) => (u.tr === null || u.placeholder) && !u.ctrl && translateUnit(itemId, u))
     publishUnits(itemId)
     return
   }
@@ -930,7 +945,13 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
       st.early = null
       continue
     }
-    const unit: Unit = { src, tr: null, ctrl: null }
+    // Different (longer) sentence than the early one: keep its translation
+    // visible until the final one is ready — no blank moment.
+    const unit: Unit = { src, tr: e?.tr ?? null, ctrl: null, placeholder: Boolean(e?.tr) }
+    if (e) {
+      e.ctrl?.abort()
+      st.early = null
+    }
     st.units.push(unit)
     translateUnit(itemId, unit)
   }
@@ -968,14 +989,16 @@ function scheduleEarly(itemId: string, st: ItemUnits, final: boolean): void {
       { meetingId: serverId, text: now, target: nativeLanguageName(nativeLanguage), context: before || undefined },
       (soFar) => {
         if (ctrl.signal.aborted || st.early !== early) return
-        early.tr = soFar
+        const next = keepOrReplace(early.tr, soFar, false)
+        if (next === early.tr) return
+        early.tr = next
         publishUnits(itemId)
       },
       ctrl.signal
     )
       .then((tr) => {
         if (st.early !== early) return
-        early.tr = tr ?? null
+        early.tr = tr ?? early.tr
         early.done = true
         early.ctrl = null
         publishUnits(itemId)
