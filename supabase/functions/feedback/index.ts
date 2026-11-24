@@ -37,7 +37,11 @@ serve(async (req) => {
   const { count } = await db.from('feedback').select('id', { count: 'exact', head: true }).eq('user_id', auth.userId).gte('created_at', since)
   if ((count ?? 0) >= 10) throw new ApiError(429, 'feedback_quota', 'Thanks — we got your messages today. Write again tomorrow.')
 
-  const { error } = await db.from('feedback').insert({ user_id: auth.userId, email, name, rating, message, app_version: appVersion })
+  const { data: row, error } = await db
+    .from('feedback')
+    .insert({ user_id: auth.userId, email, name, rating, message, app_version: appVersion })
+    .select('id')
+    .single()
   if (error) throw new Error(`feedback insert failed: ${error.message}`)
 
   let emailed = false
@@ -58,7 +62,11 @@ serve(async (req) => {
       })
     })
     emailed = res.ok
-    if (!res.ok) console.error('[feedback] resend error', res.status, (await res.text()).slice(0, 200))
+    const detail = res.ok ? null : `${res.status} ${(await res.text()).slice(0, 300)}`
+    if (detail) console.error('[feedback] resend error', detail)
+    await db.from('feedback').update({ emailed, email_error: detail }).eq('id', row.id)
+  } else {
+    await db.from('feedback').update({ emailed: false, email_error: 'RESEND_API_KEY not set' }).eq('id', row.id)
   }
   console.log('[feedback] saved', auth.userId, 'rating', rating, 'emailed', emailed)
   return json({ ok: true, emailed })
