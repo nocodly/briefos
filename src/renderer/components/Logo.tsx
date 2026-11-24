@@ -18,13 +18,13 @@ export function LogoMark({ size = 28, className = '' }: { size?: number; classNa
   )
 }
 
-/** "Minutama" wordmark. */
+/** "Minutama agent" wordmark. */
 export function Logo({ size = 28, className = '' }: { size?: number; className?: string }) {
   return (
     <span className={`inline-flex items-center gap-2 ${className}`}>
       <LogoMark size={size} />
       <span className="font-display font-bold tracking-[-0.02em] leading-none" style={{ fontSize: size * 0.58 }}>
-        Minutama
+        Minutama <span className="font-semibold text-accent-pale">agent</span>
       </span>
     </span>
   )
