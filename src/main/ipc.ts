@@ -284,9 +284,12 @@ export function registerIpcHandlers(): void {
   // default calendar app (Outlook / Windows Calendar). All-day event.
   handle('calendar:add', async (_e, p: { title?: string; date?: string; details?: string; target?: string }) => {
     const title = String(p?.title ?? '').trim().slice(0, 200)
-    const date = String(p?.date ?? '')
     const details = String(p?.details ?? '').slice(0, 1000)
-    if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('This task has no date.')
+    if (!title) throw new Error('Empty task.')
+    const given = String(p?.date ?? '')
+    const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(given)
+    // No date: Google opens the event for today (change it there); .ics uses tomorrow.
+    const date = hasDate ? given : new Date(Date.now() + 86_400_000).toISOString().slice(0, 10)
     const start = date.replace(/-/g, '')
     const next = new Date(`${date}T12:00:00Z`)
     next.setUTCDate(next.getUTCDate() + 1)
@@ -294,7 +297,7 @@ export function registerIpcHandlers(): void {
     if (p?.target === 'google') {
       const url =
         'https://calendar.google.com/calendar/render?action=TEMPLATE' +
-        `&text=${encodeURIComponent(title)}&dates=${start}/${end}&details=${encodeURIComponent(details)}`
+        `&text=${encodeURIComponent(title)}${hasDate ? `&dates=${start}/${end}` : ''}&details=${encodeURIComponent(details)}`
       await shell.openExternal(url)
       return { ok: true }
     }
@@ -320,6 +323,25 @@ export function registerIpcHandlers(): void {
     await writeFile(file, ics, 'utf8')
     const err = await shell.openPath(file)
     if (err) throw new Error('No calendar app found. Try Google Calendar instead.')
+    return { ok: true }
+  })
+  // Share one task to a messenger or mail: opens the app's own share screen
+  // (you pick the chat there). Only these fixed targets — never a URL from the renderer.
+  handle('share:task', async (_e, p: { target?: string; text?: string; subject?: string }) => {
+    const text = String(p?.text ?? '').trim().slice(0, 1500)
+    if (!text) throw new Error('Empty task.')
+    const enc = encodeURIComponent
+    const target = String(p?.target ?? '')
+    const url =
+      target === 'telegram'
+        ? `https://t.me/share/url?url=${enc(text)}`
+        : target === 'whatsapp'
+          ? `https://wa.me/?text=${enc(text)}`
+          : target === 'email'
+            ? `mailto:?subject=${enc(String(p?.subject ?? 'Task').slice(0, 150))}&body=${enc(text)}`
+            : null
+    if (!url) throw new Error('Unknown share target.')
+    await shell.openExternal(url)
     return { ok: true }
   })
   // Open the user's mail app with the notes as the message body.

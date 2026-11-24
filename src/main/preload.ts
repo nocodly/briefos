@@ -22,7 +22,7 @@ const INVOKE_CHANNELS = new Set([
   'settings:get', 'settings:set', 'settings:getAll',
   'auth:openOAuthWindow',
   'tasks:getAll', 'tasks:setDone', 'import:pickTranscript',
-  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice', 'capsule:live', 'capsule:ask', 'capsule:askState', 'calendar:add',
+  'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice', 'capsule:live', 'capsule:ask', 'capsule:askState', 'calendar:add', 'share:task',
   'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',
   'updater:check', 'updater:install'
 ])

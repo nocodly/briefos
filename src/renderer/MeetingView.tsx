@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import Markdown from './components/Markdown'
 import ShareMenu from './components/ShareMenu'
+import TaskShare from './components/TaskShare'
 import { enhanceNotes } from './lib/api'
 import { invoke } from './lib/ipc'
 import { notesLanguages } from './recording/meetingSession'
@@ -177,7 +178,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
             (meeting.enhanced_notes ? (
               <div className="max-w-[820px]">
                 <Markdown source={meeting.enhanced_notes} />
-                <TaskList items={s?.actionItems ?? []} meetingTitle={meeting.title} onToast={flash} />
+                <TaskList items={s?.actionItems ?? []} meetingTitle={meeting.title} />
                 {meeting.user_notes?.trim() && (
                   <details className="mt-6 text-[13px] text-text-3">
                     <summary className="cursor-pointer">My original notes</summary>
@@ -380,18 +381,10 @@ function Brief({ summary }: { summary: Summary }) {
   )
 }
 
-// Tasks from the call. A task with a date ("send the estimate by Friday")
-// goes to the calendar in one click.
-function TaskList({ items, meetingTitle, onToast }: { items: ActionItem[]; meetingTitle: string; onToast: (kind: 'ok' | 'err', msg: string) => void }) {
+// Tasks from the call: share each one to a calendar, Telegram, WhatsApp,
+// email — or copy it.
+function TaskList({ items, meetingTitle }: { items: ActionItem[]; meetingTitle: string }) {
   if (items.length === 0) return null
-  const add = async (a: ActionItem, target: 'google' | 'ics') => {
-    try {
-      await invoke('calendar:add', { title: a.task, date: a.dueDate, details: `From the call: ${meetingTitle}`, target })
-      if (target === 'ics') onToast('ok', 'Opened in your calendar app')
-    } catch (err) {
-      onToast('err', (err as Error).message)
-    }
-  }
   return (
     <div className="glass rounded-panel mt-8 p-5">
       <div className="flex items-center gap-2">
@@ -411,24 +404,7 @@ function TaskList({ items, meetingTitle, onToast }: { items: ActionItem[]; meeti
                 {a.dueDate ? ` · ${new Date(`${a.dueDate}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}` : ''}
               </div>
             </div>
-            {a.dueDate && (
-              <div className="flex flex-shrink-0 items-center gap-1">
-                <button
-                  onClick={() => void add(a, 'google')}
-                  title="Add to Google Calendar"
-                  className="rounded-lg border border-border bg-white/[.06] px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink transition-all"
-                >
-                  <i className="ti ti-calendar-plus text-[13px]" /> Add to calendar
-                </button>
-                <button
-                  onClick={() => void add(a, 'ics')}
-                  title="Outlook or Windows Calendar (.ics)"
-                  className="rounded-lg px-2 py-1.5 text-[11px] text-text-3 hover:text-text"
-                >
-                  Outlook
-                </button>
-              </div>
-            )}
+            <TaskShare task={{ task: a.task, dueDate: a.dueDate, deadline: a.deadline, person: a.person, meetingTitle }} />
           </div>
         ))}
       </div>

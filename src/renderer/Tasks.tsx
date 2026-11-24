@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
 import { Page } from './components/Page'
-import { AgentRuns, SendToAgentModal, useAgentRuns } from './components/Agent'
+import TaskShare from './components/TaskShare'
 
 // =============================================================================
-// Tasks — every action item from every meeting in one list. Tick them off,
-// or hand one to Claude Code / Codex with the meeting as context.
+// Tasks — every action item from every call in one list. Tick them off, or
+// share one wherever you keep to-dos: calendar, Telegram, WhatsApp, email.
 // =============================================================================
 
 interface Task {
@@ -25,9 +25,6 @@ type Filter = 'open' | 'mine' | 'done' | 'all'
 export default function Tasks({ navigate }: { navigate: NavigateFn }) {
   const [tasks, setTasks] = useState<Task[] | null>(null)
   const [filter, setFilter] = useState<Filter>('open')
-  const runCount = useAgentRuns((st) => st.runs.length)
-  const [agentTask, setAgentTask] = useState<Task | null>(null)
-  const [context, setContext] = useState<{ notes: string; transcript: { speaker: string; text: string }[] } | null>(null)
 
   const load = useCallback(() => {
     invoke<Task[]>('tasks:getAll')
@@ -39,19 +36,6 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
   const toggle = async (t: Task) => {
     setTasks((cur) => cur?.map((x) => (x === t ? { ...x, done: !x.done } : x)) ?? null)
     await invoke('tasks:setDone', { meetingId: t.meetingId, task: t.task, done: !t.done }).catch(load)
-  }
-
-  const openAgent = async (t: Task) => {
-    const m = await invoke<{
-      enhanced_notes?: string | null
-      user_notes?: string | null
-      transcript?: { speaker: string; text: string }[]
-    }>('meetings:getOne', t.meetingId).catch(() => null)
-    setContext({
-      notes: m?.enhanced_notes ?? m?.user_notes ?? '',
-      transcript: (m?.transcript ?? []).map((r) => ({ speaker: r.speaker, text: r.text }))
-    })
-    setAgentTask(t)
   }
 
   const shown = useMemo(() => {
@@ -125,57 +109,12 @@ export default function Tasks({ navigate }: { navigate: NavigateFn }) {
                   </button>
                 </div>
               </div>
-              {!t.done && t.dueDate && (
-                <button
-                  onClick={() =>
-                    void invoke('calendar:add', {
-                      title: t.task,
-                      date: t.dueDate,
-                      details: `From the call: ${t.meetingTitle}`,
-                      target: 'google'
-                    }).catch(() => {})
-                  }
-                  title="Add to Google Calendar"
-                  className="flex-shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 hover:border-accent/50 hover:text-accent-ink"
-                >
-                  <i className="ti ti-calendar-plus text-[12px]" /> Add to calendar
-                </button>
-              )}
-              {!t.done && (
-                <button
-                  onClick={() => void openAgent(t)}
-                  className="flex-shrink-0 rounded-lg border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-text-2 opacity-0 hover:border-accent/50 hover:text-accent-ink group-hover:opacity-100"
-                >
-                  <i className="ti ti-send text-[12px]" /> Send to agent
-                </button>
-              )}
+              {!t.done && <TaskShare task={t} />}
             </div>
           ))}
         </div>
       )}
 
-      {/* Only for people who use the (advanced) coding agent. */}
-      {runCount > 0 && (
-        <div>
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.1em] text-text-3">
-            <i className="ti ti-robot text-[14px] text-accent" /> Agent activity
-          </div>
-          <AgentRuns compact />
-        </div>
-      )}
-
-      {agentTask && context && (
-        <SendToAgentModal
-          task={agentTask.task}
-          context={{
-            title: agentTask.meetingTitle,
-            date: new Date(agentTask.startedAt).toLocaleDateString(),
-            notes: context.notes,
-            transcript: context.transcript
-          }}
-          onClose={() => setAgentTask(null)}
-        />
-      )}
     </Page>
   )
 }
