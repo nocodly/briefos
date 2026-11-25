@@ -29,7 +29,7 @@ async function userIdFor(req: Request): Promise<string> {
 
 serve(async (req) => {
   const userId = await userIdFor(req)
-  let body: { meetingId?: string; text?: string; target?: string; context?: string; stream?: boolean }
+  let body: { meetingId?: string; text?: string; target?: string; context?: string; stream?: boolean; mode?: string; terms?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -50,6 +50,8 @@ serve(async (req) => {
     if (!data) throw new ApiError(404, 'meeting_not_found', 'This meeting was not found.')
     owned.set(meetingId, userId)
   }
+
+  if (body.mode === 'terms') return json({ terms: await explainTerms(body.terms, text, target) })
 
   // Priority processing: lower, steadier latency for the live translation (a
   // sentence costs fractions of a cent either way). Falls back to the default
@@ -134,3 +136,51 @@ serve(async (req) => {
     headers: { ...corsHeaders, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' }
   })
 })
+
+// Term hints: one short line per technical term the client used, in the
+// user's language ("Stripe — an online payment service: cards, subscriptions,
+// invoices"). Everyday words come back without an explanation.
+async function explainTerms(raw: unknown, sentence: string, target: string): Promise<{ term: string; explanation: string }[]> {
+  const terms = (Array.isArray(raw) ? raw : [])
+    .map((t) => String(t ?? '').trim().slice(0, 60))
+    .filter(Boolean)
+    .slice(0, 5)
+  if (!terms.length) return []
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0,
+      max_tokens: 400,
+      response_format: { type: 'json_object' },
+      messages: [
+        {
+          role: 'system',
+          content:
+            `A freelancer is on a live call with a client and reads hints at a glance. For each technical term ` +
+            `(tool, service, technology, dev process or abbreviation) explain in ${target} what it is, in the sense ` +
+            `of the client's sentence, in at most 12 words, plain and useful (e.g. "Stripe — online payments service: ` +
+            `cards, subscriptions, invoices"). Do not repeat the term in the explanation. Skip everyday words that are ` +
+            `not technical here. Reply as JSON: {"terms":[{"term":"<as given>","explanation":"..."}]}`
+        },
+        { role: 'user', content: `Sentence: ${sentence}
+Terms: ${terms.join(', ')}` }
+      ]
+    })
+  })
+  if (!res.ok) {
+    console.error('[translate-line] terms error', res.status, (await res.text()).slice(0, 200))
+    return []
+  }
+  try {
+    const out = JSON.parse(
+      ((await res.json()) as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? '{}'
+    ) as { terms?: { term?: unknown; explanation?: unknown }[] }
+    return (out.terms ?? [])
+      .map((t) => ({ term: String(t.term ?? '').slice(0, 60), explanation: String(t.explanation ?? '').trim().slice(0, 200) }))
+      .filter((t) => t.term && t.explanation && terms.some((x) => x.toLowerCase() === t.term.toLowerCase()))
+  } catch {
+    return []
+  }
+}

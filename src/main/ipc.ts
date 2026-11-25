@@ -550,8 +550,15 @@ export function registerIpcHandlers(): void {
       const x = l as { id?: unknown; speaker?: unknown; text?: unknown; translation?: unknown; final?: unknown; parts?: unknown }
       const parts = Array.isArray(x.parts)
         ? x.parts.slice(-12).map((p) => {
-            const y = p as { text?: unknown; translation?: unknown; live?: unknown; skip?: unknown; done?: unknown }
+            const y = p as { text?: unknown; translation?: unknown; live?: unknown; skip?: unknown; done?: unknown; terms?: unknown }
+            const terms = Array.isArray(y.terms)
+              ? y.terms.slice(0, 4).map((t) => {
+                  const z = t as { term?: unknown; explanation?: unknown }
+                  return { term: String(z.term ?? '').slice(0, 60), explanation: String(z.explanation ?? '').slice(0, 300) }
+                }).filter((t) => t.term && t.explanation)
+              : undefined
             return {
+              terms,
               text: String(y.text ?? '').slice(0, 600),
               translation: typeof y.translation === 'string' ? y.translation.slice(0, 800) : null,
               live: Boolean(y.live),

@@ -49,7 +49,7 @@ interface CapsuleState {
       text: string
       translation: string | null
       final: boolean
-      parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean }[]
+      parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean; terms?: { term: string; explanation: string }[] }[]
     }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
@@ -549,7 +549,31 @@ type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
 type CaptionMode = 'focus' | 'both' | 'translation'
 
-type Block = { key: string; text: string; translation: string; question: string | null }
+type Term = { term: string; explanation: string }
+type Block = { key: string; text: string; translation: string; question: string | null; terms?: Term[] }
+
+/** Term hints for a sentence: its own (any tech word) + the question card's term. */
+function termsFor(own: Term[] | undefined, text: string, hint: ReplyHint | null): Term[] {
+  const out = [...(own ?? [])]
+  const h = hintFor(text, hint)
+  if (h?.term && h.termExplanation && !out.some((t) => t.term.toLowerCase() === h.term!.toLowerCase())) {
+    out.push({ term: h.term, explanation: h.termExplanation })
+  }
+  return out.slice(0, 3)
+}
+
+function TermHints({ terms, className }: { terms: Term[]; className: string }) {
+  if (!terms.length) return null
+  return (
+    <div className={className}>
+      {terms.map((t) => (
+        <div key={t.term} className="mt-1 leading-snug">
+          <span className="font-semibold text-amber">{t.term}</span> — {t.explanation}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 /**
  * The whole question a block ends: the pieces of the same client line back to
@@ -621,7 +645,7 @@ function FocusView({
         speaking = true
         return
       }
-      blocks.push({ key: `${l.id}#${i}`, text: p.text, translation: p.translation || p.text, question: fullQuestion(parts, i) })
+      blocks.push({ key: `${l.id}#${i}`, text: p.text, translation: p.translation || p.text, question: fullQuestion(parts, i), terms: p.terms })
     })
   }
   const lastMe = [...live.lines].reverse().find((l) => l.text.trim())
@@ -657,7 +681,7 @@ function FocusView({
   const current = idx >= 0 ? blocks[idx] : null
   const before = idx > 0 ? blocks.slice(Math.max(0, idx - 2), idx) : []
   const asked = current?.question ?? null
-  const term = current ? hintFor(current.question ?? current.text, hint) : null
+  const terms = current ? termsFor(current.terms, current.question ?? current.text, hint) : []
 
   return (
     <div style={{ height }} className="relative flex flex-col justify-center px-6 pb-5 pt-2">
@@ -698,11 +722,7 @@ function FocusView({
               {current.text}
             </div>
           )}
-          {term && (
-            <div className={`mt-1.5 text-[12.5px] text-white/60 ${asked ? 'pl-8' : ''}`}>
-              <span className="font-semibold text-amber">{term.term}</span> — {term.termExplanation}
-            </div>
-          )}
+          <TermHints terms={terms} className={`mt-1 text-[12.5px] text-white/60 ${asked ? 'pl-8' : ''}`} />
         </div>
       ) : (
         <div className="text-[15px] text-white/35">Listening… the translation appears here.</div>
@@ -803,8 +823,10 @@ function Sentence({
   hint,
   pinAsk,
   skip = false,
-  askText
+  askText,
+  terms: ownTerms
 }: {
+  terms?: Term[]
   /** The whole question (all its pieces), for Ask AI. */
   askText?: string | null
   text: string
@@ -818,7 +840,7 @@ function Sentence({
   pinAsk: boolean
 }) {
   const question = /\?\s*$/.test(text.trim())
-  const term = hintFor(text, hint)
+  const terms = termsFor(ownTerms, text, hint)
   const srcSize = large ? 'text-[17px]' : 'text-[14px]'
   const trSize = large ? 'text-[16px]' : 'text-[13.5px]'
   const srcColor = big ? 'text-white' : 'text-white/55'
@@ -860,11 +882,7 @@ function Sentence({
             </div>
           )
         )}
-        {term && (
-          <div className={`mt-1 text-[12px] leading-snug ${big ? 'text-white/70' : 'text-white/40'}`}>
-            <span className="font-semibold text-amber">{term.term}</span> — {term.termExplanation}
-          </div>
-        )}
+        <TermHints terms={terms} className={`text-[12px] ${big ? 'text-white/70' : 'text-white/40'}`} />
       </div>
       {!speaking && (
         <button
@@ -994,6 +1012,7 @@ function CaptionLineView({
             translation={p.translation}
             skip={Boolean(p.skip)}
             askText={fullQuestion(parts, i)}
+            terms={p.terms}
             speaking={Boolean(p.live) && !line.final}
             mode={mode}
             big={!calm || fresh.has(`${line.id}#${i}`)}

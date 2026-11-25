@@ -240,6 +240,20 @@ export function translateLine(input: { meetingId: string; text: string; target: 
 }
 
 /**
+ * One-line explanations of technical terms the client used ("Stripe", "CI",
+ * "Docker"…), in the user's language. Terms that are not technical come back
+ * without an explanation.
+ */
+export function explainTerms(input: {
+  meetingId: string
+  terms: string[]
+  text: string
+  target: string
+}): Promise<{ terms: { term: string; explanation: string }[] }> {
+  return call<{ terms: { term: string; explanation: string }[] }>('translate-line', JSON.stringify({ ...input, mode: 'terms' }), true)
+}
+
+/**
  * Streamed translation of a caption line: onText gets the translation so far
  * as it arrives (~0.5 s to the first words). Resolves to the full text, or
  * null when the line is already in the target language. Abort with `signal`.

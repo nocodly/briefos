@@ -8,6 +8,7 @@ import {
   suggestReply,
   transcribeChunk,
   translateLineStream,
+  explainTerms,
   askAiStream,
   demoCall,
   type EnhancedNotes,
@@ -56,7 +57,7 @@ export interface LiveLine {
   final: boolean
   /** Client lines: each finished sentence with its own translation (never
    *  rewritten), plus the sentence still being spoken (translation null). */
-  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean }[]
+  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean; terms?: { term: string; explanation: string }[] }[]
 }
 
 interface SessionState {
@@ -587,7 +588,9 @@ function channelLanguage(channel: 'me' | 'them'): string {
 function liveKeywords(): string[] {
   const text = `${aboutMe}\n${get().callContext}`
   const found = text.match(/\b(?:[A-Z][A-Za-z0-9]*[A-Z0-9][A-Za-z0-9]*|[A-Z][a-z]+(?:\.[a-z]+)+|[a-z]+\.(?:js|io|ai|ts))\b/g) ?? []
-  return Array.from(new Set(found)).slice(0, 40)
+  // Common tech names, so they are spelled right ("Stripe", not "stripe"/"strike").
+  const tech = ['Stripe', 'GitHub', 'GitHub Actions', 'API', 'Docker', 'Vercel', 'Netlify', 'Next.js', 'WordPress', 'CI/CD', 'webhook', 'staging']
+  return Array.from(new Set([...found, ...tech])).slice(0, 40)
 }
 
 /** Chunk transcription uses the same fixed language as live. */
@@ -764,6 +767,78 @@ interface Unit {
   ctrl: AbortController | null
   /** tr is the early translation kept on screen until the final one is ready. */
   placeholder?: boolean
+  /** Technical terms first heard in this sentence, explained. */
+  terms?: { term: string; explanation: string }[]
+}
+
+// ---- Term hints ------------------------------------------------------------
+// When the client says a technical word ("Stripe", "GitHub Actions", "API",
+// "Docker"), a one-line explanation appears under that sentence — once per
+// call, the first time the word comes up.
+
+const TECH_TERMS = [
+  'api', 'apis', 'rest', 'graphql', 'webhook', 'webhooks', 'sdk', 'oauth', 'jwt', 'json', 'xml', 'csv', 'endpoint',
+  'stripe', 'paypal', 'shopify', 'woocommerce', 'wordpress', 'webflow', 'wix', 'squarespace', 'figma', 'notion',
+  'github', 'gitlab', 'bitbucket', 'git', 'pull request', 'merge request', 'repo', 'repository', 'branch', 'commit',
+  'github actions', 'ci', 'cd', 'ci/cd', 'pipeline', 'deploy', 'deployment', 'staging', 'production', 'rollback',
+  'docker', 'dockerfile', 'container', 'containers', 'kubernetes', 'k8s', 'helm', 'terraform', 'ansible',
+  'aws', 'azure', 'gcp', 'google cloud', 'firebase', 'supabase', 'vercel', 'netlify', 'heroku', 'cloudflare', 'digitalocean',
+  'lambda', 'serverless', 's3', 'cdn', 'dns', 'ssl', 'https', 'domain', 'hosting', 'vps', 'server', 'load balancer',
+  'react', 'next.js', 'nextjs', 'vue', 'angular', 'svelte', 'node', 'node.js', 'typescript', 'javascript', 'python',
+  'django', 'flask', 'laravel', 'php', 'ruby on rails', 'rails', 'java', 'kotlin', 'swift', 'flutter', 'react native',
+  'postgres', 'postgresql', 'mysql', 'mongodb', 'redis', 'sql', 'nosql', 'database', 'schema', 'migration', 'orm',
+  'frontend', 'front-end', 'backend', 'back-end', 'full-stack', 'fullstack', 'mvp', 'saas', 'crm', 'erp', 'cms', 'seo',
+  'ux', 'ui', 'wireframe', 'wireframes', 'prototype', 'responsive', 'pwa', 'ios', 'android', 'app store', 'testflight',
+  'unit tests', 'unit test', 'qa', 'e2e', 'regression', 'bug', 'hotfix', 'refactor', 'tech debt', 'code review',
+  'agile', 'scrum', 'sprint', 'sprints', 'kanban', 'jira', 'trello', 'asana', 'slack', 'milestone', 'milestones',
+  'nda', 'sla', 'gdpr', 'kpi', 'roi', 'b2b', 'b2c', 'analytics', 'google analytics', 'gtm', 'tag manager', 'pixel',
+  'zapier', 'make.com', 'n8n', 'airtable', 'hubspot', 'salesforce', 'mailchimp', 'twilio', 'sendgrid', 'openai',
+  'chatgpt', 'llm', 'ai agent', 'machine learning', 'scraping', 'scraper', 'cron', 'queue', 'microservices', 'monorepo',
+  'uptime', 'latency', 'caching', 'cache', 'encryption', '2fa', 'sso', 'payment gateway', 'subscription', 'checkout'
+]
+const TERM_SET = new Set(TECH_TERMS)
+const MULTI_TERMS = TECH_TERMS.filter((t) => t.includes(' '))
+// Short all-caps words that are not tech terms.
+const NOT_TERMS = new Set(['I', 'OK', 'AM', 'PM', 'TV', 'USA', 'US', 'UK', 'EU', 'CEO', 'CTO', 'HR', 'PS', 'FYI', 'ASAP', 'LOL'])
+
+/** Candidate technical terms in a sentence, as written. */
+export function techTermsIn(text: string): string[] {
+  const found = new Map<string, string>()
+  const lower = text.toLowerCase()
+  for (const t of MULTI_TERMS) {
+    if ((' ' + lower.replace(/[^a-z0-9./+ -]/g, ' ') + ' ').includes(` ${t} `)) found.set(t, t)
+  }
+  for (const m of text.matchAll(/[A-Za-z][A-Za-z0-9.+#/-]*[A-Za-z0-9+#]|[A-Za-z]/g)) {
+    const w = m[0]
+    const key = w.toLowerCase()
+    if ([...found.keys()].some((k) => k.includes(' ') && k.split(' ').includes(key))) continue
+    const acronym = /^[A-Z][A-Z0-9]{1,5}s?$/.test(w) && !NOT_TERMS.has(w)
+    const camel = /^[A-Z]?[a-z]+[A-Z][A-Za-z]*$/.test(w) // GitHub, WordPress, JavaScript
+    const dotted = /^[A-Za-z]+\.(js|io|com|ai)$/i.test(w) // Node.js, make.com
+    if (TERM_SET.has(key) || acronym || camel || dotted) found.set(key, w)
+  }
+  return [...found.values()].slice(0, 5)
+}
+
+const explainedTerms = new Map<string, { term: string; explanation: string } | null>() // per call
+let termRequests = 0
+
+function explainTermsOf(itemId: string, unit: Unit): void {
+  const serverId = get().serverId
+  if (!serverId || termRequests >= 40) return
+  const fresh = techTermsIn(unit.src).filter((t) => !explainedTerms.has(t.toLowerCase()))
+  if (!fresh.length) return
+  fresh.forEach((t) => explainedTerms.set(t.toLowerCase(), null)) // once per call
+  termRequests++
+  explainTerms({ meetingId: serverId, terms: fresh, text: unit.src, target: nativeLanguageName(nativeLanguage) })
+    .then(({ terms }) => {
+      const got = (terms ?? []).filter((t) => t?.term && t?.explanation)
+      if (!got.length) return
+      got.forEach((t) => explainedTerms.set(t.term.toLowerCase(), t))
+      unit.terms = got.slice(0, 3)
+      publishUnits(itemId)
+    })
+    .catch((err) => console.warn('[live] term hints failed', (err as Error).message))
 }
 
 /**
@@ -791,15 +866,16 @@ const pct = (xs: number[], q: number) =>
   xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * q))]) : null
 const median = (xs: number[]) => pct(xs, 0.5)
 const itemTranslation = new Map<string, string>()
-const MIN_UNIT_WORDS = 3
+const MIN_UNIT_WORDS = 5
+const SENTENCE_MIN_WORDS = 3
 /** Short pieces: cut after this many words when no pause mark comes. */
-const CHUNK_WORDS = 6
-const FORCE_CUT_AFTER = 8
-const HARD_CUT_AFTER = 12
+const CHUNK_WORDS = 8
+const FORCE_CUT_AFTER = 10
+const HARD_CUT_AFTER = 14
 /** Words a long phrase is best split before (English + common others). */
 const JOINTS = new Set(
-  ('and but or so because since although though while when where which who that if than then as to for with without ' +
-    'from of about after before into on in at by like y pero porque que con para de en e mas porque com para und aber weil dass mit für')
+  ('and but or so because since although though while when where which who if than then ' +
+    'y pero porque que cuando e mas quando und aber weil dass wenn')
     .split(' ')
 )
 
@@ -808,7 +884,7 @@ const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').tri
 
 /** Cut finished units off `rest`; returns [units, consumed chars]. */
 /**
- * Cut the client's speech into short pieces — about 3 to 6 words — each shown
+ * Cut the client's speech into short pieces — about 5 to 8 words — each shown
  * with its own translation right under it (short pairs read at a glance).
  *   1. at a sentence end or a pause mark (, ; : —) once 3+ words are there;
  *   2. no mark yet but 8+ words waiting: cut after the 6th word;
@@ -825,7 +901,10 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
     let m: RegExpExecArray | null
     while ((m = re.exec(tail))) {
       const end = m.index + m[0].length
-      if (wordCount(tail.slice(0, end)) >= MIN_UNIT_WORDS) {
+      // A sentence end always closes a piece (3+ words; tiny ones like "Okay."
+      // join the next). A comma or dash needs 5+ words.
+      const sentenceEnd = /[.!?…]/.test(m[0])
+      if (wordCount(tail.slice(0, end)) >= (sentenceEnd ? SENTENCE_MIN_WORDS : MIN_UNIT_WORDS)) {
         take = end
         break
       }
@@ -836,9 +915,13 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
       const words: { start: number; end: number; w: string }[] = []
       const w = /\S+/g
       while ((m = w.exec(tail))) words.push({ start: m.index, end: m.index + m[0].length, w: m[0].toLowerCase().replace(/[^\p{L}']/gu, '') })
+      // First joint after 5+ words (a piece of 5–8 words).
       let cut = -1
-      for (let i = 3; i < Math.min(7, words.length - 1); i++) {
-        if (JOINTS.has(words[i].w)) cut = i
+      for (let i = 5; i < Math.min(9, words.length - 1); i++) {
+        if (JOINTS.has(words[i].w)) {
+          cut = i
+          break
+        }
       }
       if (cut > 0) take = words[cut - 1].end
       // No joint: only a really long run without any mark is cut after 7 words.
@@ -868,6 +951,7 @@ function publishUnits(itemId: string): void {
       text: u.src,
       translation: u.tr,
       skip: !u.tr && !needsTranslation(u.src),
+      terms: u.terms,
       // Final translation is in (not streaming, not an early placeholder).
       done: Boolean(u.tr) && !u.ctrl && !u.placeholder
     })),
@@ -953,7 +1037,7 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
     const [srcs] = splitUnits(text, true)
     st.units = srcs.map((src, i) => {
       const same = old.find((u) => norm(u.src) === norm(src))
-      return same ?? { src, tr: old[i]?.tr ?? null, ctrl: null, placeholder: Boolean(old[i]?.tr) }
+      return same ?? { src, tr: old[i]?.tr ?? null, ctrl: null, placeholder: Boolean(old[i]?.tr), terms: old[i]?.terms }
     })
     old.forEach((u) => !st!.units.includes(u) && u.ctrl?.abort())
     st.cut = text.length
@@ -970,8 +1054,10 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
     // Reuse the early translation when the finished sentence is what it covered.
     const e = st.early
     if (e && e.done && e.tr && norm(e.src) === norm(src)) {
-      st.units.push({ src, tr: e.tr, ctrl: null })
+      const reused: Unit = { src, tr: e.tr, ctrl: null }
+      st.units.push(reused)
       st.early = null
+      explainTermsOf(itemId, reused)
       continue
     }
     // Different (longer) sentence than the early one: keep its translation
@@ -983,6 +1069,7 @@ function handleClientText(itemId: string, text: string, final: boolean): void {
     }
     st.units.push(unit)
     translateUnit(itemId, unit)
+    explainTermsOf(itemId, unit)
   }
   if (fresh.length) {
     st.early?.ctrl?.abort()
@@ -1182,6 +1269,8 @@ export async function startMeeting_(templateId?: string, opts: { context?: strin
     set({ callContext: '' })
     contextOwner = null
   }
+  explainedTerms.clear()
+  termRequests = 0
   if (opts.context) set({ callContext: opts.context.slice(0, 6000) })
   else if (!get().callContext.trim()) {
     const ev = await invoke<{ title: string; description: string; location: string } | null>('calendar:current').catch(() => null)
@@ -1487,7 +1576,9 @@ export async function startTestCall(): Promise<void> {
   await startMeeting_('client-call', {
     context:
       'Test call: Anna Weber, owner of a small coffee shop in Berlin, wants a website with an online menu, ' +
-      'table reservations and opening hours. Budget about $2,000, launch in the first week of December.'
+      'table reservations, opening hours and online payments (she has a Stripe account and an old draft in a ' +
+      'GitHub repo). Budget about $2,000, launch in the first week of December. Expect technical questions: ' +
+      'Stripe, GitHub Actions, hosting, Docker, staging, API, how you work.'
   })
   if (get().status !== 'recording') return
   const got = await credsP

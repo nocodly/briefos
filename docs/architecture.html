@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Minutama Architecture</title>
+<style>
+:root {
+  --bg: #F7F9FC; --surface: #FFFFFF; --text: #0A2540; --text2: #3D5A80; --text3: #7A95B8; --border: #D8E5F5;
+  --app: #1A56DB; --app-bg: #EBF3FF;
+  --srv: #0EA874; --srv-bg: #E7F7F0;
+  --ext: #7C3AED; --ext-bg: #F2ECFE;
+  --web: #D97706; --web-bg: #FDF3E6;
+  --line: #3D5A80; --live: #F2552C; --badge: #0A2540;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B1220; --surface: #111A2E; --text: #E6EDF7; --text2: #A9B8CE; --text3: #7086A6; --border: #24324D;
+    --app: #6EA0FF; --app-bg: #13234A; --srv: #3DD6A0; --srv-bg: #0F2A24;
+    --ext: #B794FF; --ext-bg: #231A40; --web: #F5A94A; --web-bg: #2E2214;
+    --line: #A9B8CE; --live: #FF7A50; --badge: #E6EDF7;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B1220; --surface: #111A2E; --text: #E6EDF7; --text2: #A9B8CE; --text3: #7086A6; --border: #24324D;
+  --app: #6EA0FF; --app-bg: #13234A; --srv: #3DD6A0; --srv-bg: #0F2A24;
+  --ext: #B794FF; --ext-bg: #231A40; --web: #F5A94A; --web-bg: #2E2214;
+  --line: #A9B8CE; --live: #FF7A50; --badge: #E6EDF7;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 32px 16px 64px; }
+h1 { font-size: 30px; margin: 0 0 6px; }
+h2 { font-size: 20px; margin: 44px 0 14px; }
+.lead { color: var(--text2); margin: 0 0 22px; max-width: 760px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 16px; }
+.scroll { overflow-x: auto; }
+svg { display: block; min-width: 960px; width: 100%; height: auto; }
+svg text { font-family: "Segoe UI", system-ui, sans-serif; fill: var(--text); }
+.t { font-size: 14px; font-weight: 700; }
+.i { font-size: 12px; fill: var(--text2); }
+.ct { font-size: 15px; font-weight: 700; }
+.app { fill: var(--app-bg); stroke: var(--app); }
+.srv { fill: var(--srv-bg); stroke: var(--srv); }
+.ext { fill: var(--ext-bg); stroke: var(--ext); }
+.web { fill: var(--web-bg); stroke: var(--web); }
+.box { fill: var(--surface); stroke-width: 1; }
+.cont { stroke-width: 1.5; stroke-dasharray: 6 4; }
+.arrow { fill: none; stroke: var(--line); stroke-width: 1.6; }
+.live { fill: none; stroke: var(--live); stroke-width: 2; stroke-dasharray: 7 5; }
+.badge circle { fill: var(--badge); }
+.badge text { fill: var(--bg); font-size: 11px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 24px; margin-top: 14px; padding: 0; list-style: none; }
+.legend li { display: flex; gap: 10px; color: var(--text2); font-size: 14px; }
+.n { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--badge); color: var(--bg); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.keys { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 14px; font-size: 13px; color: var(--text2); }
+.keys span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; border: 1.5px solid var(--c); background: var(--b); }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.step { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--c, var(--app)); border-radius: 12px; padding: 12px 14px; }
+.step b { display: block; margin-bottom: 4px; }
+.step small { color: var(--text2); font-size: 13px; }
+.step .ms { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; color: var(--live); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td, th { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { color: var(--text3); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+code { font-family: Consolas, "DM Mono", monospace; font-size: 12.5px; background: var(--app-bg); padding: 1px 5px; border-radius: 5px; word-break: break-word; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Minutama Architecture</h1>
+  <p class="lead">The whole system on one page: the Windows app, the Supabase server, outside services (OpenAI, Stripe, Resend) and the minutama.com website. AI keys live only on the server. Audio and notes stay on the user's computer.</p>
+
+  <div class="keys">
+    <span style="--c:var(--app);--b:var(--app-bg)">App on the PC</span>
+    <span style="--c:var(--srv);--b:var(--srv-bg)">Our server</span>
+    <span style="--c:var(--ext);--b:var(--ext-bg)">Outside services</span>
+    <span style="--c:var(--web);--b:var(--web-bg)">Website and delivery</span>
+    <span style="--c:var(--live);--b:transparent">Live audio, direct</span>
+  </div>
+
+  <div class="card scroll">
+  <svg viewBox="0 0 1200 810" role="img" aria-label="Minutama architecture diagram">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker>
+      <marker id="ahl" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--live)"/></marker>
+    </defs>
+
+    <!-- ===== Windows app ===== -->
+    <rect class="app cont" x="20" y="60" width="450" height="560" rx="16"/>
+    <text class="ct" x="40" y="86">Minutama app for Windows · Electron 28</text>
+
+    <rect class="box" style="stroke:var(--app)" x="40" y="100" width="410" height="150" rx="10"/>
+    <text class="t" x="56" y="122">Main process (Node.js)</text>
+    <text class="i" x="56" y="146">• Tray, hotkeys, call detection</text>
+    <text class="i" x="56" y="166">• Capsule — floating window: large / small view</text>
+    <text class="i" x="56" y="186">• IPC + preload (contextIsolation on)</text>
+    <text class="i" x="56" y="206">• store — settings, languages, plan</text>
+    <text class="i" x="56" y="226">• Auto-update, recovery after a window crash</text>
+
+    <rect class="box" style="stroke:var(--app)" x="40" y="270" width="410" height="150" rx="10"/>
+    <text class="t" x="56" y="292">Renderer (React + Tailwind)</text>
+    <text class="i" x="56" y="316">• Dashboard, meetings, LiveMeeting, Period Reports</text>
+    <text class="i" x="56" y="336">• Overlay — live captions, translation, question cards</text>
+    <text class="i" x="56" y="356">• Onboarding, Settings, language choice</text>
+    <text class="i" x="56" y="376">• Billing: regional prices, Checkout, portal</text>
+    <text class="i" x="56" y="396">• track — funnel events and errors</text>
+
+    <rect class="box" style="stroke:var(--app)" x="40" y="440" width="200" height="160" rx="10"/>
+    <text class="t" x="56" y="462">Local data</text>
+    <text class="i" x="56" y="486">• SQLite: meetings,</text>
+    <text class="i" x="56" y="506">  transcripts, notes</text>
+    <text class="i" x="56" y="526">• Audio stays on the PC</text>
+    <text class="i" x="56" y="546">• electron-store</text>
+    <text class="i" x="56" y="566">• FTS5 search</text>
+
+    <rect class="box" style="stroke:var(--app)" x="250" y="440" width="200" height="160" rx="10"/>
+    <text class="t" x="266" y="462">Recording and live audio</text>
+    <text class="i" x="266" y="486">• Mic + system audio</text>
+    <text class="i" x="266" y="506">• ChannelRecorder: Me / Them</text>
+    <text class="i" x="266" y="526">• LiveTranscriber: 24 kHz,</text>
+    <text class="i" x="266" y="546">  silence is not sent</text>
+    <text class="i" x="266" y="566">• meetingSession: filters</text>
+
+    <!-- ===== Supabase ===== -->
+    <rect class="srv cont" x="500" y="60" width="320" height="560" rx="16"/>
+    <text class="ct" x="520" y="86">Supabase · project BriefOc</text>
+
+    <rect class="box" style="stroke:var(--srv)" x="520" y="100" width="280" height="60" rx="10"/>
+    <text class="t" x="536" y="122">Auth</text>
+    <text class="i" x="536" y="144">Email + password, password reset</text>
+
+    <rect class="box" style="stroke:var(--srv)" x="520" y="175" width="280" height="290" rx="10"/>
+    <text class="t" x="536" y="197">Edge Functions (Deno)</text>
+    <text class="i" x="536" y="221">live-session — key for live captions</text>
+    <text class="i" x="536" y="241">translate-line — streaming translation</text>
+    <text class="i" x="536" y="261">suggest-reply — question cards</text>
+    <text class="i" x="536" y="281">transcribe-chunk — transcript, limits</text>
+    <text class="i" x="536" y="301">enhance-notes — notes after the call</text>
+    <text class="i" x="536" y="321">period-report — period reports</text>
+    <text class="i" x="536" y="341">checkout — payment by region</text>
+    <text class="i" x="536" y="361">billing-portal — manage subscription</text>
+    <text class="i" x="536" y="381">stripe-webhook — grants Pro / Max</text>
+    <text class="i" x="536" y="401">track — event analytics</text>
+    <text class="i" x="536" y="429" style="fill:var(--text3)">OpenAI and Stripe keys live only here</text>
+
+    <rect class="box" style="stroke:var(--srv)" x="520" y="480" width="280" height="120" rx="10"/>
+    <text class="t" x="536" y="502">Postgres (RLS)</text>
+    <text class="i" x="536" y="526">profiles — plan, Stripe customer</text>
+    <text class="i" x="536" y="546">usage — meetings and minutes per month</text>
+    <text class="i" x="536" y="566">meeting_sessions — call check</text>
+    <text class="i" x="536" y="586">app_events — funnel by country</text>
+
+    <!-- ===== External ===== -->
+    <rect class="ext box" x="850" y="60" width="330" height="60" rx="10"/>
+    <text class="t" x="866" y="82">Resend</text>
+    <text class="i" x="866" y="104">SMTP: confirmation and password-reset emails</text>
+
+    <rect class="ext box" x="850" y="140" width="330" height="190" rx="10"/>
+    <text class="t" x="866" y="162">OpenAI</text>
+    <text class="i" x="866" y="186">• gpt-live-transcribe — Realtime WebSocket,</text>
+    <text class="i" x="866" y="206">  words in 0.2–0.4 s, language fixed</text>
+    <text class="i" x="866" y="226">• gpt-4.1-mini — streaming translation (~0.45 s)</text>
+    <text class="i" x="866" y="246">• gpt-4o-mini — cards, notes, reports</text>
+    <text class="i" x="866" y="266">• Audio chunk transcription</text>
+    <text class="i" x="866" y="296" style="fill:var(--text3)">API data is not used for training</text>
+
+    <rect class="ext box" x="850" y="350" width="330" height="190" rx="10"/>
+    <text class="t" x="866" y="372">Stripe</text>
+    <text class="i" x="866" y="396">• Checkout: regional prices T1–T4</text>
+    <text class="i" x="866" y="416">  ($19 Europe/US … $5 India)</text>
+    <text class="i" x="866" y="436">• Customer Portal — cancel subscription</text>
+    <text class="i" x="866" y="456">• Webhook → our server</text>
+    <text class="i" x="866" y="476">• Promo codes, no VAT (§ 19 UStG)</text>
+
+    <!-- ===== Web and delivery ===== -->
+    <rect class="web box" x="20" y="660" width="540" height="130" rx="10"/>
+    <text class="t" x="36" y="682">minutama.com · Next.js 16 on Railway</text>
+    <text class="i" x="36" y="706">• Home + /freelancers landings in English, Spanish, Portuguese</text>
+    <text class="i" x="36" y="726">• /api/region — visitor's country → regional price</text>
+    <text class="i" x="36" y="746">• Terms, Privacy, Impressum, /account (cancel)</text>
+    <text class="i" x="36" y="766">• Deploys itself on push to minutama/stage-0-security</text>
+
+    <rect class="web box" x="600" y="660" width="270" height="130" rx="10"/>
+    <text class="t" x="616" y="682">Cloudflare</text>
+    <text class="i" x="616" y="706">• DNS and proxy</text>
+    <text class="i" x="616" y="726">• Country (CF-IPCountry)</text>
+    <text class="i" x="616" y="746">• Web Analytics, no cookies</text>
+
+    <rect class="web box" x="890" y="660" width="290" height="130" rx="10"/>
+    <text class="t" x="906" y="682">GitHub Releases</text>
+    <text class="i" x="906" y="706">• Minutama-Setup.exe (installer)</text>
+    <text class="i" x="906" y="726">• latest.yml — version for auto-update</text>
+    <text class="i" x="906" y="746">• Repository nocodly/briefos</text>
+
+    <!-- ===== Arrows ===== -->
+    <!-- 1 app -> functions -->
+    <path class="arrow" d="M450,300 H518" marker-end="url(#ah)"/>
+    <!-- 2 live audio -> OpenAI realtime -->
+    <path class="live" d="M450,470 H485 V40 H1015 V138" marker-end="url(#ahl)"/>
+    <!-- 3 functions -> OpenAI -->
+    <path class="arrow" d="M800,240 H848" marker-end="url(#ah)"/>
+    <!-- 4 functions <-> Stripe -->
+    <path class="arrow" d="M800,390 H848" marker-end="url(#ah)"/>
+    <path class="arrow" d="M850,430 H802" marker-end="url(#ah)"/>
+    <!-- 5 functions -> postgres -->
+    <path class="arrow" d="M660,465 V478" marker-end="url(#ah)"/>
+    <!-- 6 auth -> resend -->
+    <path class="arrow" d="M800,110 H848" marker-end="url(#ah)"/>
+    <!-- 7 app -> /api/region -->
+    <path class="arrow" d="M200,620 V658" marker-end="url(#ah)"/>
+    <!-- 8 GitHub -> app updater -->
+    <path class="arrow" d="M1035,660 V640 H430 V622" marker-end="url(#ah)"/>
+    <!-- 9 site <-> Cloudflare -->
+    <path class="arrow" d="M562,725 H598" marker-start="url(#ah)" marker-end="url(#ah)"/>
+
+    <g class="badge"><circle cx="465" cy="300" r="9"/><text x="465" y="300">1</text></g>
+    <g class="badge"><circle cx="750" cy="40" r="10" style="fill:var(--live)"/><text x="750" y="40">2</text></g>
+    <g class="badge"><circle cx="825" cy="240" r="9"/><text x="825" y="240">3</text></g>
+    <g class="badge"><circle cx="825" cy="410" r="9"/><text x="825" y="410">4</text></g>
+    <g class="badge"><circle cx="680" cy="472" r="9"/><text x="680" y="472">5</text></g>
+    <g class="badge"><circle cx="825" cy="110" r="9"/><text x="825" y="110">6</text></g>
+    <g class="badge"><circle cx="200" cy="640" r="9"/><text x="200" y="640">7</text></g>
+    <g class="badge"><circle cx="735" cy="640" r="9"/><text x="735" y="640">8</text></g>
+    <g class="badge"><circle cx="580" cy="705" r="9"/><text x="580" y="705">9</text></g>
+  </svg>
+  </div>
+
+  <ul class="legend">
+    <li><span class="n">1</span>The app calls server functions over HTTPS with the user's token. The app holds no AI keys.</li>
+    <li><span class="n" style="background:var(--live)">2</span>Live audio goes straight to OpenAI Realtime over WebSocket. live-session issues a temporary 120 s key.</li>
+    <li><span class="n">3</span>Functions call OpenAI: translation, question cards, notes, reports.</li>
+    <li><span class="n">4</span>Functions create Stripe checkout and portal sessions. Stripe calls the webhook, and only the webhook turns a plan on.</li>
+    <li><span class="n">5</span>Functions read and write plans, limits and events in Postgres.</li>
+    <li><span class="n">6</span>Auth sends emails through Resend SMTP.</li>
+    <li><span class="n">7</span>The app asks the website for the user's country and shows that region's price.</li>
+    <li><span class="n">8</span>The app checks latest.yml on GitHub and installs the new version itself.</li>
+    <li><span class="n">9</span>The website runs behind Cloudflare: proxy, visitor country, analytics.</li>
+  </ul>
+
+  <h2>What happens during a call</h2>
+  <div class="flow">
+    <div class="step"><b>1. Audio</b><small>The mic ("Me") and system audio ("Them") are recorded separately.</small></div>
+    <div class="step"><b>2. LiveTranscriber</b><small>Audio is resampled to 24 kHz. Silence is cut and never sent.</small></div>
+    <div class="step" style="--c:var(--ext)"><b>3. OpenAI Realtime</b><small>Recognizes words in the language set in Settings.</small><span class="ms">0.2–0.4 s</span></div>
+    <div class="step"><b>4. Filters</b><small>Drop unexpected scripts (e.g. Chinese) and the client's echo in the mic.</small></div>
+    <div class="step" style="--c:var(--srv)"><b>5. translate-line</b><small>Streams a translation of the client's lines while they are still speaking.</small><span class="ms">~0.45 s to first words</span></div>
+    <div class="step" style="--c:var(--web)"><b>6. Capsule</b><small>Captions type out with an orange leading edge, the translation is indented, scrolling is automatic.</small></div>
+  </div>
+  <div class="flow" style="margin-top:12px">
+    <div class="step" style="--c:var(--srv)"><b>In parallel: question cards</b><small>When the client finishes a question, suggest-reply shows a card: question, translation, term and hint.</small><span class="ms">~2 s</span></div>
+    <div class="step" style="--c:var(--srv)"><b>After the call</b><small>enhance-notes writes notes, a client brief, an estimate and a follow-up email. Everything is saved in SQLite on the PC.</small></div>
+    <div class="step" style="--c:var(--srv)"><b>Recording for history</b><small>transcribe-chunk counts minutes for the limits. Audio is deleted on the server right after processing.</small></div>
+  </div>
+
+  <h2>How to ship updates</h2>
+  <div class="card scroll">
+  <table>
+    <tr><th>What</th><th>How</th></tr>
+    <tr><td>App</td><td><code>npm run build:win -- --publish never</code>, then <code>gh release create vX.Y.Z</code> with the .exe, .blockmap and latest.yml</td></tr>
+    <tr><td>Server functions</td><td><code>npx supabase functions deploy &lt;name&gt; --remote=ijxqtdthzrhkbcxvllei</code></td></tr>
+    <tr><td>Database</td><td>Migrations in <code>supabase/migrations</code>, funnel in <code>supabase/queries/funnel.sql</code></td></tr>
+    <tr><td>Website</td><td><code>git push</code> to <code>minutama/stage-0-security</code>, Railway deploys it</td></tr>
+  </table>
+  </div>
+</main>
+</body>
+</html>
