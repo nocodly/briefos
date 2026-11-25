@@ -142,7 +142,9 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: REDIRECT_URL })
       if (err) throw new Error(err.message)
       markRecoveryPending()
-      setInfo('Check your inbox. Open the link from the email on this computer: Minutama will open and let you set a new password.')
+      setInfo(
+        'We sent you a link. Open your inbox here, on the computer with Minutama, and click it: Minutama opens and asks for a new password. On a phone the link can’t open the app.'
+      )
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -254,7 +256,7 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
               </h2>
               <p className="text-[13px] text-text-3">
                 {mode === 'forgot'
-                  ? 'Enter your account email and we will send you a link.'
+                  ? 'Enter your account email and we will send you a link. Open it on this computer — the link opens Minutama here.'
                   : 'Choose a new password for your Minutama account.'}
               </p>
               {mode === 'forgot' ? (
@@ -269,17 +271,27 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
                 />
               ) : (
                 <>
+                  <div className="relative">
+                    <input
+                      type={showPass ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="New password (min 6 characters)"
+                      required
+                      autoFocus
+                      className={`${inputCls} pr-10`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPass((v) => !v)}
+                      title={showPass ? 'Hide password' : 'Show password'}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-text-3 hover:text-text-2"
+                    >
+                      <i className={`ti ti-${showPass ? 'eye-off' : 'eye'} text-[15px]`} />
+                    </button>
+                  </div>
                   <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="New password (min 6 characters)"
-                    required
-                    autoFocus
-                    className={inputCls}
-                  />
-                  <input
-                    type="password"
+                    type={showPass ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repeat new password"
@@ -292,7 +304,13 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
                 <div className="text-[12px] text-red bg-red-soft border border-red/20 rounded-xl px-3 py-2">{error}</div>
               )}
               {info && (
-                <div className="text-[12px] text-green bg-green-soft border border-green/20 rounded-xl px-3 py-2">{info}</div>
+                <div className="flex gap-2.5 rounded-xl border border-amber/40 bg-amber/10 px-3.5 py-3">
+                  <i className="ti ti-device-desktop mt-0.5 flex-shrink-0 text-[18px] text-amber" />
+                  <div className="text-[12.5px] leading-relaxed text-text">
+                    <div className="font-semibold text-amber">Open the email on this computer</div>
+                    {info}
+                  </div>
+                </div>
               )}
               <button
                 type="submit"
