@@ -561,6 +561,8 @@ let capsuleTimer: ReturnType<typeof setTimeout> | null = null
 let meLiveOk = false
 /** The client was speaking until this moment: mic text then is their echo. */
 let themActiveUntil = 0
+/** When the client's channel last produced words (to tell echo from your short replies). */
+let lastThemAt = 0
 const recentThem: { at: number; text: string }[] = []
 
 function livePartial(): string {
@@ -1048,17 +1050,21 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
       onPartial: (rawId, text) => {
         const id = `${channel}:${rawId}`
         if (!inExpectedScript(text, channel) || !/\p{L}/u.test(text)) return
-        if (channel === 'them') themActiveUntil = Date.now() + 700
-        else if (Date.now() < themActiveUntil) return // the client's voice leaking into your mic
+        if (channel === 'them') {
+          themActiveUntil = Date.now() + 400
+          lastThemAt = Date.now()
+        } else if (Date.now() < themActiveUntil) return // the client's voice leaking into your mic
         if (!liveStartMs.has(id)) liveStartMs.set(id, Math.max(0, Math.round(timeline() - 1500)))
         upsertLive(id, channel, { text })
         if (channel === 'them') handleClientText(id, text, false)
       },
       onFinal: (rawId, text) => {
         const id = `${channel}:${rawId}`
-        // Your side: a single word on its own is almost always noise or the
-        // client's voice from the speakers guessed at ("Problemas").
-        const noise = channel === 'me' && text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length < 2
+        // Your side: a single word right after the client spoke is usually
+        // their voice from the speakers guessed at ("Problemas"). A short reply
+        // of yours ("Yes.", "Sure!") said on its own is kept.
+        const words = text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length
+        const noise = channel === 'me' && (words === 0 || (words < 2 && Date.now() - lastThemAt < 1500))
         if (!inExpectedScript(text, channel) || noise || (channel === 'me' && isEcho(text))) {
           console.log(`[live] dropped ${channel} line:`, text.slice(0, 80))
           removeLive(id)
@@ -1067,6 +1073,7 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
         }
         upsertLive(id, channel, { text, final: true })
         if (channel === 'them') {
+          lastThemAt = Date.now()
           recentThem.push({ at: Date.now(), text })
           handleClientText(id, text, true)
         }
@@ -1097,14 +1104,18 @@ async function startLive(system: MediaStream | null, mic: MediaStream): Promise<
   const gate = system ? new EchoGate() : undefined
   if (system) transcribers.them = makeTranscriber('them', system, serverId, gate)
   transcribers.me = makeTranscriber('me', mic, serverId, gate)
-  for (const [ch, t] of Object.entries(transcribers)) {
-    try {
-      await t!.start()
-    } catch (err) {
-      console.warn(`[live] ${ch} could not start`, (err as Error).message)
-      if (ch === 'them') set({ liveStatus: 'failed' })
-    }
-  }
+  // Both sides connect at the same time (your side used to wait for the
+  // client's connection, so your first words came in late).
+  await Promise.all(
+    Object.entries(transcribers).map(async ([ch, t]) => {
+      try {
+        await t!.start()
+      } catch (err) {
+        console.warn(`[live] ${ch} could not start`, (err as Error).message)
+        if (ch === 'them') set({ liveStatus: 'failed' })
+      }
+    })
+  )
 }
 
 function resetLive(): void {
@@ -1121,6 +1132,7 @@ function resetLive(): void {
   trLatency.done.length = 0
   recentThem.length = 0
   themActiveUntil = 0
+  lastThemAt = 0
   meLiveOk = false
   set({ live: [], liveStatus: 'off' })
 }
