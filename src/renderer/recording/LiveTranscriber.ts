@@ -47,7 +47,7 @@ export class EchoGate {
   isEcho(micRms: number): boolean {
     const now = performance.now()
     // Client silent for a while (plus room reverb tail): the mic is the user.
-    if (now - this.lastFarVoice > 300) return false
+    if (now - this.lastFarVoice > 200) return false
     let farMax = 0
     for (const f of this.far) if (f.rms > farMax) farMax = f.rms
     if (farMax < VOICE_RMS * 0.5) return false
@@ -74,7 +74,7 @@ const MAX_FAILURES = 4
 /** Audio held while (re)connecting, sent as soon as the socket opens. */
 const MAX_BACKLOG_SAMPLES = RATE * 8
 /** Audio kept before speech starts so the first word isn't cut. */
-const PREROLL_SAMPLES = 7_200 // 300 ms
+const PREROLL_SAMPLES = 10_800 // 450 ms — the first syllable isn't cut off
 
 export class LiveTranscriber {
   private track: MediaStreamTrack | null = null
@@ -94,6 +94,8 @@ export class LiveTranscriber {
   private turnStartedAt = 0
   // Items
   private texts = new Map<string, string>()
+  /** Software gain for the mic channel (see onAudio). */
+  private gain = 1
   // Resampler state (device rate → 24 kHz)
   private ratio = 2
   private srcPos = 0
@@ -255,7 +257,7 @@ export class LiveTranscriber {
     // Level-based VAD.
     let sum = 0
     for (let i = 0; i < input.length; i++) sum += input[i] * input[i]
-    const rms = Math.sqrt(sum / input.length)
+    let rms = Math.sqrt(sum / input.length)
     const now = performance.now()
     if (this.echo?.role === 'far') this.echo.gate.far_(rms)
     else if (this.echo?.role === 'near' && this.echo.gate.isEcho(rms)) {
@@ -263,6 +265,19 @@ export class LiveTranscriber {
       // is neither transcribed as "You" nor counted as the user speaking.
       input = new Float32Array(input.length)
       sum = 0
+    } else if (this.echo?.role === 'near' && rms > 0.005) {
+      // Your mic (no automatic gain): lift quiet speech to a steady level so a
+      // short "Fixed" isn't heard as "Uh". Slow to rise, fast to fall, max 4x.
+      const want = Math.min(4, Math.max(1, 0.06 / rms))
+      this.gain = want < this.gain ? want : this.gain + (want - this.gain) * 0.05
+      if (this.gain > 1.01) {
+        const g = this.gain
+        const out = new Float32Array(input.length)
+        for (let i = 0; i < input.length; i++) out[i] = Math.max(-1, Math.min(1, input[i] * g))
+        input = out
+        rms *= g
+        sum = rms * rms * input.length
+      }
     }
     const level = sum ? rms : 0
     if (level >= VOICE_RMS) {

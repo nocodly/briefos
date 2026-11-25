@@ -789,39 +789,58 @@ const itemUnits = new Map<string, ItemUnits>()
 const trLatency = { first: [] as number[], done: [] as number[] }
 const median = (xs: number[]) => (xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]) : null)
 const itemTranslation = new Map<string, string>()
-const MIN_UNIT_WORDS = 4
-// A long sentence is translated in parts: cut at a comma once 9+ words are
-// waiting (with 5+ before the comma), so the first half doesn't wait for the end.
-const CLAUSE_CUT_WORDS = 9
-const CLAUSE_MIN_WORDS = 5
+const MIN_UNIT_WORDS = 3
+/** Short pieces: cut after this many words when no pause mark comes. */
+const CHUNK_WORDS = 6
+const FORCE_CUT_AFTER = 8
+const HARD_CUT_AFTER = 12
+/** Words a long phrase is best split before (English + common others). */
+const JOINTS = new Set(
+  ('and but or so because since although though while when where which who that if than then as to for with without ' +
+    'from of about after before into on in at by like y pero porque que con para de en e mas porque com para und aber weil dass mit für')
+    .split(' ')
+)
 
 const wordCount = (t: string) => t.split(/\s+/).filter(Boolean).length
 const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 
 /** Cut finished units off `rest`; returns [units, consumed chars]. */
+/**
+ * Cut the client's speech into short pieces — about 3 to 6 words — each shown
+ * with its own translation right under it (short pairs read at a glance).
+ *   1. at a sentence end or a pause mark (, ; : —) once 3+ words are there;
+ *   2. no mark yet but 8+ words waiting: cut after the 6th word;
+ *   3. at the end of the client's turn, the rest is one piece.
+ */
 function splitUnits(rest: string, final: boolean): [string[], number] {
   const out: string[] = []
   let pos = 0
   for (;;) {
     const tail = rest.slice(pos)
     if (!tail.trim()) break
-    // Sentence ends (followed by a space or at the end of the text so far —
-    // the recognizer streams punctuation with the last word).
-    const ends: number[] = []
-    const re = /[.!?…]+(?=\s|$)/g
-    let m: RegExpExecArray | null
-    while ((m = re.exec(tail))) ends.push(m.index + m[0].length)
     let take = -1
-    for (const end of ends) {
+    const re = /([.!?…]+|[,;:]|\s[—–-])(?=\s|$)/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(tail))) {
+      const end = m.index + m[0].length
       if (wordCount(tail.slice(0, end)) >= MIN_UNIT_WORDS) {
         take = end
         break
       }
     }
-    if (take < 0 && !final && wordCount(tail) >= CLAUSE_CUT_WORDS) {
-      // A long sentence still going: cut at the last comma after 6+ words.
-      const comma = tail.lastIndexOf(', ')
-      if (comma > 0 && wordCount(tail.slice(0, comma)) >= CLAUSE_MIN_WORDS) take = comma + 1
+    if (take < 0 && !final && wordCount(tail) >= FORCE_CUT_AFTER) {
+      // No pause mark: cut at a natural joint — right before "because",
+      // "and", "with", "for"… among words 4–7 — or else after the 6th word.
+      const words: { start: number; end: number; w: string }[] = []
+      const w = /\S+/g
+      while ((m = w.exec(tail))) words.push({ start: m.index, end: m.index + m[0].length, w: m[0].toLowerCase().replace(/[^\p{L}']/gu, '') })
+      let cut = -1
+      for (let i = 3; i < Math.min(7, words.length - 1); i++) {
+        if (JOINTS.has(words[i].w)) cut = i
+      }
+      if (cut > 0) take = words[cut - 1].end
+      // No joint: only a really long run without any mark is cut after 7 words.
+      else if (words.length >= HARD_CUT_AFTER) take = words[CHUNK_WORDS].end
     }
     if (take < 0) {
       if (final) take = tail.length
