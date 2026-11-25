@@ -221,6 +221,36 @@ function similarity(a: string, b: string): number {
   return common / Math.min(A.size, B.size)
 }
 
+/**
+ * Your line is the client's voice from the speakers only when it repeats their
+ * words nearly verbatim, in order: the longest run of words it shares with
+ * their line covers 80%+ of yours (3+ words). A reply that reuses their words
+ * ("Yes, I can set up Stripe Checkout") is yours and is kept.
+ */
+function isEchoOf(mine: string, theirs: string): boolean {
+  const tok = (t: string) =>
+    t
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(Boolean)
+  const a = tok(mine)
+  const b = tok(theirs)
+  if (a.length < 3 || !b.length) return false
+  let best = 0
+  const prev = new Array(b.length + 1).fill(0)
+  for (let i = 1; i <= a.length; i++) {
+    let diag = 0
+    for (let j = 1; j <= b.length; j++) {
+      const up = prev[j]
+      prev[j] = a[i - 1] === b[j - 1] ? diag + 1 : 0
+      if (prev[j] > best) best = prev[j]
+      diag = up
+    }
+  }
+  return best >= 3 && best / a.length >= 0.8
+}
+
 function near(a: LiveSegment, b: LiveSegment): boolean {
   return Math.abs(a.startMs - b.startMs) <= DUP_WINDOW_MS
 }
@@ -241,7 +271,7 @@ function addSegment(seg: LiveSegment): boolean {
   }
   if (seg.speaker === 'me') {
     const echo = current.some(
-      (s) => s.speaker === 'them' && near(s, seg) && similarity(s.text, seg.text) >= CROSS_DUP
+      (s) => s.speaker === 'them' && Math.abs(s.startMs - seg.startMs) <= 10_000 && isEchoOf(seg.text, s.text)
     )
     if (echo) {
       console.log(`[session] drop mic echo of system audio @${seg.startMs}`)
@@ -866,12 +896,12 @@ const pct = (xs: number[], q: number) =>
   xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * q))]) : null
 const median = (xs: number[]) => pct(xs, 0.5)
 const itemTranslation = new Map<string, string>()
-const MIN_UNIT_WORDS = 5
+const MIN_UNIT_WORDS = 4
 const SENTENCE_MIN_WORDS = 3
 /** Short pieces: cut after this many words when no pause mark comes. */
-const CHUNK_WORDS = 8
-const FORCE_CUT_AFTER = 10
-const HARD_CUT_AFTER = 14
+const CHUNK_WORDS = 7
+const FORCE_CUT_AFTER = 9
+const HARD_CUT_AFTER = 13
 /** Words a long phrase is best split before (English + common others). */
 const JOINTS = new Set(
   ('and but or so because since although though while when where which who if than then ' +
@@ -884,12 +914,36 @@ const norm = (t: string) => t.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').tri
 
 /** Cut finished units off `rest`; returns [units, consumed chars]. */
 /**
- * Cut the client's speech into short pieces — about 5 to 8 words — each shown
+ * Cut the client's speech into short pieces — about 4 to 7 words — each shown
  * with its own translation right under it (short pairs read at a glance).
- *   1. at a sentence end or a pause mark (, ; : —) once 3+ words are there;
- *   2. no mark yet but 8+ words waiting: cut after the 6th word;
- *   3. at the end of the client's turn, the rest is one piece.
+ *   1. at a sentence end (3+ words) or a pause mark (, ; : —) once 4+ words are there;
+ *   2. no mark yet but 9+ words waiting: cut at a joint (4–7 words in), or after the 7th word in a 13+ word run;
+ *   3. at the end of the client's turn, the rest is one piece;
+ *   4. any piece of 12+ words is split in two halves.
  */
+/**
+ * A piece of 12+ words (a long sentence with no comma) becomes two halves, at
+ * a joint ("and", "because"…) near the middle if there is one.
+ */
+function halves(unit: string): string[] {
+  const words = unit.split(/\s+/)
+  if (words.length < 12) return [unit]
+  const key = (i: number) => (words[i] ?? '').toLowerCase().replace(/[^\p{L}']/gu, '')
+  const mid = Math.ceil(words.length / 2)
+  let cut = mid
+  for (let d = 0; d <= 2; d++) {
+    if (mid - d >= MIN_UNIT_WORDS && JOINTS.has(key(mid - d))) {
+      cut = mid - d
+      break
+    }
+    if (words.length - (mid + d) >= MIN_UNIT_WORDS && JOINTS.has(key(mid + d))) {
+      cut = mid + d
+      break
+    }
+  }
+  return [words.slice(0, cut).join(' '), words.slice(cut).join(' ')]
+}
+
 function splitUnits(rest: string, final: boolean): [string[], number] {
   const out: string[] = []
   let pos = 0
@@ -902,7 +956,7 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
     while ((m = re.exec(tail))) {
       const end = m.index + m[0].length
       // A sentence end always closes a piece (3+ words; tiny ones like "Okay."
-      // join the next). A comma or dash needs 5+ words.
+      // join the next). A comma or dash needs 4+ words.
       const sentenceEnd = /[.!?…]/.test(m[0])
       if (wordCount(tail.slice(0, end)) >= (sentenceEnd ? SENTENCE_MIN_WORDS : MIN_UNIT_WORDS)) {
         take = end
@@ -915,9 +969,9 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
       const words: { start: number; end: number; w: string }[] = []
       const w = /\S+/g
       while ((m = w.exec(tail))) words.push({ start: m.index, end: m.index + m[0].length, w: m[0].toLowerCase().replace(/[^\p{L}']/gu, '') })
-      // First joint after 5+ words (a piece of 5–8 words).
+      // First joint after 4+ words (a piece of 4–7 words).
       let cut = -1
-      for (let i = 5; i < Math.min(9, words.length - 1); i++) {
+      for (let i = 4; i < Math.min(8, words.length - 1); i++) {
         if (JOINTS.has(words[i].w)) {
           cut = i
           break
@@ -925,14 +979,14 @@ function splitUnits(rest: string, final: boolean): [string[], number] {
       }
       if (cut > 0) take = words[cut - 1].end
       // No joint: only a really long run without any mark is cut after 7 words.
-      else if (words.length >= HARD_CUT_AFTER) take = words[CHUNK_WORDS].end
+      else if (words.length >= HARD_CUT_AFTER) take = words[CHUNK_WORDS - 1].end
     }
     if (take < 0) {
       if (final) take = tail.length
       else break
     }
     const unit = tail.slice(0, take).trim()
-    if (unit) out.push(unit)
+    if (unit) out.push(...halves(unit))
     pos += take
     while (pos < rest.length && /\s/.test(rest[pos])) pos++
   }
@@ -1128,8 +1182,8 @@ function scheduleEarly(itemId: string, st: ItemUnits, final: boolean): void {
 
 function isEcho(text: string): boolean {
   const now = Date.now()
-  while (recentThem.length && now - recentThem[0].at > 20_000) recentThem.shift()
-  return recentThem.some((r) => similarity(r.text, text) >= 0.5)
+  while (recentThem.length && now - recentThem[0].at > 10_000) recentThem.shift()
+  return recentThem.some((r) => isEchoOf(text, r.text))
 }
 
 function saveLiveSegment(id: string, speaker: 'me' | 'them', text: string): void {

@@ -648,8 +648,11 @@ function FocusView({
       blocks.push({ key: `${l.id}#${i}`, text: p.text, translation: p.translation || p.text, question: fullQuestion(parts, i), terms: p.terms })
     })
   }
-  const lastMe = [...live.lines].reverse().find((l) => l.text.trim())
-  const youLast = lastMe?.speaker === 'me' ? lastMe.text : null
+  // Your last reply stays at the bottom until you say something new (dimmer
+  // once the client talks again).
+  const meIdx = live.lines.map((l) => l.speaker === 'me' && Boolean(l.text.trim())).lastIndexOf(true)
+  const youLast = meIdx >= 0 ? live.lines[meIdx].text : null
+  const youOld = meIdx >= 0 && live.lines.slice(meIdx + 1).some((l) => l.speaker === 'them' && l.text.trim())
 
   // Scheduler: index of the block on screen.
   const [shownKey, setShownKey] = useState<string | null>(null)
@@ -734,7 +737,7 @@ function FocusView({
           </span>
         )}
         {youLast && (
-          <span className="ml-auto max-w-[70%] truncate text-white/40" title={youLast}>
+          <span className={`ml-auto line-clamp-2 max-w-[75%] text-right leading-snug ${youOld ? 'text-white/35' : 'text-white/60'}`} title={youLast}>
             <span className="font-semibold text-[#9DB7FF]/70">You:</span> {youLast}
           </span>
         )}
