@@ -13,7 +13,7 @@ import { ApiError, adminClient, authenticate, json, requireEnv, serve } from '..
 
 const MODEL = Deno.env.get('DEMO_MODEL') ?? 'gpt-realtime-mini'
 const VOICE = Deno.env.get('DEMO_VOICE') ?? 'marin'
-const PER_DAY = 5
+const PER_DAY = 20
 
 const INSTRUCTIONS = [
   'You are Anna Weber, the friendly owner of a small coffee shop in Berlin. You are on a video call with a',

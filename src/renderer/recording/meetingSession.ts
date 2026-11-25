@@ -1177,10 +1177,25 @@ export async function startMeeting_(templateId?: string, opts: { context?: strin
   console.log('[session] starting')
 
   try {
-    const server = await startMeeting()
-
-    const mic = await getMic()
-    const sys = await getSystemAudio()
+    // Server, microphone and system audio start together (they used to run
+    // one after another, ~1 s slower to the capsule).
+    const micP = getMic()
+    const sysP = getSystemAudio()
+    let server: Awaited<ReturnType<typeof startMeeting>>
+    try {
+      server = await startMeeting()
+    } catch (err) {
+      void micP.then((m) => m.getTracks().forEach((t) => t.stop())).catch(() => {})
+      void sysP.then((x) => x && [x.capture, x.audio].forEach((st) => st.getTracks().forEach((t) => t.stop()))).catch(() => {})
+      throw err
+    }
+    const mic = await micP.catch(async (err) => {
+      // No microphone: don't leave the system-audio capture running.
+      const x = await sysP.catch(() => null)
+      if (x) [x.capture, x.audio].forEach((st) => st.getTracks().forEach((t) => t.stop()))
+      throw err
+    })
+    const sys = await sysP
     const system = sys?.audio ?? null
     streams = sys ? [mic, sys.capture, sys.audio] : [mic]
 
@@ -1436,8 +1451,10 @@ export async function startTestCall(): Promise<void> {
   if (get().status !== 'recording') return
   const got = await credsP
   if (!got.ok) {
+    // Stop first (it discards the empty call), THEN say why — otherwise the
+    // real reason was replaced by "Nothing was said".
+    await stopMeeting()
     set({ error: got.err.message })
-    void stopMeeting()
     return
   }
   const creds = got.c
