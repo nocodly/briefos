@@ -550,12 +550,13 @@ export function registerIpcHandlers(): void {
       const x = l as { id?: unknown; speaker?: unknown; text?: unknown; translation?: unknown; final?: unknown; parts?: unknown }
       const parts = Array.isArray(x.parts)
         ? x.parts.slice(-12).map((p) => {
-            const y = p as { text?: unknown; translation?: unknown; live?: unknown; skip?: unknown }
+            const y = p as { text?: unknown; translation?: unknown; live?: unknown; skip?: unknown; done?: unknown }
             return {
               text: String(y.text ?? '').slice(0, 600),
               translation: typeof y.translation === 'string' ? y.translation.slice(0, 800) : null,
               live: Boolean(y.live),
-              skip: Boolean(y.skip)
+              skip: Boolean(y.skip),
+              done: Boolean(y.done)
             }
           })
         : undefined

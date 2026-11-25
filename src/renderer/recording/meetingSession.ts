@@ -56,7 +56,7 @@ export interface LiveLine {
   final: boolean
   /** Client lines: each finished sentence with its own translation (never
    *  rewritten), plus the sentence still being spoken (translation null). */
-  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
+  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean }[]
 }
 
 interface SessionState {
@@ -787,7 +787,9 @@ interface ItemUnits {
 const itemUnits = new Map<string, ItemUnits>()
 /** Translation speed in this call: request → first words / full sentence (ms). */
 const trLatency = { first: [] as number[], done: [] as number[] }
-const median = (xs: number[]) => (xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)]) : null)
+const pct = (xs: number[], q: number) =>
+  xs.length ? Math.round([...xs].sort((a, b) => a - b)[Math.min(xs.length - 1, Math.floor(xs.length * q))]) : null
+const median = (xs: number[]) => pct(xs, 0.5)
 const itemTranslation = new Map<string, string>()
 const MIN_UNIT_WORDS = 3
 /** Short pieces: cut after this many words when no pause mark comes. */
@@ -862,7 +864,13 @@ function publishUnits(itemId: string): void {
   // for the words heard so far; the final one replaces it).
   const early = st.early && tail ? st.early.tr : null
   const parts = [
-    ...st.units.map((u) => ({ text: u.src, translation: u.tr, skip: !u.tr && !needsTranslation(u.src) })),
+    ...st.units.map((u) => ({
+      text: u.src,
+      translation: u.tr,
+      skip: !u.tr && !needsTranslation(u.src),
+      // Final translation is in (not streaming, not an early placeholder).
+      done: Boolean(u.tr) && !u.ctrl && !u.placeholder
+    })),
     ...(tail ? [{ text: tail, translation: early, live: true }] : [])
   ]
   const joined = st.units.map((u) => u.tr ?? '').filter(Boolean).join(' ')
@@ -1315,6 +1323,8 @@ export async function stopMeeting(): Promise<void> {
     unanswered: s.hints.filter((h) => !h.answered).length,
     trFirstMs: median(trLatency.first),
     trDoneMs: median(trLatency.done),
+    trFirstP95: pct(trLatency.first, 0.95),
+    trDoneP95: pct(trLatency.done, 0.95),
     trCount: trLatency.done.length
   })
   activeBaseMs = durationMs

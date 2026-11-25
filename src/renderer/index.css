@@ -144,6 +144,19 @@ body.overlay {
 .animate-caption-in {
   animation: caption-in 0.35s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
+/* Focus mode: a new block fades in place (no movement, no word animation). */
+@keyframes focus-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.animate-focus-in {
+  animation: focus-in 0.22s ease-out both;
+}
+
 /* Task ticked: the check pops in. */
 @keyframes check-pop {
   0% {

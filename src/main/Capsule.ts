@@ -70,7 +70,7 @@ export interface CapsuleLiveLine {
   translation: string | null
   final: boolean
   /** Sentence → translation pairs (client lines). */
-  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
+  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean }[]
 }
 
 export interface CapsuleAgentRun {

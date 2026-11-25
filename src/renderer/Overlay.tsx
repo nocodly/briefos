@@ -49,7 +49,7 @@ interface CapsuleState {
       text: string
       translation: string | null
       final: boolean
-      parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
+      parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean; done?: boolean }[]
     }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
@@ -346,9 +346,10 @@ function LiveCaptions({
   const lines = live.lines
   const [mode, setModeState] = useState<CaptionMode>(() => {
     try {
-      return localStorage.getItem('captionMode') === 'translation' ? 'translation' : 'both'
+      const m = localStorage.getItem('captionMode')
+      return m === 'translation' || m === 'both' ? m : 'focus'
     } catch {
-      return 'both'
+      return 'focus'
     }
   })
   const setMode = (m: CaptionMode) => {
@@ -403,6 +404,9 @@ function LiveCaptions({
         {live.status === 'live' ? 'Live' : live.status === 'failed' ? 'Live captions off' : 'Connecting…'}
         <ModeSwitch mode={mode} onChange={setMode} />
       </div>
+      {mode === 'focus' ? (
+        <FocusView live={live} large={large} height={height} hint={hint} />
+      ) : (
       <div
         ref={box}
         // Only a deliberate scroll up stops following; reaching the bottom again resumes it.
@@ -440,7 +444,8 @@ function LiveCaptions({
           </div>
         )}
       </div>
-      {!following && (
+      )}
+      {mode !== 'focus' && !following && (
         <button
           onClick={() => setFollow(true)}
           className="absolute bottom-10 left-1/2 -translate-x-1/2 rounded-full bg-accent px-3 py-1 text-[11.5px] font-semibold text-white shadow-lg animate-caption-in"
@@ -542,7 +547,181 @@ function AskPanel({ ask, large, height }: { ask: AskState; large: boolean; heigh
 
 type CaptionLineData = NonNullable<CapsuleState['live']>['lines'][number]
 
-type CaptionMode = 'both' | 'translation'
+type CaptionMode = 'focus' | 'both' | 'translation'
+
+type Block = { key: string; text: string; translation: string; question: string | null }
+
+/**
+ * The whole question a block ends: the pieces of the same client line back to
+ * the previous sentence end ("Could you send me a fixed" + "price estimate by
+ * Friday?"). Ask AI gets this, not just the last piece.
+ */
+function fullQuestion(parts: { text: string }[], i: number): string | null {
+  if (!/\?\s*$/.test(parts[i]?.text.trim() ?? '')) return null
+  let start = i
+  while (start > 0 && !/[.!?…]\s*$/.test(parts[start - 1].text.trim())) start--
+  return parts
+    .slice(start, i + 1)
+    .map((p) => p.text.trim())
+    .join(' ')
+}
+
+/** Reading time for a block: ~20 characters a second, at least 1.2 s. */
+const readMs = (t: string) => Math.max(1200, ([...t].length / 20) * 1000)
+
+/**
+ * Focus mode: the current translation big in a fixed place, the two before it
+ * above (calm), the client's words small under it. A block appears whole only
+ * once its translation is final, stays at least long enough to read it, then
+ * the next one takes over (faster when several are waiting). During a pause
+ * the last block stays.
+ */
+function FocusView({
+  live,
+  large,
+  height,
+  hint
+}: {
+  live: NonNullable<CapsuleState['live']>
+  large: boolean
+  height: number
+  hint: ReplyHint | null
+}) {
+  const [size, setSize] = useState<number>(() => {
+    try {
+      return Number(localStorage.getItem('focusSize')) || (large ? 26 : 20)
+    } catch {
+      return large ? 26 : 20
+    }
+  })
+  const changeSize = (d: number) =>
+    setSize((v) => {
+      const n = Math.min(40, Math.max(16, v + d))
+      try {
+        localStorage.setItem('focusSize', String(n))
+      } catch {
+        /* storage off */
+      }
+      return n
+    })
+
+  // Finished blocks in order.
+  const blocks: Block[] = []
+  let speaking = false
+  for (const l of live.lines) {
+    if (l.speaker === 'me') continue
+    const parts = l.parts?.length ? l.parts : [{ text: l.text, translation: l.translation, done: l.final, skip: false, live: !l.final }]
+    parts.forEach((p, i) => {
+      if (p.live && !l.final) {
+        speaking = true
+        return
+      }
+      const ready = p.done || p.skip || (l.final && Boolean(p.translation) && !l.parts?.length)
+      if (!ready) {
+        speaking = true
+        return
+      }
+      blocks.push({ key: `${l.id}#${i}`, text: p.text, translation: p.translation || p.text, question: fullQuestion(parts, i) })
+    })
+  }
+  const lastMe = [...live.lines].reverse().find((l) => l.text.trim())
+  const youLast = lastMe?.speaker === 'me' ? lastMe.text : null
+
+  // Scheduler: index of the block on screen.
+  const [shownKey, setShownKey] = useState<string | null>(null)
+  const shownAt = useRef(0)
+  const blocksRef = useRef(blocks)
+  blocksRef.current = blocks
+  const shownRef = useRef<string | null>(null)
+  const idx = shownKey ? blocks.findIndex((b) => b.key === shownKey) : -1
+  useEffect(() => {
+    // One steady clock (the data updates every 40 ms; the clock must not reset).
+    const t = setInterval(() => {
+      const list = blocksRef.current
+      const cur = shownRef.current ? list.findIndex((b) => b.key === shownRef.current) : -1
+      if (!list.length || cur === list.length - 1) return
+      const waiting = list.length - 1 - cur
+      const current = list[cur]
+      const need = !current ? 0 : waiting > 2 ? 1200 : readMs(current.translation)
+      if (performance.now() - shownAt.current >= need) {
+        shownAt.current = performance.now()
+        // Far behind: jump so the newest is at most 2 blocks away.
+        const next = list[Math.max(cur + 1, list.length - 3)].key
+        shownRef.current = next
+        setShownKey(next)
+      }
+    }, 100)
+    return () => clearInterval(t)
+  }, [])
+
+  const current = idx >= 0 ? blocks[idx] : null
+  const before = idx > 0 ? blocks.slice(Math.max(0, idx - 2), idx) : []
+  const asked = current?.question ?? null
+  const term = current ? hintFor(current.question ?? current.text, hint) : null
+
+  return (
+    <div style={{ height }} className="relative flex flex-col justify-center px-6 pb-5 pt-2">
+      <div className="absolute right-3 top-1 flex items-center gap-1 text-white/40">
+        <button onClick={() => changeSize(-2)} className="rounded px-1.5 text-[12px] hover:bg-white/10 hover:text-white" title="Smaller text">
+          A−
+        </button>
+        <button onClick={() => changeSize(2)} className="rounded px-1.5 text-[14px] hover:bg-white/10 hover:text-white" title="Bigger text">
+          A+
+        </button>
+      </div>
+      {before.map((b) => (
+        <div key={b.key} className="mb-2 leading-snug text-[#D4D4D8]/45" style={{ fontSize: Math.round(size * 0.62) }}>
+          {b.translation}
+        </div>
+      ))}
+      {current ? (
+        <div key={current.key} className="animate-focus-in">
+          <div className="flex items-start gap-3">
+            {asked && (
+              <span className="mt-[0.35em] flex h-5 w-5 flex-none items-center justify-center rounded-full bg-amber/20 text-[12px] font-bold text-amber">?</span>
+            )}
+            <div className="min-w-0 flex-1 font-medium text-[#F5F5F5]" style={{ fontSize: size, lineHeight: 1.4 }}>
+              {current.translation}
+            </div>
+            {asked && (
+              <button
+                onClick={() => void invoke('capsule:ask', { line: asked })}
+                title="Ask AI about this question"
+                className="mt-1 flex flex-none items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_2px_10px_rgba(255,106,61,.35)] hover:brightness-110"
+              >
+                <i className="ti ti-sparkles text-[12px]" /> Ask AI
+              </button>
+            )}
+          </div>
+          {current.translation !== current.text && (
+            <div className={`mt-1.5 leading-snug text-[#A1A1AA] ${asked ? 'pl-8' : ''}`} style={{ fontSize: Math.max(13, Math.round(size * 0.55)) }}>
+              {current.text}
+            </div>
+          )}
+          {term && (
+            <div className={`mt-1.5 text-[12.5px] text-white/60 ${asked ? 'pl-8' : ''}`}>
+              <span className="font-semibold text-amber">{term.term}</span> — {term.termExplanation}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-[15px] text-white/35">Listening… the translation appears here.</div>
+      )}
+      <div className="absolute bottom-2 left-6 right-6 flex items-center gap-3 text-[11.5px]">
+        {speaking && (
+          <span className="flex items-center gap-1 text-white/35">
+            <span className="h-1.5 w-1.5 animate-pulse-dot rounded-full bg-green" /> listening…
+          </span>
+        )}
+        {youLast && (
+          <span className="ml-auto max-w-[70%] truncate text-white/40" title={youLast}>
+            <span className="font-semibold text-[#9DB7FF]/70">You:</span> {youLast}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /** "Both" = the client's words + translation; "Translation" = only the translation. */
 function ModeSwitch({ mode, onChange }: { mode: CaptionMode; onChange: (m: CaptionMode) => void }) {
@@ -550,6 +729,7 @@ function ModeSwitch({ mode, onChange }: { mode: CaptionMode; onChange: (m: Capti
     <div className="ml-auto flex rounded-full bg-white/[.06] p-0.5 normal-case tracking-normal">
       {(
         [
+          ['focus', 'Focus'],
           ['both', 'Both'],
           ['translation', 'Translation']
         ] as const
@@ -622,8 +802,11 @@ function Sentence({
   large,
   hint,
   pinAsk,
-  skip = false
+  skip = false,
+  askText
 }: {
+  /** The whole question (all its pieces), for Ask AI. */
+  askText?: string | null
   text: string
   translation: string | null
   skip?: boolean
@@ -685,7 +868,7 @@ function Sentence({
       </div>
       {!speaking && (
         <button
-          onClick={() => void invoke('capsule:ask', { line: text })}
+          onClick={() => void invoke('capsule:ask', { line: askText ?? text })}
           title="Ask AI what this means and what to answer"
           className={`flex h-fit flex-none items-center gap-1 rounded-full bg-accent px-2.5 py-1 text-[11px] font-semibold text-white shadow-[0_2px_10px_rgba(255,106,61,.35)] transition-opacity duration-150 hover:brightness-110 focus:opacity-100 group-hover/s:opacity-100 ${
             pinAsk ? 'opacity-100' : 'opacity-0'
@@ -810,6 +993,7 @@ function CaptionLineView({
             text={p.text}
             translation={p.translation}
             skip={Boolean(p.skip)}
+            askText={fullQuestion(parts, i)}
             speaking={Boolean(p.live) && !line.final}
             mode={mode}
             big={!calm || fresh.has(`${line.id}#${i}`)}
