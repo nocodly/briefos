@@ -1,4 +1,4 @@
-import { MEETING_LANGUAGES, nativeLanguageName } from '../recording/meetingSession'
+import { MEETING_LANGUAGES } from '../recording/meetingSession'
 
 // The three language choices, shared by onboarding, Settings and the Agent page:
 //   - your language: translations go into it
@@ -30,7 +30,6 @@ export function LanguageFields({
     <div className={compact ? 'grid grid-cols-2 gap-3' : 'space-y-3.5'}>
       <Field label="Your language" hint="Translations of what the client says appear in this language.">
         <select value={value.nativeLanguage} onChange={(e) => onChange('nativeLanguage', e.target.value)} className={selectCls}>
-          <option value="">My Windows language ({nativeLanguageName('')})</option>
           {OPTIONS.map((l) => (
             <option key={l.code} value={l.code}>
               {l.name}

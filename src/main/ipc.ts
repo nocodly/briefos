@@ -343,6 +343,8 @@ export function registerIpcHandlers(): void {
   })
   // After the window crashed and reloaded: tell analytics why.
   handle('app:lastCrash', async () => takeRendererCrash())
+  // The user's Windows display languages (to preselect "Your language").
+  handle('app:systemLanguages', async () => app.getPreferredSystemLanguages())
   // "Contact us" in the menu: a new email to the team in the user's mail app.
   handle('app:contact', async () => {
     await shell.openExternal(`mailto:hello@minutama.com?subject=${encodeURIComponent(`Minutama ${app.getVersion()}`)}`)

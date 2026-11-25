@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { NavigateFn } from './App'
 import { invoke } from './lib/ipc'
+import { detectSystemLanguage } from './lib/systemLanguage'
 import { supabase } from './lib/supabaseClient'
 import { getUsage, type UsageInfo } from './lib/usage'
 import { openBillingPortal, openCheckout, usePrices, type Checkout } from './lib/billing'
@@ -91,7 +92,14 @@ export function useAppSettings() {
 
   useEffect(() => {
     invoke<Partial<SettingsState>>('settings:getAll')
-      .then((all) => setS({ ...DEFAULTS, ...(all || {}) }))
+      .then(async (all) => {
+        const merged = { ...DEFAULTS, ...(all || {}) }
+        if (!merged.nativeLanguage) {
+          merged.nativeLanguage = await detectSystemLanguage()
+          void invoke('settings:set', { key: 'nativeLanguage', value: merged.nativeLanguage }).catch(() => {})
+        }
+        setS(merged)
+      })
       .catch((err) => setError((err as Error).message))
   }, [])
 
