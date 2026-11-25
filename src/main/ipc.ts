@@ -1,7 +1,7 @@
 import { app, ipcMain, clipboard, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
-import { getMainWindow, getOverlayWindow } from './index'
+import { getMainWindow, getOverlayWindow, takeRendererCrash } from './index'
 import { getDatabase } from '@storage/Database'
 import { deleteMeetingFiles } from '@storage/FileManager'
 import { getSetting, setSetting, getAllSettings, isProOrByok, type AppSettings } from './store'
@@ -341,6 +341,8 @@ export function registerIpcHandlers(): void {
     const { testCalendar } = await import('./CalendarWatcher')
     return testCalendar(link)
   })
+  // After the window crashed and reloaded: tell analytics why.
+  handle('app:lastCrash', async () => takeRendererCrash())
   // "Contact us" in the menu: a new email to the team in the user's mail app.
   handle('app:contact', async () => {
     await shell.openExternal(`mailto:hello@minutama.com?subject=${encodeURIComponent(`Minutama ${app.getVersion()}`)}`)

@@ -19,7 +19,24 @@ interface Props {
 const STEPS = ['Start recording', 'Ask AI on the call', 'Get the result']
 
 export default function Onboarding({ onDone }: Props) {
-  const [step, setStep] = useState(0)
+  // Survives a window reload: you continue on the same step.
+  const [step, setStepState] = useState(() => {
+    try {
+      return Math.min(2, Math.max(0, Number(sessionStorage.getItem('onboardingStep')) || 0))
+    } catch {
+      return 0
+    }
+  })
+  const setStep = (next: number | ((n: number) => number)) =>
+    setStepState((cur) => {
+      const v = typeof next === 'function' ? next(cur) : next
+      try {
+        sessionStorage.setItem('onboardingStep', String(v))
+      } catch {
+        /* storage off */
+      }
+      return v
+    })
 
   const finish = async () => {
     await invoke('settings:set', { key: 'onboardingComplete', value: true }).catch(() => {})
@@ -84,28 +101,58 @@ function RecordStep() {
 
   useEffect(() => () => cleanup.current(), [])
 
+  // Mic level without an AudioContext: the Web Audio graph made the window
+  // crash and reload right after "Allow microphone" on some PCs. Frames are
+  // read straight from the track (the same way live captions do it).
   const allow = async () => {
+    let stream: MediaStream
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const ctx = new AudioContext()
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 512
-      ctx.createMediaStreamSource(stream).connect(analyser)
-      const buf = new Float32Array(new ArrayBuffer(analyser.fftSize * 4))
-      const id = window.setInterval(() => {
-        analyser.getFloatTimeDomainData(buf)
-        let sum = 0
-        for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
-        setLevel(Math.sqrt(sum / buf.length))
-      }, 100)
-      cleanup.current = () => {
-        window.clearInterval(id)
-        stream.getTracks().forEach((t) => t.stop())
-        void ctx.close()
-      }
-      setState('on')
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }
+      })
     } catch {
       setState('denied')
+      return
+    }
+    setState('on')
+    let stopped = false
+    cleanup.current = () => {
+      stopped = true
+      stream.getTracks().forEach((t) => t.stop())
+    }
+    type Frame = { numberOfFrames: number; copyTo: (d: Float32Array, o: { planeIndex: number; format?: string }) => void; close: () => void }
+    const Processor = (window as unknown as {
+      MediaStreamTrackProcessor?: new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<Frame> }
+    }).MediaStreamTrackProcessor
+    const track = stream.getAudioTracks()[0]
+    if (!Processor || !track) return // permission works; just no level meter
+    const reader = new Processor({ track }).readable.getReader()
+    let buf = new Float32Array(0)
+    let last = 0
+    try {
+      while (!stopped) {
+        const { value, done } = await reader.read()
+        if (done || !value) break
+        try {
+          if (buf.length !== value.numberOfFrames) buf = new Float32Array(value.numberOfFrames)
+          value.copyTo(buf, { planeIndex: 0, format: 'f32-planar' })
+        } catch {
+          /* unsupported format: skip this frame */
+        } finally {
+          value.close()
+        }
+        const now = performance.now()
+        if (now - last > 90) {
+          last = now
+          let sum = 0
+          for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i]
+          setLevel(Math.sqrt(sum / Math.max(1, buf.length)))
+        }
+      }
+    } catch {
+      /* stopped */
+    } finally {
+      void reader.cancel().catch(() => {})
     }
   }
 

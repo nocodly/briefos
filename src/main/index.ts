@@ -70,6 +70,7 @@ function createMainWindow(): BrowserWindow {
   // (the capsule and tray follow) and load the UI again.
   win.webContents.on('render-process-gone', (_e, details) => {
     console.error('[main] renderer gone', details.reason, details.exitCode)
+    lastRendererCrash = { reason: details.reason, exitCode: details.exitCode, at: Date.now() }
     reportRecordingState({ recording: false, paused: false, durationMs: 0, meetingId: null })
     if (details.reason !== 'clean-exit' && !win.isDestroyed()) setTimeout(() => win.reload(), 500)
   })
@@ -136,6 +137,14 @@ function createMainWindow(): BrowserWindow {
   }
 
   return win
+}
+
+/** Last renderer crash (reported to analytics after the reload). */
+export let lastRendererCrash: { reason: string; exitCode: number; at: number } | null = null
+export function takeRendererCrash(): typeof lastRendererCrash {
+  const c = lastRendererCrash
+  lastRendererCrash = null
+  return c
 }
 
 // Reveal helper: showInactive (don't steal focus from the meeting) + pin above
