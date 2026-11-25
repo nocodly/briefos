@@ -9,6 +9,7 @@ import { getDatabase, type BriefOSDatabase } from '@storage/Database'
 const SERVER_TIMEOUT_MS = 120_000
 
 export interface PeriodReportResult {
+  totalMinutes: number
   reportId: string
   meetingCount: number
   executiveSummary: string
@@ -33,6 +34,8 @@ export interface GenerateArgs {
   from: string
   to: string
   label: string
+  /** Language to write the report in ("Ukrainian"); empty = the meetings' language. */
+  language?: string
   onProgress?: (step: string) => void
 }
 
@@ -45,7 +48,7 @@ export class PeriodReportEngine {
     this.db = getDatabase()
   }
 
-  async generate({ from, to, label, onProgress }: GenerateArgs): Promise<PeriodReportResult> {
+  async generate({ from, to, label, language, onProgress }: GenerateArgs): Promise<PeriodReportResult> {
     console.log(`[period] generating report "${label}" (${from} → ${to})`)
 
     onProgress?.('Loading meetings from database…')
@@ -69,7 +72,7 @@ export class PeriodReportEngine {
     }))
 
     onProgress?.('Analyzing the period on Minutama servers…')
-    const report = this.normalize(await this.callServer({ label, from, to, meetings: context }))
+    const report = this.normalize(await this.callServer({ label, from, to, language, meetings: context }))
 
     onProgress?.('Saving report…')
     const totalDurationS = meetings.reduce(
@@ -96,7 +99,7 @@ export class PeriodReportEngine {
     })
 
     console.log('[period] report saved', reportId)
-    return { reportId, meetingCount: meetings.length, ...report }
+    return { reportId, meetingCount: meetings.length, totalMinutes: Math.round(totalDurationS / 60), ...report }
   }
 
   private async callServer(body: unknown): Promise<Record<string, unknown>> {
@@ -128,7 +131,7 @@ export class PeriodReportEngine {
     }
   }
 
-  private normalize(parsed: Record<string, unknown>): Omit<PeriodReportResult, 'reportId' | 'meetingCount'> {
+  private normalize(parsed: Record<string, unknown>): Omit<PeriodReportResult, 'reportId' | 'meetingCount' | 'totalMinutes'> {
     const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : [])
     return {
       executiveSummary: String(parsed.executiveSummary ?? ''),

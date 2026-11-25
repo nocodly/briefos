@@ -99,8 +99,18 @@ export default function Integrations({ navigate }: { navigate: NavigateFn }) {
 
         <Card icon="sparkles" title="Add to Claude" desc="Let Claude search and use all your meetings (MCP connector)." status={<SoonBadge />} />
         <Card icon="webhook" title="Webhook · Zapier · Make · n8n" desc="Send every finished meeting to any tool automatically." status={<SoonBadge />} />
-        <Card icon="mail" title="Email follow-up" desc="Draft and send a recap to everyone on the call." status={<SoonBadge />} />
-        <Card icon="calendar" title="Google Calendar · Outlook" desc="Name meetings from your calendar and add agreed meetings." status={<SoonBadge />} />
+        <Card
+          icon="mail"
+          title="Follow-up email"
+          desc="Every call's notes end with a ready follow-up email in the client's language — copy it or open it in your mail app (Share → Email)."
+          status={<span className="text-[11px] font-semibold text-green">Included</span>}
+        />
+        <Card
+          icon="calendar"
+          title="Google Calendar · Outlook"
+          desc="Paste your private calendar link in Settings → Calendar: Minutama reminds you before a call and uses the event description."
+          status={<span className="text-[11px] font-semibold text-green">In Settings</span>}
+        />
         <Card icon="checkbox" title="Todoist · Linear · Asana" desc="Turn action items into tasks in your tracker." status={<SoonBadge />} />
       </div>
     </Page>

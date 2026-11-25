@@ -32,7 +32,7 @@ export default function AgentPage() {
       <Panel title="Activity" icon="history" desc="Tasks your agent worked on in this session.">
         {runs.length === 0 ? (
           <p className="text-[12.5px] text-text-3">
-            Nothing yet. Use “Send to agent” on a task in Tasks.
+            Nothing yet. Tasks you send to your agent show up here.
           </p>
         ) : (
           <AgentRuns compact />

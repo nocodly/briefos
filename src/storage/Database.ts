@@ -331,6 +331,25 @@ export class BriefOSDatabase {
     return this.db.prepare(sql).all(...params) as Record<string, unknown>[]
   }
 
+  /**
+   * On start no call is being recorded, so a call still marked "recording"
+   * with no transcript and no notes was cut off (app closed mid-call): remove
+   * it instead of showing an empty "Untitled meeting · 0s".
+   */
+  removeEmptyUnfinished(): number {
+    const ids = this.db
+      .prepare(
+        `SELECT m.id FROM meetings m
+         WHERE m.status = 'recording'
+           AND COALESCE(TRIM(m.user_notes), '') = ''
+           AND NOT EXISTS (SELECT 1 FROM transcripts t WHERE t.meeting_id = m.id)`
+      )
+      .all() as { id: string }[]
+    ids.forEach((r) => this.deleteMeeting(r.id))
+    if (ids.length) console.log('[db] removed empty unfinished calls:', ids.length)
+    return ids.length
+  }
+
   deleteMeeting(id: string): void {
     // CASCADE removes summaries + transcripts; FTS isn't a real table so clean
     // it explicitly to avoid orphaned search rows.

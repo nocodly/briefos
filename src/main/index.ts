@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { config as loadEnv } from 'dotenv'
 import { createTray, updateTrayState } from './tray'
 import { registerIpcHandlers } from './ipc'
+import { getDatabase } from '@storage/Database'
 import { initAutoUpdater } from './updater'
 import { enforceRetention } from '@storage/FileManager'
 import { getSetting } from './store'
@@ -307,7 +308,11 @@ if (!gotLock) {
     } else if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore()
       mainWindow.show()
+      // Windows doesn't let a background app take focus: pin on top for a
+      // moment so the window really comes to the front.
+      mainWindow.setAlwaysOnTop(true)
       mainWindow.focus()
+      mainWindow.setAlwaysOnTop(false)
     }
   })
 
@@ -356,6 +361,11 @@ if (!gotLock) {
 
     // All IPC channels live in ipc.ts; it pulls windows via the getters above.
     registerIpcHandlers()
+    try {
+      getDatabase().removeEmptyUnfinished()
+    } catch (err) {
+      console.warn('[main] cleanup of empty calls failed', err)
+    }
 
     // Enforce the audio retention window (deletes old meetings + their files).
     try {

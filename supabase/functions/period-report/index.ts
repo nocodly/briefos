@@ -42,7 +42,7 @@ Rules:
 - Every openActions item MUST name its sourceMeeting.
 - topTopics count = number of meetings the topic appeared in, sorted descending.
 - Ground every insight in the summaries; never speculate or invent facts.
-- Write everything in the language most of the meetings were held in.
+- Write everything in the language the user asks for (else the language most of the meetings were held in).
 - If a field has no data, use [] — never null.`
 
 interface MeetingContext {
@@ -63,7 +63,7 @@ serve(async (req) => {
     throw new ApiError(402, 'pro_required', 'Period Reports are part of Pro. Upgrade in Settings → Plan.')
   }
 
-  let body: { label?: string; from?: string; to?: string; meetings?: MeetingContext[] }
+  let body: { label?: string; from?: string; to?: string; language?: string; meetings?: MeetingContext[] }
   try {
     body = await req.json()
   } catch {
@@ -76,6 +76,7 @@ serve(async (req) => {
     `Period: ${String(body.label ?? '').slice(0, 80)}`,
     `Date range: ${String(body.from ?? '').slice(0, 40)} to ${String(body.to ?? '').slice(0, 40)}`,
     `Total meetings: ${meetings.length}`,
+    ...(body.language ? [`Write the whole report in ${String(body.language).slice(0, 40)}.`] : []),
     '',
     JSON.stringify(meetings)
   ]

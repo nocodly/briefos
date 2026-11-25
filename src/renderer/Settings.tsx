@@ -183,7 +183,7 @@ export default function Settings({ navigate }: { navigate: NavigateFn }) {
         </Panel>
 
         <Panel title="Recording" icon="microphone" desc="Minutama records your microphone and your computer's audio — no bot joins the call, no drivers needed.">
-          <Text label="Start / stop hotkey" value={s.hotkeyRecord} saved={saved === 'hotkeyRecord'} onSave={(v) => set('hotkeyRecord', v)} placeholder="CmdOrCtrl+Shift+B" mono />
+          <Text label="Start / stop hotkey" value={s.hotkeyRecord.replace(/CmdOrCtrl|CommandOrControl/gi, 'Ctrl')} saved={saved === 'hotkeyRecord'} onSave={(v) => set('hotkeyRecord', v)} placeholder="Ctrl+Shift+B" mono />
           <Toggle label="Launch at startup" value={s.launchAtStartup} onSave={(v) => set('launchAtStartup', v)} />
           <p className="text-[11px] text-text-3">Tip: use headphones for the cleanest "You / Them" separation.</p>
         </Panel>
@@ -722,7 +722,7 @@ function CalendarLink({ value }: { value: string }) {
         'calendar:test',
         url.trim()
       )
-      if (!url.trim()) setStatus(null)
+      if (!url.trim()) setStatus({ ok: true, text: 'No calendar connected. Paste your iCal link above to connect one.' })
       else if (!r.ok) setStatus({ ok: false, text: r.error ?? 'Could not read this calendar.' })
       else
         setStatus({

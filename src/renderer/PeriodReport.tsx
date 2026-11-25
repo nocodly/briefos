@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react'
 import { invoke, subscribe } from './lib/ipc'
 import { supabase } from './lib/supabaseClient'
-import Processing from './Processing'
+import Processing, { type Stage } from './Processing'
+import { nativeLanguageName } from './recording/meetingSession'
+
+const REPORT_STAGES: Stage[] = [
+  { key: 'load', label: 'Reading your calls', icon: 'database', match: ['loading', 'aggregat'] },
+  { key: 'ai', label: 'Finding decisions, tasks and patterns', icon: 'sparkles', match: ['analyz', 'server'] },
+  { key: 'save', label: 'Saving the report', icon: 'device-floppy', match: ['saving'] }
+]
 
 // =============================================================================
 // PeriodReport — Minutama's differentiator. Pick a period → ai:generatePeriodReport
@@ -42,6 +49,8 @@ interface Insight {
 interface Report {
   reportId: string
   meetingCount: number
+  /** Sum of the calls' durations. */
+  totalMinutes?: number
   executiveSummary: string
   mainThemes: string[]
   allDecisions: Decision[]
@@ -171,6 +180,7 @@ export default function PeriodReport() {
         from: range.from,
         to: range.to,
         label: selected,
+        language: nativeLanguageName(String((await invoke('settings:get', 'nativeLanguage').catch(() => '')) ?? '')),
         server: {
           url: import.meta.env.VITE_SUPABASE_URL as string,
           anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY as string,
@@ -253,7 +263,7 @@ export default function PeriodReport() {
             onGenerate={generate}
           />
         )}
-        {view === 'processing' && <Processing step={step} />}
+        {view === 'processing' && <Processing step={step} title="Building your report" stages={REPORT_STAGES} />}
         {view === 'report' && report && (
           <ReportView report={report} period={selected} onError={setError} />
         )}
@@ -315,7 +325,7 @@ function ReportView({
   onError: (m: string) => void
 }) {
   const [exporting, setExporting] = useState(false)
-  const totalMinutes = report.speakerStats.reduce((s, x) => s + (x.totalMinutes || 0), 0)
+  const totalMinutes = report.totalMinutes ?? report.speakerStats.reduce((s, x) => s + (x.totalMinutes || 0), 0)
 
   const exportPdf = async () => {
     setExporting(true)

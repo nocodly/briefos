@@ -148,6 +148,7 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
           setMeeting({ ...meeting, title })
         }}
         onBack={() => navigate('dashboard')}
+        onOpenIntegrations={() => navigate('integrations')}
       />
 
       <div className="px-8">
@@ -213,8 +214,10 @@ export default function MeetingView({ id, navigate }: { id: string | null; navig
 function Hero({
   meeting,
   onTitleSave,
-  onBack
+  onBack,
+  onOpenIntegrations
 }: {
+  onOpenIntegrations: () => void
   meeting: Meeting
   onTitleSave: (t: string) => Promise<void>
   onBack: () => void
@@ -235,7 +238,7 @@ function Hero({
         <button onClick={onBack} className="flex items-center gap-1 text-[12px] text-white/50 transition-all hover:text-white">
           <i className="ti ti-arrow-left text-[14px]" /> Calls
         </button>
-        <ShareMenu meetingId={meeting.id} />
+        <ShareMenu meetingId={meeting.id} onOpenIntegrations={onOpenIntegrations} />
       </div>
 
       {editing ? (

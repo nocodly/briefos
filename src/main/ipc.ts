@@ -258,7 +258,13 @@ export function registerIpcHandlers(): void {
     'ai:generatePeriodReport',
     async (
       _e,
-      payload: { from: string; to: string; label: string; server: { url: string; anonKey: string; accessToken: string } }
+      payload: {
+        from: string
+        to: string
+        label: string
+        language?: string
+        server: { url: string; anonKey: string; accessToken: string }
+      }
     ) => {
       // The plan check happens on the server (period-report → 402 for Free).
       const engine = new PeriodReportEngine(payload.server)
@@ -266,6 +272,7 @@ export function registerIpcHandlers(): void {
         from: payload.from,
         to: payload.to,
         label: payload.label,
+        language: String(payload.language ?? '').slice(0, 40),
         onProgress: (step) => progress.periodReport(50, step)
       })
     }

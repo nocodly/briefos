@@ -241,7 +241,7 @@ export default function App() {
   return (
     <div className="flex h-screen font-body text-text">
       <Sidebar page={page} navigate={navigate} />
-      <main className="flex-1 overflow-auto">
+      <main key={page} className="flex-1 overflow-auto">
         <RecordingBanner page={page} onOpen={() => setPage('live')} />
         {page === 'dashboard' && <Dashboard navigate={navigate} />}
         {page === 'live' && <LiveMeeting navigate={(p, id) => navigate(p, id)} />}

@@ -5,7 +5,7 @@
 // from that string to drive the checklist.
 // =============================================================================
 
-interface Stage {
+export interface Stage {
   key: string
   label: string
   icon: string
@@ -17,7 +17,7 @@ const STAGES: Stage[] = [
   { key: 'chunk', label: 'Splitting audio into chunks', icon: 'scissors', match: ['chunk', 'split'] },
   {
     key: 'transcribe',
-    label: 'Transcribing with Whisper',
+    label: 'Transcribing',
     icon: 'file-text',
     match: ['transcrib', 'whisper']
   },
@@ -35,30 +35,38 @@ const STAGES: Stage[] = [
   }
 ]
 
-function activeIndex(step: string): number {
+function activeIndex(step: string, stages: Stage[]): number {
   const s = (step || '').toLowerCase()
-  for (let i = STAGES.length - 1; i >= 0; i--) {
-    if (STAGES[i].match.some((m) => s.includes(m))) return i
+  for (let i = stages.length - 1; i >= 0; i--) {
+    if (stages[i].match.some((m) => s.includes(m))) return i
   }
   return 0
 }
 
-export default function Processing({ step }: { step: string }) {
-  const active = activeIndex(step)
+export default function Processing({
+  step,
+  title = 'Analyzing your meeting',
+  stages = STAGES
+}: {
+  step: string
+  title?: string
+  stages?: Stage[]
+}) {
+  const active = activeIndex(step, stages)
 
   return (
     <div className="fixed inset-0 bg-ink/60 backdrop-blur-sm z-50 flex items-center justify-center font-body">
       <div className="glass-strong rounded-modal p-9 w-[420px] animate-fade-up">
         <div className="w-14 h-14 border-[3px] border-accent-pale border-t-accent rounded-full animate-spin-slow mx-auto mb-5" />
         <h2 className="font-display font-bold text-[20px] text-text text-center mb-1">
-          Analyzing your meeting
+          {title}
         </h2>
         <p className="text-[12px] text-text-3 text-center mb-6 min-h-[18px]">
           {step || 'Preparing…'}
         </p>
 
         <div className="space-y-1.5">
-          {STAGES.map((stage, i) => {
+          {stages.map((stage, i) => {
             const done = i < active
             const current = i === active
             return (

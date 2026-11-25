@@ -301,7 +301,7 @@ function ResultStep() {
     { icon: 'file-text', title: 'Notes and a client brief', text: 'What the client wants, budget, deadlines and open points — ready when the call ends.' },
     { icon: 'calendar-plus', title: 'Tasks with dates', text: '“Send the estimate by Friday” becomes a task — add it to your calendar in one click.' },
     { icon: 'mail', title: 'Follow-up email', text: 'A short recap to send the client, in the language of the call.' },
-    { icon: 'upload', title: 'Import other recordings', text: 'Recorded a call somewhere else? Import the audio or video and get the same notes.' }
+    { icon: 'upload', title: 'Import other calls', text: 'Have a transcript from Zoom, Teams or Google Meet? Import it and get the same notes.' }
   ]
   return (
     <div>
