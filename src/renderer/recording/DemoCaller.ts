@@ -40,7 +40,40 @@ export class DemoCaller {
       this.mic.getTracks().forEach((t) => pc.addTrack(t, this.mic!))
 
       const events = pc.createDataChannel('oai-events')
+      // Half-duplex: while Anna speaks (and ~0.8 s after, for room echo) her
+      // microphone is muted. With speakers instead of headphones she used to
+      // hear her own voice and answer herself.
+      const micTracks = this.mic.getAudioTracks()
+      let reopen: ReturnType<typeof setTimeout> | null = null
+      let safety: ReturnType<typeof setTimeout> | null = null
+      const setMic = (on: boolean) => micTracks.forEach((t) => (t.enabled = on))
+      const annaSpeaks = () => {
+        if (reopen) clearTimeout(reopen)
+        reopen = null
+        setMic(false)
+        // Never leave the mic closed if an event goes missing.
+        if (safety) clearTimeout(safety)
+        safety = setTimeout(() => setMic(true), 45_000)
+      }
+      const annaDone = (delay: number) => {
+        if (reopen) clearTimeout(reopen)
+        reopen = setTimeout(() => {
+          if (safety) clearTimeout(safety)
+          setMic(true)
+        }, delay)
+      }
+      events.onmessage = (e) => {
+        let m: { type?: string }
+        try {
+          m = JSON.parse(String(e.data))
+        } catch {
+          return
+        }
+        if (m.type === 'response.created' || m.type === 'output_audio_buffer.started') annaSpeaks()
+        else if (m.type === 'output_audio_buffer.stopped' || m.type === 'output_audio_buffer.cleared') annaDone(800)
+      }
       events.onopen = () => {
+        annaSpeaks()
         // Anna starts the conversation.
         events.send(JSON.stringify({ type: 'response.create' }))
         this.events.onStatus('live')

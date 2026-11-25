@@ -67,13 +67,11 @@ serve(async (req) => {
           // a firmer voice threshold, and she finishes her sentence even if
           // the mic picks something up.
           input: {
-            turn_detection: {
-              type: 'server_vad',
-              threshold: 0.65,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 800,
-              interrupt_response: false
-            }
+            // Speakers and a room mic: filter far-field noise; "semantic" turn
+            // detection answers when the person finished a thought — not to
+            // a cough, a click or background noise.
+            noise_reduction: { type: 'far_field' },
+            turn_detection: { type: 'semantic_vad', eagerness: 'medium', interrupt_response: false }
           },
           output: { voice: VOICE }
         }
