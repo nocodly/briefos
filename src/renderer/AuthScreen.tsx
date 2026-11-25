@@ -36,14 +36,27 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
 
   // Listen for OAuth callback deep link from main process.
   useEffect(() => {
-    const unsub = subscribe('auth:deeplink', async (url: string) => {
-      console.log('[auth] deep link received:', url)
+    const handleLink = async () => {
+      const url = await invoke<string | null>('auth:takeDeepLink', true).catch(() => null)
+      if (!url) return
+      console.log('[auth] deep link received')
       setGoogleLoading(true)
       setError('')
       try {
         const parsed = new URL(url)
         // Implicit flow: tokens are in the URL fragment (#access_token=...&refresh_token=...)
         const fragment = new URLSearchParams(parsed.hash.slice(1))
+        // The server sends errors in the link (expired / already used link).
+        const linkError =
+          fragment.get('error_description') ?? parsed.searchParams.get('error_description') ?? fragment.get('error') ?? parsed.searchParams.get('error')
+        if (linkError) {
+          setTab('login')
+          throw new Error(
+            /expired|invalid|otp/i.test(linkError)
+              ? 'This link has expired or was already used. Click “Forgot password?” to get a new one, and open the newest email.'
+              : linkError.replace(/\+/g, ' ')
+          )
+        }
         const accessToken = fragment.get('access_token')
         const refreshToken = fragment.get('refresh_token')
 
@@ -76,7 +89,11 @@ export default function AuthScreen({ onAuthSuccess }: Props) {
       } finally {
         setGoogleLoading(false)
       }
-    })
+    }
+    // The link may have arrived before this screen was shown (app starting,
+    // or signed in on another screen): take it now, and on every new one.
+    void handleLink()
+    const unsub = subscribe('auth:deeplink', () => void handleLink())
     return unsub
   }, [onAuthSuccess])
 

@@ -20,7 +20,7 @@ const INVOKE_CHANNELS = new Set([
   'export:pdf', 'export:periodReportPdf', 'export:notion', 'export:slack',
   'export:email', 'export:clipboard', 'export:emailDraft',
   'settings:get', 'settings:set', 'settings:getAll',
-  'auth:openOAuthWindow',
+  'auth:openOAuthWindow', 'auth:takeDeepLink',
   'tasks:getAll', 'tasks:setDone', 'import:pickTranscript',
   'capsule:get', 'capsule:action', 'capsule:hint', 'capsule:task', 'capsule:fit', 'capsule:quick', 'capsule:notice', 'capsule:live', 'capsule:ask', 'capsule:askState', 'capsule:resize', 'calendar:add', 'share:task', 'calendar:current', 'calendar:test', 'app:contact', 'app:lastCrash', 'app:systemLanguages',
   'agent:detect', 'agent:run', 'agent:cancel', 'agent:chooseWorkdir',

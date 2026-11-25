@@ -1,7 +1,7 @@
 import { app, ipcMain, clipboard, dialog, shell, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
 import pkg from 'electron-updater'
 const { autoUpdater } = pkg
-import { getMainWindow, getOverlayWindow, takeRendererCrash } from './index'
+import { getMainWindow, getOverlayWindow, takeRendererCrash, takeDeepLink } from './index'
 import { getDatabase } from '@storage/Database'
 import { deleteMeetingFiles } from '@storage/FileManager'
 import { getSetting, setSetting, getAllSettings, isProOrByok, type AppSettings } from './store'
@@ -436,6 +436,8 @@ export function registerIpcHandlers(): void {
   // (second-instance → handleDeepLink → auth:deeplink).
   // Dev (protocol not registered): fall back to an in-app window that
   // intercepts the redirect.
+  // The sign-in / reset link that arrived (take = remove it once handled).
+  handle('auth:takeDeepLink', async (_e, take: boolean) => takeDeepLink(Boolean(take)))
   handle('auth:openOAuthWindow', async (_e, oauthUrl: string) => {
     // Only ever open our Supabase auth endpoint (the renderer passes the URL).
     const target = new URL(String(oauthUrl))

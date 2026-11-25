@@ -64,6 +64,11 @@ export default function App() {
         return
       }
       try {
+        // Opened from a password-reset / sign-in link: the sign-in screen handles it.
+        if (await invoke<string | null>('auth:takeDeepLink', false).catch(() => null)) {
+          setStage('auth')
+          return
+        }
         const { data: { session } } = await supabase.auth.getSession()
 
         if (!session) {
@@ -88,11 +93,17 @@ export default function App() {
 
     boot()
 
+    // A reset / sign-in link while another screen is shown → the sign-in screen.
+    const unsubLink = subscribe('auth:deeplink', () => setStage('auth'))
+
     // Keep session fresh; if user signs out from another tab → back to auth.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') setStage('auth')
     })
-    return () => subscription.unsubscribe()
+    return () => {
+      subscription.unsubscribe()
+      unsubLink()
+    }
   }, [])
 
   // ── Real-time profile sync ──────────────────────────────────────────────────

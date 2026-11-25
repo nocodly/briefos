@@ -282,12 +282,26 @@ function registerGlobalShortcuts(): void {
 // for links issued before the rebrand).
 const isAuthLink = (arg: string): boolean => arg.startsWith('minutama://') || arg.startsWith('briefos://')
 
+// A sign-in / password-reset link waits here until the renderer takes it
+// (auth:takeDeepLink): the app may be starting, or showing another screen,
+// when the link arrives — it must not get lost.
+let pendingDeepLink: string | null = null
+export function takeDeepLink(take: boolean): string | null {
+  const url = pendingDeepLink
+  if (take) pendingDeepLink = null
+  return url
+}
+
 // Windows sends the URL as a second-instance argument.
 function handleDeepLink(url: string): void {
-  console.log('[main] deep link:', url)
+  console.log('[main] deep link received')
+  pendingDeepLink = url
   if (mainWindow && !mainWindow.isDestroyed()) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.show()
+    mainWindow.setAlwaysOnTop(true)
     mainWindow.focus()
+    mainWindow.setAlwaysOnTop(false)
     mainWindow.webContents.send('auth:deeplink', url)
   }
 }
@@ -328,8 +342,9 @@ if (!gotLock) {
 
     // Dev-mode: if launched with a minutama:// URL directly (e.g. from a test),
     // handle it after the window is ready.
-    const devDeepLink = process.argv.find(isAuthLink)
-    if (devDeepLink) setTimeout(() => handleDeepLink(devDeepLink), 1500)
+    // App started by the link itself (it was closed): keep it for the renderer.
+    const startLink = process.argv.find(isAuthLink)
+    if (startLink) pendingDeepLink = startLink
 
     // Dark window frame/title bar to match the dark UI.
     nativeTheme.themeSource = 'dark'
