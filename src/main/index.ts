@@ -142,7 +142,9 @@ function createMainWindow(): BrowserWindow {
 // fullscreen apps via the 'screen-saver' always-on-top level.
 export function revealOverlay(win: BrowserWindow): void {
   if (win.isDestroyed()) return
-  win.showInactive()
+  overlayParked = false
+  win.setIgnoreMouseEvents(false)
+  if (!win.isVisible()) win.showInactive()
   win.setAlwaysOnTop(true, 'screen-saver')
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
 }
@@ -201,6 +203,13 @@ export function createOverlayWindow(): BrowserWindow {
   // transparent frameless windows don't always emit ready-to-show on Windows.
   win.webContents.once('did-finish-load', () => {
     overlayLoaded = true
+    // Show it once, off-screen and click-through, so later reveals are a move
+    // (instant) instead of a show (Windows fades shown windows in).
+    if (overlayParked) {
+      win.setIgnoreMouseEvents(true)
+      win.setBounds({ x: -30000, y: -30000, width: win.getBounds().width, height: win.getBounds().height })
+      win.showInactive()
+    }
     pushCapsuleState()
   })
 
@@ -220,11 +229,26 @@ export function createOverlayWindow(): BrowserWindow {
 }
 
 /** Hide the capsule but keep the window loaded for the next call. */
+/** Is the capsule out of sight (parked)? */
+let overlayParked = true
+export function isOverlayShown(): boolean {
+  return Boolean(overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible() && !overlayParked)
+}
+
+/**
+ * Hide the capsule but keep the window loaded for the next call. It is parked
+ * off-screen (and click-through) rather than hidden: showing a hidden window
+ * on Windows plays a fade-in, which looked like a lag.
+ */
 export function closeOverlayWindow(): void {
-  if (overlayWindow && !overlayWindow.isDestroyed() && overlayWindow.isVisible()) {
-    console.log('[main] hiding overlay window')
-    overlayWindow.hide()
-  }
+  if (!overlayWindow || overlayWindow.isDestroyed() || overlayParked) return
+  console.log('[main] parking overlay window')
+  overlayParked = true
+  overlayWindow.setIgnoreMouseEvents(true)
+  const b = overlayWindow.getBounds()
+  overlayWindow.setMinimumSize(1, 1)
+  overlayWindow.setMaximumSize(4000, 4000)
+  overlayWindow.setBounds({ x: -30000, y: -30000, width: b.width, height: b.height })
 }
 
 // Toggle is owned by the renderer (it knows current recording UI state);

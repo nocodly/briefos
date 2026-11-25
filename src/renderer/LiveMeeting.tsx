@@ -106,7 +106,8 @@ export default function LiveMeeting({ navigate }: { navigate: NavigateFn }) {
           <i className="ti ti-arrow-left text-[18px]" />
         </button>
         <h1 className="font-display font-bold text-[16px] text-text flex-1 truncate">
-          {s.enhanced?.title ?? (live ? 'Call in progress' : 'New call')}
+          {s.enhanced?.title ??
+            (live ? 'Call in progress' : busy ? 'Writing your notes…' : s.status === 'starting' ? 'Starting…' : 'New call')}
         </h1>
 
         {s.meetingId && s.enhanced && !live && !busy && (

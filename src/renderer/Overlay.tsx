@@ -49,7 +49,7 @@ interface CapsuleState {
       text: string
       translation: string | null
       final: boolean
-      parts?: { text: string; translation: string | null; live?: boolean }[]
+      parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
     }[]
     status: 'off' | 'connecting' | 'live' | 'failed'
   }
@@ -422,9 +422,21 @@ function LiveCaptions({
           <div className="pt-2 text-[13px] text-white/35">Words appear here as people speak.</div>
         ) : (
           <div className={`flex flex-col ${large ? 'gap-5' : 'gap-3.5'}`}>
-            {lines.map((l) => (
-              <CaptionLine key={l.id} line={l} large={large} mode={mode} fresh={fresh} calm={following} hint={hint} newest={l.id === lastClient?.id} />
+            {lines.map((l, i) => (
+              <CaptionLine
+                key={l.id}
+                line={l}
+                large={large}
+                mode={mode}
+                fresh={fresh}
+                calm={following}
+                hint={hint}
+                newest={l.id === lastClient?.id}
+                continued={i > 0 && l.speaker !== 'me' && lines[i - 1].speaker !== 'me'}
+              />
             ))}
+            {/* Room below the newest line: it sits a bit above the bottom edge, nearer the middle. */}
+            <div aria-hidden="true" style={{ height: Math.round(height * 0.28) }} />
           </div>
         )}
       </div>
@@ -609,10 +621,12 @@ function Sentence({
   big,
   large,
   hint,
-  pinAsk
+  pinAsk,
+  skip = false
 }: {
   text: string
   translation: string | null
+  skip?: boolean
   speaking: boolean
   mode: CaptionMode
   big: boolean
@@ -654,7 +668,8 @@ function Sentence({
             }`}
           />
         ) : (
-          !speaking && (
+          !speaking &&
+          !skip && (
             <div className="mt-1 flex gap-1" aria-label="Translating">
               {[0, 1, 2].map((d) => (
                 <span key={d} className="h-1 w-1 animate-pulse rounded-full bg-[#5EC8F2]/60" style={{ animationDelay: `${d * 150}ms` }} />
@@ -734,6 +749,7 @@ const CaptionLine = memo(CaptionLineView, (a, b) =>
   a.mode === b.mode &&
   a.calm === b.calm &&
   a.newest === b.newest &&
+  a.continued === b.continued &&
   a.hint === b.hint &&
   a.line.text === b.line.text &&
   a.line.final === b.line.final &&
@@ -749,7 +765,8 @@ function CaptionLineView({
   fresh,
   calm,
   hint,
-  newest
+  newest,
+  continued = false
 }: {
   line: CaptionLineData
   large: boolean
@@ -759,6 +776,8 @@ function CaptionLineView({
   calm: boolean
   hint: ReplyHint | null
   newest: boolean
+  /** Same speaker as the line above: continue the block, no new label. */
+  continued?: boolean
 }) {
   // Your own lines: one quiet line on the right — you know what you said.
   if (line.speaker === 'me') {
@@ -776,14 +795,21 @@ function CaptionLineView({
   const pinned = ([...finished].reverse().find(({ p }) => /\?\s*$/.test(p.text.trim())) ?? finished[finished.length - 1])?.i
   const lineFresh = parts.some((_, i) => fresh.has(`${line.id}#${i}`))
   return (
-    <div className={`animate-caption-in border-l-2 pl-2.5 transition-colors duration-500 ${lineFresh || !calm ? 'border-accent/70' : 'border-white/15'}`}>
-      <div className={`mb-1 text-[10px] font-semibold uppercase tracking-[.12em] ${lineFresh || !calm ? 'text-accent-pale' : 'text-white/35'}`}>Client</div>
+    <div
+      className={`animate-caption-in border-l-2 pl-2.5 transition-colors duration-500 ${continued ? (large ? '-mt-3' : '-mt-2') : ''} ${
+        lineFresh || !calm ? 'border-accent/70' : 'border-white/15'
+      }`}
+    >
+      {!continued && (
+        <div className={`mb-1 text-[10px] font-semibold uppercase tracking-[.12em] ${lineFresh || !calm ? 'text-accent-pale' : 'text-white/35'}`}>Client</div>
+      )}
       <div className={`flex flex-col ${large ? 'gap-2.5' : 'gap-1.5'}`}>
         {parts.map((p, i) => (
           <Sentence
             key={i}
             text={p.text}
             translation={p.translation}
+            skip={Boolean(p.skip)}
             speaking={Boolean(p.live) && !line.final}
             mode={mode}
             big={!calm || fresh.has(`${line.id}#${i}`)}

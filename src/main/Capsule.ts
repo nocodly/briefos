@@ -1,5 +1,5 @@
 import { screen, type BrowserWindow } from 'electron'
-import { createOverlayWindow, closeOverlayWindow, getOverlayWindow, isOverlayLoaded, revealOverlay } from './index'
+import { createOverlayWindow, closeOverlayWindow, getOverlayWindow, isOverlayLoaded, isOverlayShown, revealOverlay } from './index'
 import { getSetting, setSetting } from './store'
 
 // =============================================================================
@@ -70,7 +70,7 @@ export interface CapsuleLiveLine {
   translation: string | null
   final: boolean
   /** Sentence → translation pairs (client lines). */
-  parts?: { text: string; translation: string | null; live?: boolean }[]
+  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
 }
 
 export interface CapsuleAgentRun {
@@ -181,6 +181,8 @@ function revealWhenReady(win: BrowserWindow): void {
   if (revealTimer) clearTimeout(revealTimer)
   revealTimer = null
   revealOverlay(win)
+  // The content is already rendered at its final size off-screen: move it in.
+  apply()
 }
 
 function apply(): void {
@@ -195,7 +197,7 @@ function apply(): void {
     // New mode (prompt → recording, or first show): wait for the renderer to
     // report the new height, so the window appears at its final size.
     shownMode = state.mode
-    if (!win.isVisible()) {
+    if (!isOverlayShown()) {
       revealPending = true
       if (revealTimer) clearTimeout(revealTimer)
       revealTimer = setTimeout(() => revealWhenReady(win), isOverlayLoaded() ? 250 : 2500)
@@ -207,6 +209,7 @@ function apply(): void {
     // capsule grows to the left when it widens.
     win.on('moved', () => {
       const b = win.getBounds()
+      if (b.x < -10000) return // parked off-screen, not a user drag
       if (isLarge(state)) largeSpot = { x: b.x, y: b.y }
       else userSpot = { right: b.x + b.width, y: b.y }
     })
@@ -229,7 +232,12 @@ function apply(): void {
     top = userSpot ? userSpot.y : wa.y + Math.round(wa.height * 0.2)
   }
   x = Math.min(Math.max(x, wa.x), wa.x + wa.width - width)
-  const y = Math.min(Math.max(top, wa.y), wa.y + wa.height - height)
+  let y = Math.min(Math.max(top, wa.y), wa.y + wa.height - height)
+  // Not revealed yet: lay it out off-screen at its final size first.
+  if (!isOverlayShown()) {
+    x = -30000
+    y = -30000
+  }
   // Lock the size: on Windows a transparent frameless window can creep in size
   // while it is dragged (DPI rounding) — fixed min = max prevents that.
   win.setMinimumSize(1, 1)

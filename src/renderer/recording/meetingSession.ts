@@ -56,7 +56,7 @@ export interface LiveLine {
   final: boolean
   /** Client lines: each finished sentence with its own translation (never
    *  rewritten), plus the sentence still being spoken (translation null). */
-  parts?: { text: string; translation: string | null; live?: boolean }[]
+  parts?: { text: string; translation: string | null; live?: boolean; skip?: boolean }[]
 }
 
 interface SessionState {
@@ -841,7 +841,7 @@ function publishUnits(itemId: string): void {
   // for the words heard so far; the final one replaces it).
   const early = st.early && tail ? st.early.tr : null
   const parts = [
-    ...st.units.map((u) => ({ text: u.src, translation: u.tr })),
+    ...st.units.map((u) => ({ text: u.src, translation: u.tr, skip: !u.tr && !needsTranslation(u.src) })),
     ...(tail ? [{ text: tail, translation: early, live: true }] : [])
   ]
   const joined = st.units.map((u) => u.tr ?? '').filter(Boolean).join(' ')
@@ -1047,7 +1047,7 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
     {
       onPartial: (rawId, text) => {
         const id = `${channel}:${rawId}`
-        if (!inExpectedScript(text, channel)) return
+        if (!inExpectedScript(text, channel) || !/\p{L}/u.test(text)) return
         if (channel === 'them') themActiveUntil = Date.now() + 700
         else if (Date.now() < themActiveUntil) return // the client's voice leaking into your mic
         if (!liveStartMs.has(id)) liveStartMs.set(id, Math.max(0, Math.round(timeline() - 1500)))
@@ -1056,7 +1056,10 @@ function makeTranscriber(channel: 'me' | 'them', stream: MediaStream, serverId: 
       },
       onFinal: (rawId, text) => {
         const id = `${channel}:${rawId}`
-        if (!inExpectedScript(text, channel) || (channel === 'me' && isEcho(text))) {
+        // Your side: a single word on its own is almost always noise or the
+        // client's voice from the speakers guessed at ("Problemas").
+        const noise = channel === 'me' && text.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length < 2
+        if (!inExpectedScript(text, channel) || noise || (channel === 'me' && isEcho(text))) {
           console.log(`[live] dropped ${channel} line:`, text.slice(0, 80))
           removeLive(id)
           liveStartMs.delete(id)
@@ -1419,19 +1422,25 @@ let demo: DemoCaller | null = null
 
 export async function startTestCall(): Promise<void> {
   if (get().status !== 'idle') return
-  let creds: { secret: string; model: string }
-  try {
-    creds = await demoCall()
-  } catch (err) {
-    set({ error: (err as Error).message })
-    return
-  }
+  // Don't make the click wait for the key: recording starts at once (the
+  // capsule appears), Anna's key arrives in parallel.
+  const credsP = demoCall().then(
+    (c) => ({ ok: true as const, c }),
+    (err: Error) => ({ ok: false as const, err })
+  )
   await startMeeting_('client-call', {
     context:
       'Test call: Anna Weber, owner of a small coffee shop in Berlin, wants a website with an online menu, ' +
       'table reservations and opening hours. Budget about $2,000, launch in the first week of December.'
   })
   if (get().status !== 'recording') return
+  const got = await credsP
+  if (!got.ok) {
+    set({ error: got.err.message })
+    void stopMeeting()
+    return
+  }
+  const creds = got.c
   track('demo_call_started', {})
   demo = new DemoCaller({
     onStatus: (st, message) => {
