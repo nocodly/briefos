@@ -6,6 +6,8 @@ import { L, type LandingLocale } from '@/lib/landing-i18n'
 import { SITE } from '@/lib/site'
 import { BRANDS } from './brands'
 import { HeroVideo } from './HeroVideo'
+import { HeroFlow } from './HeroFlow'
+import { AnimatedChart, AskDemo, Faq, HardQuestionDemo, ShareDemo } from './Demos'
 import { Icon } from './Icon'
 import { Pricing } from './Pricing'
 
@@ -31,32 +33,6 @@ function SectionHead({ title, sub }: { title: string; sub?: string }) {
     <div className="text-center">
       <h2 className="h-dark">{title}</h2>
       {sub && <p className="mx-auto mt-4 max-w-2xl text-[16px] leading-relaxed text-t-2">{sub}</p>}
-    </div>
-  )
-}
-
-function ChartBox({ label, rising }: { label: string; rising?: boolean }) {
-  return (
-    <div className={`rounded-[18px] p-4 ${rising ? 'border border-accent/40 bg-accent/[.07]' : 'glass-card'}`}>
-      <div className={`text-[12px] font-semibold ${rising ? 'text-accent-hi' : 'text-t-3'}`}>{label}</div>
-      <svg viewBox="0 0 200 90" className="mt-2 h-24 w-full" aria-hidden="true">
-        <defs>
-          <linearGradient id={rising ? 'gUp' : 'gFlat'} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={rising ? '#FF6A3D' : '#807D78'} stopOpacity=".55" />
-            <stop offset="100%" stopColor={rising ? '#FF6A3D' : '#807D78'} stopOpacity=".05" />
-          </linearGradient>
-        </defs>
-        <path
-          d={
-            rising
-              ? 'M0 80 C30 78 50 70 75 66 S120 60 140 45 S175 20 200 8 L200 90 L0 90 Z'
-              : 'M0 62 C20 55 35 68 55 64 S90 56 110 63 S150 70 170 62 S190 58 200 63 L200 90 L0 90 Z'
-          }
-          fill={`url(#${rising ? 'gUp' : 'gFlat'})`}
-          stroke={rising ? '#FF8F6B' : '#807D78'}
-          strokeWidth="2"
-        />
-      </svg>
     </div>
   )
 }
@@ -127,7 +103,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="text-[13.5px] text-t-3">{s.hero.langs}</span>
             </div>
           </div>
-          <HeroVideo labels={s.video} answer="Stripe es un servicio de pagos online: tarjetas, suscripciones y facturas. Di: “Yes — I’ve set up Stripe Checkout with webhooks for several clients.”" />
+          <HeroFlow clientsSpeak={s.flow.clients} youSee={s.flow.you} />
         </section>
 
         {/* ── Works with ── */}
@@ -146,6 +122,17 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
           </div>
           <p className="mt-3 text-center text-[13px] text-t-3">{s.works}</p>
         </div>
+
+        {/* ── The call demo (video) ── */}
+        <section className="container-x pt-20">
+          <SectionHead title={s.demo.videoTitle} sub={s.demo.videoSub} />
+          <div className="mx-auto mt-10 max-w-[620px] lg:[zoom:1.32]">
+            <HeroVideo
+              labels={s.video}
+              answer="Stripe es un servicio de pagos online: tarjetas, suscripciones y facturas. Di: “Yes — I’ve set up Stripe Checkout with webhooks for several clients.”"
+            />
+          </div>
+        </section>
 
         {/* ── Problems ── */}
         <section className="container-x py-20">
@@ -182,9 +169,9 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               </ul>
             </div>
             <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-              <ChartBox label={s.band.without} />
+              <AnimatedChart label={s.band.without} />
               <Icon name="arrow" className="h-6 w-6 text-t-3" />
-              <ChartBox label={s.band.with} rising />
+              <AnimatedChart label={s.band.with} rising delay={450} />
             </div>
           </div>
         </section>
@@ -211,42 +198,18 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
           {s.features.map((f, i) => {
             const pic =
               i === 0 ? (
-                <div className="glass-card rounded-[20px] p-5">
-                  <div className="text-[10px] font-semibold uppercase tracking-[.14em] text-accent-pale">{s.video.client}</div>
-                  <div className="mt-2 text-[14px] font-medium text-t-1">Have you worked with Stripe subscriptions before?</div>
-                  <div className="mt-0.5 text-[13.5px] text-[#8FD8F7]">¿Has trabajado antes con suscripciones de Stripe?</div>
-                  <div className="mt-3 rounded-lg bg-white/[.04] px-3 py-2 text-[12px] text-t-2">
-                    <b className="text-[#F5A524]">Stripe</b> — {L.es.pics.termLine}
-                  </div>
-                </div>
+                <HardQuestionDemo clientLabel={s.video.client} hintLabel={s.demo.hint} />
               ) : i === 1 ? (
-                <div className="glass-card rounded-[20px] p-5">
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full bg-[#F5A524]/20 text-[10px] font-bold text-[#F5A524]">?</span>
-                    <div className="text-[14px] font-medium text-t-1">How would you set up the deploy — Docker or Vercel?</div>
-                  </div>
-                  <div className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[12.5px] leading-relaxed text-t-1">
-                    <div className="mb-1 flex items-center gap-1.5 font-semibold text-accent-hi">
-                      <Icon name="sparkles" className="h-3.5 w-3.5" /> Ask AI
-                    </div>
-                    {L.es.pics.askAnswer}
-                  </div>
-                </div>
+                <AskDemo askLabel={s.demo.ask} clickHint={s.demo.click} again={s.demo.again} />
               ) : (
-                <div className="glass-card rounded-[20px] p-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-display text-[15px] font-bold text-t-1">{s.pics.notesTitle}</div>
-                    <span className="flex-none rounded-full bg-[#22C55E]/15 px-2 py-0.5 text-[11px] font-semibold text-[#22C55E]">{s.pics.notesReady}</span>
-                  </div>
-                  <div className="mt-3 space-y-1.5 text-[12.5px] text-t-2">
-                    {s.pics.notes.map((n) => (
-                      <div key={n}>• {n}</div>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-white/[.04] px-3 py-2 text-[12.5px] text-t-1">
-                    <span className="h-4 w-4 rounded border border-white/25" /> {s.pics.task} · <span className="text-accent-hi">{s.pics.due}</span>
-                  </div>
-                </div>
+                <ShareDemo
+                  title={s.pics.notesTitle}
+                  ready={s.pics.notesReady}
+                  notes={s.pics.notes}
+                  task={s.pics.task}
+                  due={s.pics.due}
+                  share={s.demo.share}
+                />
               )
             return (
               <div key={f.title} className="grid items-center gap-10 md:grid-cols-2">
@@ -340,17 +303,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
         {/* ── FAQ ── */}
         <section id="faq" className="container-x max-w-3xl scroll-mt-20 py-20">
           <SectionHead title={s.faqTitle} />
-          <div className="mt-10 space-y-3">
-            {faq.map((f) => (
-              <details key={f.q} className="glass-card group rounded-[14px] px-5 py-4">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-semibold text-t-1">
-                  {f.q}
-                  <Icon name="chevron" className="h-5 w-5 flex-none text-t-3 transition-transform group-open:rotate-180" />
-                </summary>
-                <p className="mt-3 text-[15px] leading-relaxed text-t-2">{f.a}</p>
-              </details>
-            ))}
-          </div>
+          <Faq items={faq} />
         </section>
 
         {/* ── CTA band ── */}

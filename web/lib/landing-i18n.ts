@@ -7,6 +7,8 @@ export type LandingLocale = 'en' | 'es'
 
 export const L = {
   en: {
+    flow: { clients: 'Your clients speak English', you: 'You read it in your language' },
+    demo: { hint: 'Hint during the call', ask: 'Ask AI', click: 'Click the button — that’s how it works in the app.', again: 'Ask again', share: 'Share', videoTitle: 'Watch a real call', videoSub: 'Captions, translation, term hints and Ask AI — right on top of your call.' },
     nav: { how: 'How it works', features: 'Features', pricing: 'Pricing', faq: 'FAQ', download: 'Download free' },
     hero: {
       title1: 'Every client call,',
@@ -74,6 +76,8 @@ export const L = {
     footer: { privacy: 'Privacy', terms: 'Terms', impressum: 'Impressum', cancel: 'Verträge hier kündigen', mail: 'Email us', download: 'Download', account: 'Your subscription' }
   },
   es: {
+    flow: { clients: 'Tus clientes hablan inglés', you: 'Tú lo lees en tu idioma' },
+    demo: { hint: 'Pista durante la llamada', ask: 'Ask AI', click: 'Haz clic en el botón — así funciona en la app.', again: 'Preguntar de nuevo', share: 'Compartir', videoTitle: 'Mira una llamada real', videoSub: 'Subtítulos, traducción, pistas de términos y Ask AI — encima de tu llamada.' },
     nav: { how: 'Cómo funciona', features: 'Funciones', pricing: 'Precios', faq: 'Preguntas', download: 'Descargar gratis' },
     hero: {
       title1: 'Cada llamada,',
