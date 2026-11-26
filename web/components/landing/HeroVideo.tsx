@@ -31,11 +31,13 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
   const words = (l: (typeof LINES)[number]) => l.en.split(' ')
   const ends = (l: (typeof LINES)[number]) => l.start + words(l).length * WORD_MS
   const started = LINES.filter((l) => t >= l.start)
-  const shown = started.slice(-2) // like the capsule: the newest two lines
+
   const speaking = started.some((l) => t < ends(l))
   const termOn = t >= (LINES[1].term ?? 0) && t < LINES[2].start + 400
   const asking = t >= (LINES[2].ask ?? 0)
   const answerOn = t >= (LINES[2].ask ?? 0) + 800
+  // Like the capsule: the newest two lines (only the question once its answer shows).
+  const shown = started.slice(answerOn ? -1 : -2)
   const fading = t > LOOP_MS - 500
   const secs = 4 * 60 + 12 + Math.floor(t / 1000)
 
@@ -45,9 +47,9 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
       <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_30%_20%,rgba(255,106,61,.14),transparent_70%),linear-gradient(180deg,#15161B,#0E0F13)]" />
 
       {/* Top bar */}
-      <div className="absolute inset-x-0 top-0 flex items-center justify-between px-4 py-3 text-[11px]">
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between px-3.5 py-2.5 text-[10px]">
         <span className="flex items-center gap-2 text-t-2">
-          <span className="flex items-center gap-1 rounded bg-[#F2555A] px-1.5 py-0.5 font-bold text-white">
+          <span className="flex items-center gap-1 rounded bg-[#F2555A] px-1 py-px font-bold text-white">
             <span className="h-1.5 w-1.5 animate-blink rounded-full bg-white" /> {labels.live}
           </span>
           {labels.call}
@@ -58,30 +60,30 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
       </div>
 
       {/* Client tile */}
-      <div className="absolute inset-x-4 bottom-14 top-10 rounded-2xl border border-white/[.06] bg-[#1A1B21]">
-        <div className="absolute left-1/2 top-[7%] -translate-x-1/2 sm:top-3">
+      <div className="absolute inset-x-3.5 bottom-12 top-9 rounded-xl border border-white/[.06] bg-[#1A1B21]">
+        <div className="absolute left-1/2 top-2.5 -translate-x-1/2">
           <span
-            className={`flex h-14 w-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,#FFB088,#FF6A3D)] font-display text-[18px] font-bold text-white transition-shadow duration-300 sm:h-12 sm:w-12 sm:text-[16px] ${
-              speaking ? 'shadow-[0_0_0_4px_rgba(34,197,94,.55),0_0_0_9px_rgba(34,197,94,.18)]' : ''
+            className={`flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#FFB088,#FF6A3D)] font-display text-[13px] font-bold text-white transition-shadow duration-300 ${
+              speaking ? 'shadow-[0_0_0_3px_rgba(34,197,94,.55),0_0_0_7px_rgba(34,197,94,.18)]' : ''
             }`}
           >
             AW
           </span>
         </div>
-        <div className="absolute left-3 top-3 rounded-md bg-black/40 px-2 py-0.5 text-[11px] text-t-1">Anna Weber</div>
+        <div className="absolute left-2.5 top-2.5 rounded bg-black/40 px-1.5 py-px text-[10px] text-t-1">Anna Weber</div>
         {/* You */}
-        <div className="absolute right-3 top-3 flex h-14 w-20 items-end rounded-lg border border-white/10 bg-[#24252C] p-1.5 sm:h-16 sm:w-24">
-          <span className="rounded bg-black/40 px-1.5 text-[10px] text-t-2">{labels.you}</span>
+        <div className="absolute right-2.5 top-2.5 flex h-11 w-16 items-end rounded-md border border-white/10 bg-[#24252C] p-1 sm:h-12 sm:w-[76px]">
+          <span className="rounded bg-black/40 px-1 text-[9px] text-t-2">{labels.you}</span>
         </div>
       </div>
 
       {/* Minutama capsule */}
       <div
-        className={`absolute inset-x-6 bottom-[60px] rounded-2xl border border-white/10 bg-[#0E0F13]/95 p-3 shadow-[0_20px_50px_-15px_rgba(0,0,0,.8)] backdrop-blur transition-opacity duration-500 sm:inset-x-10 ${
+        className={`absolute inset-x-6 bottom-[54px] rounded-xl border border-white/10 bg-[#0E0F13]/95 px-3 py-2.5 shadow-[0_20px_50px_-15px_rgba(0,0,0,.8)] backdrop-blur transition-opacity duration-500 sm:inset-x-10 ${
           fading ? 'opacity-0' : 'opacity-100'
         }`}
       >
-        <div className="mb-1.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[.14em]">
+        <div className="mb-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-[.14em]">
           <span className="flex items-center gap-1.5 text-accent-pale">
             <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-accent text-[7px] text-white">M</span>
             {labels.client}
@@ -90,25 +92,25 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
             <b className="text-accent-hi">ES</b> · {labels.lang}
           </span>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {shown.map((l) => {
             const n = Math.min(words(l).length, Math.max(1, Math.floor((t - l.start) / WORD_MS) + 1))
             const trOn = t >= ends(l) + 400
             return (
               <div key={l.start} className="flex items-start gap-2">
                 {l.ask && (
-                  <span className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full bg-[#F5A524]/20 text-[10px] font-bold text-[#F5A524]">?</span>
+                  <span className="mt-px flex h-3.5 w-3.5 flex-none items-center justify-center rounded-full bg-[#F5A524]/20 text-[9px] font-bold text-[#F5A524]">?</span>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] font-medium leading-snug text-t-1 sm:text-[13.5px]">{words(l).slice(0, n).join(' ')}</div>
+                  <div className="text-[11px] font-medium leading-snug text-t-1 sm:text-[12px]">{words(l).slice(0, n).join(' ')}</div>
                   <div
-                    className={`text-[12px] leading-snug text-[#8FD8F7] transition-opacity duration-500 sm:text-[13px] ${trOn ? 'opacity-100' : 'opacity-0'}`}
+                    className={`text-[10.5px] leading-snug text-[#8FD8F7] transition-opacity duration-500 sm:text-[11.5px] ${trOn ? 'opacity-100' : 'opacity-0'}`}
                   >
                     {l.es}
                   </div>
                 </div>
                 {l.ask && asking && (
-                  <span className="flex flex-none animate-rise items-center gap-1 rounded-full bg-accent px-2 py-1 text-[10.5px] font-semibold text-white shadow-[0_2px_12px_rgba(255,106,61,.5)]">
+                  <span className="flex flex-none animate-rise items-center gap-1 rounded-full bg-accent px-1.5 py-0.5 text-[9.5px] font-semibold text-white shadow-[0_2px_12px_rgba(255,106,61,.5)]">
                     <Icon name="sparkles" className="h-3 w-3" /> {labels.ask}
                   </span>
                 )}
@@ -117,12 +119,12 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
           })}
         </div>
         {termOn && (
-          <div className="mt-1.5 animate-rise text-[11.5px] text-t-2">
+          <div className="mt-1 animate-rise text-[10.5px] text-t-2">
             <b className="text-[#F5A524]">Stripe</b> — {termLine}
           </div>
         )}
         {answerOn && (
-          <div className="mt-2 flex animate-rise items-start gap-2 rounded-xl border border-accent/30 bg-accent/10 px-2.5 py-1.5 text-[11.5px] leading-snug text-t-1">
+          <div className="mt-1.5 flex animate-rise items-start gap-1.5 rounded-lg border border-accent/30 bg-accent/10 px-2 py-1 text-[10.5px] leading-snug text-t-1">
             <Icon name="sparkles" className="mt-0.5 h-3 w-3 flex-none text-accent-hi" />
             <span>{answer}</span>
           </div>
@@ -130,14 +132,14 @@ export function HeroVideo({ labels, termLine, answer }: { labels: Labels; termLi
       </div>
 
       {/* Call controls */}
-      <div className="absolute inset-x-0 bottom-3 flex items-center justify-center gap-2.5">
+      <div className="absolute inset-x-0 bottom-2.5 flex items-center justify-center gap-2">
         {['mic', 'video', 'screen'].map((n) => (
-          <span key={n} className="flex h-8 w-8 items-center justify-center rounded-full bg-white/[.08] text-t-2">
-            <Icon name={n} className="h-4 w-4" />
+          <span key={n} className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[.08] text-t-2">
+            <Icon name={n} className="h-3.5 w-3.5" />
           </span>
         ))}
-        <span className="flex h-8 w-11 items-center justify-center rounded-full bg-[#F2555A] text-white">
-          <Icon name="phone" className="h-4 w-4" />
+        <span className="flex h-7 w-10 items-center justify-center rounded-full bg-[#F2555A] text-white">
+          <Icon name="phone" className="h-3.5 w-3.5" />
         </span>
       </div>
     </div>
