@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   description: t.description,
   alternates: {
     canonical: '/',
-    languages: { en: '/', es: '/es/freelancers', pt: '/pt/freelancers' }
+    languages: { en: '/', es: '/es', pt: '/pt/freelancers' }
   },
   openGraph: { title: `${t.title} · Minutama`, description: t.description }
 }
