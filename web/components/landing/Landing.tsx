@@ -6,7 +6,7 @@ import { L, type LandingLocale } from '@/lib/landing-i18n'
 import { SITE } from '@/lib/site'
 import { BRANDS } from './brands'
 import { HeroVideo } from './HeroVideo'
-import { HeroFlow } from './HeroFlow'
+import { HeroSplit } from './HeroSplit'
 import { AnimatedChart, AskDemo, Faq, HardQuestionDemo, ShareDemo } from './Demos'
 import { Icon } from './Icon'
 import { Pricing } from './Pricing'
@@ -103,7 +103,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="text-[13.5px] text-t-3">{s.hero.langs}</span>
             </div>
           </div>
-          <HeroFlow clientsSpeak={s.flow.clients} youSee={s.flow.you} />
+          <HeroSplit clientSays={s.flow.clients} youSee={s.flow.you} />
         </section>
 
         {/* ── Works with ── */}

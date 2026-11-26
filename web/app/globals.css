@@ -96,6 +96,17 @@ body {
   background-repeat: no-repeat;
 }
 
+/* Hero: the client's voice wave. */
+@keyframes hero-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 /* Hero demo: one click ripple. */
 @keyframes ripple-once {
   from {
