@@ -51,7 +51,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
           <Link href={home} aria-label="Minutama home">
             <Logo />
           </Link>
-          <div className="hidden items-center gap-8 text-[14px] font-medium text-t-2 md:flex">
+          <div className="hidden items-center gap-7 whitespace-nowrap text-[14px] font-medium text-t-2 lg:flex">
             <a href="#how" className="hover:text-t-1">{s.nav.how}</a>
             <a href="#features" className="hover:text-t-1">{s.nav.features}</a>
             <a href="#pricing" className="hover:text-t-1">{s.nav.pricing}</a>
@@ -71,7 +71,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               ))}
             </div>
             <a href={SITE.downloadUrl} className="btn-glow !px-4 !py-2 text-[14px]">
-              <WindowsIcon /> <span className="hidden sm:inline">{s.nav.download}</span>
+              <WindowsIcon /> <span className="hidden whitespace-nowrap sm:inline">{s.nav.download}</span>
             </a>
           </div>
         </nav>
@@ -103,7 +103,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="text-[13.5px] text-t-3">{s.hero.langs}</span>
             </div>
           </div>
-          <HeroSplit clientSays={s.flow.clients} youSee={s.flow.you} />
+          <HeroSplit clientSays={s.flow.clients} youSee={s.flow.you} spanishOnly={locale === 'es'} />
         </section>
 
         {/* ── Works with ── */}
@@ -251,8 +251,8 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
                 </div>
               ))}
             </div>
-            <div className="glass-card mt-5 grid items-center gap-6 rounded-[20px] p-5 sm:grid-cols-[1.1fr_1fr_1fr_1fr]">
-              <div className="rounded-xl bg-night-3 p-4 text-[12.5px]">
+            <div className="glass-card mt-5 grid items-center gap-6 rounded-[20px] p-5 sm:grid-cols-3 lg:grid-cols-[1.1fr_1fr_1fr_1fr]">
+              <div className="rounded-xl bg-night-3 p-4 text-[12.5px] sm:col-span-3 lg:col-span-1">
                 <div className="text-t-3">{s.video.client}</div>
                 <div className="font-medium text-t-1">Could you send the estimate by Friday?</div>
                 <div className="text-[#8FD8F7]">¿Podrías enviar el presupuesto el viernes?</div>
@@ -314,8 +314,8 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
                 <h2 className="font-display text-[28px] font-bold leading-tight sm:text-[32px]">{c.final.title}</h2>
                 <p className="mt-2 text-[15.5px] text-t-2">{c.final.sub}</p>
               </div>
-              <a href={SITE.downloadUrl} className="btn-glow flex-none px-7 py-3.5 text-[15.5px]">
-                <WindowsIcon /> {c.final.cta}
+              <a href={SITE.downloadUrl} className="btn-glow w-full flex-none px-6 py-3.5 text-[15px] md:w-auto">
+                <WindowsIcon className="h-4 w-4 flex-none" /> {c.final.cta}
               </a>
             </div>
           </div>

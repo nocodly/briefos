@@ -231,11 +231,14 @@ export function ShareDemo({
           <div key={n}>• {n}</div>
         ))}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2 rounded-lg bg-white/[.04] px-3 py-2 text-[12.5px] text-t-1">
-        <span className="flex items-center gap-2">
-          <span className="h-4 w-4 rounded border border-white/25" /> {task} · <span className="text-accent-hi">{due}</span>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 rounded-lg bg-white/[.04] px-3 py-2 text-[12.5px] text-t-1">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="h-4 w-4 flex-none rounded border border-white/25" />
+          <span className="min-w-0">
+            {task} · <span className="whitespace-nowrap text-accent-hi">{due}</span>
+          </span>
         </span>
-        <span className="flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent-hi">
+        <span className="flex flex-none items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent-hi">
           <Icon name="arrow" className="h-3 w-3" /> {share}
         </span>
       </div>
@@ -268,7 +271,7 @@ export function ShareDemo({
                     <Icon name="check" className="h-2.5 w-2.5" />
                   </span>
                 </span>
-                <span className="text-[9.5px] text-t-3">{s.name}</span>
+                <span className="max-w-full truncate text-[9.5px] text-t-3">{s.name}</span>
               </div>
             )
           })}
