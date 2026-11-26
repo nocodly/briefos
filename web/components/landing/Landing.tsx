@@ -127,7 +127,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="text-[13.5px] text-t-3">{s.hero.langs}</span>
             </div>
           </div>
-          <HeroVideo labels={s.video} termLine={L.es.pics.termLine} answer="Quiere un precio fijo antes del viernes. Di: “Yes — I’ll send it on Thursday.”" />
+          <HeroVideo labels={s.video} answer="Stripe es un servicio de pagos online: tarjetas, suscripciones y facturas. Di: “Yes — I’ve set up Stripe Checkout with webhooks for several clients.”" />
         </section>
 
         {/* ── Works with ── */}

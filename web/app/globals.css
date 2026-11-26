@@ -96,6 +96,21 @@ body {
   background-repeat: no-repeat;
 }
 
+/* Hero demo: one click ripple. */
+@keyframes ripple-once {
+  from {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  to {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+.ripple-once {
+  animation: ripple-once 0.6s ease-out forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
