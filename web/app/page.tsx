@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { FreelancersLanding } from '@/components/FreelancersLanding'
+import { Landing } from '@/components/landing/Landing'
 import { COPY } from '@/lib/freelancers-i18n'
 
 // The home page is the freelancer landing: live captions in your language,
@@ -17,5 +17,5 @@ export const metadata: Metadata = {
 }
 
 export default function Page() {
-  return <FreelancersLanding locale="en" />
+  return <Landing />
 }

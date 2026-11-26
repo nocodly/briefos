@@ -15,6 +15,15 @@ export default {
         accent: '#FF6A3D', //     tangerine — CTAs, highlights
         'accent-ink': '#C9441B', // accent text on light bg (AA)
         'accent-soft': '#FFEDE6',
+        // Dark landing — same palette as the Minutama app (dark glass + tangerine).
+        night: '#0B0C0F', //      page background
+        'night-2': '#111217', //  alternate band
+        'night-3': '#17181D', //  solid panels
+        't-1': '#F3F1EC', //      primary text on dark
+        't-2': '#B4B1AB', //      secondary text on dark
+        't-3': '#807D78', //      muted text on dark
+        'accent-hi': '#FF8F6B', // accent text on dark
+        'accent-pale': '#FFC9B3',
         me: '#E8F0FF', //         "You" transcript bubbles
         them: '#F1EEE7' //        "Them" transcript bubbles
       },
