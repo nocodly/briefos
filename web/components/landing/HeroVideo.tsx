@@ -1,92 +1,73 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Pointer } from './Demos'
 import { Icon } from './Icon'
+import { useLoop } from './useLoop'
 
-// The hero "video": a video call with the Minutama capsule on top, playing by
-// itself in a loop, frame by frame (requestAnimationFrame):
+// The call demo: a video call with the Minutama capsule on top, playing by
+// itself in a loop, frame by frame:
 //   the client speaks → her words appear letter by letter → the Spanish
-//   translation types in under them → on her question the Ask AI button
-//   appears → the mouse moves to it and clicks → the answer explains Stripe
-//   and what to say.
-// Text never reflows while typing: the rest of each line is already laid out,
-// just invisible. Lines enter and leave by smoothly opening / closing.
+//   translation types in under them → "Have you worked with Stripe?" gets a
+//   term hint on its own → "How would you set up the webhooks?" gets the Ask
+//   AI button → the mouse glides to it and clicks → the answer types in.
+// Text never reflows while typing (the rest is laid out, just invisible), and
+// lines enter / leave by smoothly opening / closing.
 
 const EN_CPS = 0.026 // client speech, letters per ms
 const TR_CPS = 0.07 // translation stream
-const AN_CPS = 0.06 // AI answer
+const AN_CPS = 0.06 // hints and answers
+const GAP = 650 // pause between the client's sentences
 
-const LINES = [
-  { start: 400, en: 'We need a booking site for our coffee shop,', es: 'Necesitamos un sitio de reservas para nuestra cafetería,' },
-  { start: 3300, en: 'with online payments through Stripe.', es: 'con pagos online a través de Stripe.' },
-  { start: 5700, en: 'Have you worked with Stripe before?', es: '¿Has trabajado antes con Stripe?', q: true }
-].map((l) => {
-  const enEnd = l.start + l.en.length / EN_CPS
-  const trStart = enEnd + 220
-  return { ...l, enEnd, trStart, trEnd: trStart + l.es.length / TR_CPS }
-})
+type Line = { en: string; es: string; q?: boolean; term?: boolean; ask?: boolean }
 
-const Q = LINES[2]
-const T_BUTTON = Q.trEnd - 150 // Ask AI appears
-const T_CURSOR = T_BUTTON + 350 // the mouse comes in
-const T_MOVE = T_CURSOR + 150 // … and glides to the button
-const T_CLICK = T_MOVE + 950
-const T_ANSWER = T_CLICK + 230
-const LOOP_MS = 17000
-const FADE_AT = LOOP_MS - 700
+const SCRIPT: Line[] = [
+  { en: 'We need a booking site for our coffee shop,', es: 'Necesitamos un sitio de reservas para nuestra cafetería,' },
+  { en: 'with online payments through Stripe.', es: 'con pagos online a través de Stripe.' },
+  { en: 'Have you worked with Stripe before?', es: '¿Has trabajado antes con Stripe?', q: true, term: true },
+  { en: 'And how would you set up the webhooks?', es: '¿Y cómo configurarías los webhooks?', q: true, ask: true }
+]
 
-type Labels = { call: string; live: string; you: string; client: string; lang: string; ask: string }
+const TERM = { word: 'Stripe', text: 'servicio de pagos online: tarjetas, suscripciones y facturas.' }
 
-/** Shows the first `n` letters; the rest keeps its place but is invisible. */
-function Typed({ text, n }: { text: string; n: number }) {
-  const k = Math.max(0, Math.min(text.length, Math.floor(n)))
-  return (
-    <>
-      {text.slice(0, k)}
-      <span className="invisible">{text.slice(k)}</span>
-    </>
-  )
-}
-
-/** Opens / closes smoothly (height + fade). */
-function Reveal({ open, children, className = '' }: { open: boolean; children: React.ReactNode; className?: string }) {
-  return (
-    <div
-      className={`grid transition-[grid-template-rows,opacity] duration-500 ease-[cubic-bezier(.4,0,.2,1)] ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'} ${className}`}
-    >
-      <div className="overflow-hidden">{children}</div>
-    </div>
-  )
-}
+// Timeline (ms) built from the script.
+const LINES = (() => {
+  let at = 400
+  return SCRIPT.map((l) => {
+    const start = at
+    const enEnd = start + l.en.length / EN_CPS
+    const trStart = enEnd + 220
+    const trEnd = trStart + l.es.length / TR_CPS
+    // After the Stripe question, leave time to read its hint.
+    at = trEnd + GAP + (l.term ? 1900 : 0)
+    return { ...l, start, enEnd, trStart, trEnd }
+  })
+})()
+const QT = LINES[2] // Stripe question → hint by itself
+const QA = LINES[3] // webhooks question → Ask AI click
+const T_TERM = QT.trEnd + 250
+const T_BUTTON = QA.trEnd - 150
+const T_POINTER = T_BUTTON + 350
+const T_MOVE = T_POINTER + 150
+const T_CLICK = T_MOVE + 1000
+const T_ANSWER = T_CLICK + 240
 
 export function HeroVideo({ labels, answer }: { labels: Labels; answer: string }) {
-  const [t, setT] = useState(T_ANSWER + answer.length / AN_CPS + 500) // first paint: the full picture
-
-  useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
-    let raf = 0
-    const t0 = performance.now()
-    const tick = (now: number) => {
-      setT((now - t0) % LOOP_MS)
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
+  const LOOP = T_ANSWER + 250 + answer.length / AN_CPS + 4200
+  const FADE_AT = LOOP - 700
+  const { ref, t } = useLoop(LOOP, T_ANSWER + 250 + answer.length / AN_CPS + 600)
 
   const answerOn = t >= T_ANSWER
-  // Which lines are in the capsule: the newest two; once the answer opens,
-  // only the question (so everything fits).
+  // The newest two lines; once the answer opens, only the question it answers.
   const visible = (i: number) => {
     const l = LINES[i]
     if (t < l.start) return false
-    const newer = LINES.filter((x) => x.start <= t && x.start > l.start).length
-    if (answerOn) return i === 2
-    return newer < 2
+    if (answerOn) return i === LINES.length - 1
+    return LINES.filter((x) => x.start <= t && x.start > l.start).length < 2
   }
+  const termOn = t >= T_TERM && t < QA.trEnd + 300 && !answerOn
   const speaking = LINES.some((l) => t >= l.start && t < l.enEnd)
   const buttonOn = t >= T_BUTTON
-  const cursorOn = t >= T_CURSOR && t < T_ANSWER + 1400
+  const pointerOn = t >= T_POINTER && t < T_ANSWER + 1200
   const moved = t >= T_MOVE
   const pressed = t >= T_CLICK && t < T_CLICK + 180
   const clicked = t >= T_CLICK
@@ -94,7 +75,7 @@ export function HeroVideo({ labels, answer }: { labels: Labels; answer: string }
   const secs = 4 * 60 + 12 + Math.floor(t / 1000)
 
   return (
-    <div className="glass-card relative aspect-square w-full overflow-hidden rounded-[22px] sm:aspect-video">
+    <div ref={ref} className="glass-card relative aspect-square w-full overflow-hidden rounded-[22px] sm:aspect-video">
       {/* Call backdrop */}
       <div className="absolute inset-0 bg-[radial-gradient(520px_320px_at_30%_20%,rgba(255,106,61,.14),transparent_70%),linear-gradient(180deg,#15161B,#0E0F13)]" />
 
@@ -130,16 +111,15 @@ export function HeroVideo({ labels, answer }: { labels: Labels; answer: string }
 
       {/* Minutama capsule */}
       <div
-        className={`absolute inset-x-5 bottom-[54px] rounded-xl border border-white/10 bg-[#0E0F13]/95 px-3 py-2.5 shadow-[0_20px_50px_-15px_rgba(0,0,0,.8)] backdrop-blur transition-opacity duration-700 sm:inset-x-8 ${
-          fading ? 'opacity-0' : 'opacity-100'
-        }`}
+        className="absolute inset-x-4 bottom-[54px] rounded-xl border border-white/10 bg-[#0E0F13]/95 px-3 py-2.5 shadow-[0_20px_50px_-15px_rgba(0,0,0,.8)] backdrop-blur sm:inset-x-6"
+        style={{ opacity: fading ? 0 : 1, transition: 'opacity .7s cubic-bezier(.4,0,.2,1)' }}
       >
-        <div className="mb-1 flex items-center justify-between text-[9px] font-semibold uppercase tracking-[.14em]">
+        <div className="mb-1 flex items-center justify-between gap-2 text-[9px] font-semibold uppercase tracking-[.14em]">
           <span className="flex items-center gap-1.5 text-accent-pale">
             <span className="flex h-3.5 w-3.5 items-center justify-center rounded bg-accent text-[7px] text-white">M</span>
             {labels.client}
           </span>
-          <span className="normal-case tracking-normal text-t-3">
+          <span className="whitespace-nowrap normal-case tracking-normal text-t-3">
             <b className="text-accent-hi">ES</b> · {labels.lang}
           </span>
         </div>
@@ -158,36 +138,40 @@ export function HeroVideo({ labels, answer }: { labels: Labels; answer: string }
                   <Typed text={l.es} n={(t - l.trStart) * TR_CPS} />
                 </div>
               </div>
-              {l.q && (
+              {l.ask && (
                 <span className="relative flex-none">
                   <span
-                    className={`flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[9.5px] font-semibold text-white shadow-[0_2px_12px_rgba(255,106,61,.5)] transition-[opacity,transform] duration-300 ease-out ${
-                      buttonOn ? 'opacity-100' : 'opacity-0'
-                    } ${pressed ? 'scale-90' : buttonOn ? 'scale-100' : 'scale-75'} ${clicked ? 'ring-2 ring-accent/40' : ''}`}
+                    className="flex items-center gap-1 rounded-full bg-accent px-2 py-1 text-[9.5px] font-semibold text-white shadow-[0_2px_12px_rgba(255,106,61,.5)]"
+                    style={{
+                      opacity: buttonOn ? 1 : 0,
+                      transform: `scale(${pressed ? 0.9 : buttonOn ? 1 : 0.75})`,
+                      transition: 'opacity .35s ease-out, transform .25s ease-out'
+                    }}
                   >
                     <Icon name="sparkles" className="h-3 w-3" /> {labels.ask}
                   </span>
-                  {/* Click ripple */}
                   {clicked && t < T_CLICK + 700 && (
                     <span className="ripple-once pointer-events-none absolute inset-0 rounded-full border-2 border-accent-pale" />
                   )}
-                  {/* Mouse */}
-                  <svg
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute left-1/2 top-1/2 z-10 h-5 w-5 drop-shadow-[0_2px_4px_rgba(0,0,0,.6)] transition-[transform,opacity] ease-[cubic-bezier(.45,.05,.25,1)] ${
-                      cursorOn ? 'opacity-100' : 'opacity-0'
-                    }`}
+                  <Pointer
+                    className="absolute left-1/2 top-1/2 z-10"
                     style={{
-                      transform: `translate(${moved ? 2 : 70}px, ${moved ? 2 : 58}px) scale(${pressed ? 0.85 : 1})`,
-                      transitionDuration: moved && !clicked ? '900ms' : '200ms'
+                      opacity: pointerOn ? 1 : 0,
+                      transform: `translate(${moved ? 2 : -120}px, ${moved ? 2 : 8}px) scale(${pressed ? 0.85 : 1})`,
+                      transition: `transform ${moved && !clicked ? 950 : 180}ms cubic-bezier(.45,.05,.25,1), opacity .35s ease`
                     }}
-                  >
-                    <path d="M5 3l14 7.5-6.2 1.7L10 18.5z" fill="#fff" stroke="#0B0C0F" strokeWidth="1.4" strokeLinejoin="round" />
-                  </svg>
+                  />
                 </span>
               )}
             </div>
+            {/* The term hint shows up by itself under the Stripe question. */}
+            {l.term && (
+              <Reveal open={termOn}>
+                <div className="mb-1 ml-5 rounded-lg border border-[#F5A524]/25 bg-[#F5A524]/[.07] px-2 py-1 text-[10.5px] leading-snug text-t-2">
+                  <b className="text-[#F5A524]">{TERM.word}</b> — <Typed text={TERM.text} n={(t - T_TERM - 200) * AN_CPS} />
+                </div>
+              </Reveal>
+            )}
           </Reveal>
         ))}
 
@@ -212,6 +196,35 @@ export function HeroVideo({ labels, answer }: { labels: Labels; answer: string }
           <Icon name="phone" className="h-3.5 w-3.5" />
         </span>
       </div>
+    </div>
+  )
+}
+
+type Labels = { call: string; live: string; you: string; client: string; lang: string; ask: string }
+
+/** Shows the first `n` letters; the rest keeps its place but is invisible. */
+function Typed({ text, n }: { text: string; n: number }) {
+  const k = Math.max(0, Math.min(text.length, Math.floor(n)))
+  return (
+    <>
+      {text.slice(0, k)}
+      <span className="invisible">{text.slice(k)}</span>
+    </>
+  )
+}
+
+/** Opens / closes smoothly (height + fade). */
+function Reveal({ open, children }: { open: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className="grid"
+      style={{
+        gridTemplateRows: open ? '1fr' : '0fr',
+        opacity: open ? 1 : 0,
+        transition: 'grid-template-rows .5s cubic-bezier(.4,0,.2,1), opacity .5s cubic-bezier(.4,0,.2,1)'
+      }}
+    >
+      <div className="overflow-hidden">{children}</div>
     </div>
   )
 }

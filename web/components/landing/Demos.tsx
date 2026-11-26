@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { SHARE_TARGETS } from './brands'
 import { Icon } from './Icon'
 import { lettersOf, useInView, useLoop } from './useLoop'
@@ -108,58 +108,87 @@ const ASK = {
   a: 'Para un sitio pequeño Vercel es más simple y barato. Di: “I’d deploy on Vercel with a staging site first — Docker only if you need your own server.”'
 }
 
-export function AskDemo({ askLabel, clickHint, again }: { askLabel: string; clickHint: string; again: string }) {
-  const [at, setAt] = useState<number | null>(null)
-  const [now, setNow] = useState(0)
-  useEffect(() => {
-    if (at === null) return
-    let raf = 0
-    const tick = (n: number) => {
-      setNow(n - at)
-      if (n - at < 4000) raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [at])
-  const asked = at !== null
+/** The mouse pointer used in the demos. */
+export function Pointer({ className = '', style }: { className?: string; style?: React.CSSProperties }) {
   return (
-    <div className="glass-card rounded-[20px] p-5">
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={`pointer-events-none h-5 w-5 drop-shadow-[0_2px_4px_rgba(0,0,0,.6)] ${className}`} style={style}>
+      <path d="M5 3l14 7.5-6.2 1.7L10 18.5z" fill="#fff" stroke="#0B0C0F" strokeWidth="1.4" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+/**
+ * Ask AI plays by itself: the pointer comes in, glides to the button and
+ * clicks; the AI "thinks" for a moment, then the answer types in. The answer
+ * area keeps its size the whole time, so the page never jumps.
+ */
+export function AskDemo({ askLabel }: { askLabel: string }) {
+  const LOOP = 13000
+  const IN = 1300 // pointer appears
+  const MOVE = 1500 // … and glides
+  const CLICK = 2500
+  const THINK = 2750
+  const TYPE = 3250
+  const OUT = 11800 // answer fades before the loop starts again
+  const { ref, t } = useLoop(LOOP, 9000)
+  const clicked = t >= CLICK && t < OUT
+  const pressed = t >= CLICK && t < CLICK + 180
+  const pointerOn = t >= IN && t < THINK + 900
+  const moved = t >= MOVE
+  const answerOn = t >= THINK && t < OUT
+  return (
+    <div ref={ref} className="glass-card rounded-[20px] p-5">
       <div className="flex items-start gap-2">
         <span className="mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full bg-[#F5A524]/20 text-[10px] font-bold text-[#F5A524]">?</span>
         <div className="flex-1 text-[14px] font-medium leading-snug text-t-1">{ASK.q}</div>
-        <button
-          onClick={() => {
-            setNow(0)
-            setAt(performance.now())
-          }}
-          className={`relative flex flex-none items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white transition-all duration-300 ${
-            asked ? 'bg-accent/60' : 'bg-accent shadow-[0_4px_18px_rgba(255,106,61,.55)] hover:brightness-110 active:scale-95'
-          }`}
-        >
-          {!asked && <span className="absolute inset-0 animate-ping rounded-full bg-accent/40 [animation-duration:1.8s]" />}
-          <Icon name="sparkles" className="relative h-3.5 w-3.5" /> <span className="relative">{askLabel}</span>
-        </button>
+        <span className="relative flex-none">
+          <span
+            className="relative flex items-center gap-1 rounded-full px-3 py-1.5 text-[12px] font-semibold text-white"
+            style={{
+              background: clicked ? 'rgba(255,106,61,.65)' : '#FF6A3D',
+              boxShadow: clicked ? 'none' : '0 4px 18px rgba(255,106,61,.55)',
+              transform: pressed ? 'scale(.9)' : 'scale(1)',
+              transition: `transform .18s ${ease}, background .4s ${ease}, box-shadow .4s ${ease}`
+            }}
+          >
+            <Icon name="sparkles" className="h-3.5 w-3.5" /> {askLabel}
+          </span>
+          {t >= CLICK && t < CLICK + 700 && <span className="ripple-once pointer-events-none absolute inset-0 rounded-full border-2 border-accent-pale" />}
+          <Pointer
+            className="absolute left-1/2 top-1/2 z-10"
+            style={{
+              opacity: pointerOn ? 1 : 0,
+              transform: `translate(${moved ? 2 : 80}px, ${moved ? 2 : 70}px) scale(${pressed ? 0.85 : 1})`,
+              transition: `transform ${moved && t < CLICK ? 950 : 180}ms cubic-bezier(.45,.05,.25,1), opacity .35s ease`
+            }}
+          />
+        </span>
       </div>
-      {!asked && <div className="mt-2 pl-6 text-[11.5px] text-t-3">{clickHint}</div>}
-      <Reveal open={asked}>
+      <div
+        style={{
+          opacity: answerOn ? 1 : 0,
+          transform: answerOn ? 'translateY(0)' : 'translateY(8px)',
+          transition: `opacity .55s ${ease}, transform .55s ${ease}`
+        }}
+      >
         <div className="mt-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-[12.5px] leading-relaxed text-t-1">
           <div className="mb-1 flex items-center gap-1.5 font-semibold text-accent-hi">
             <Icon name="sparkles" className="h-3.5 w-3.5" /> Ask AI
           </div>
-          {now < 350 ? (
-            <span className="inline-flex gap-1 py-1">
+          <div className="relative">
+            {/* Thinking dots sit on top of the (still invisible) answer. */}
+            <span
+              className="absolute left-0 top-1 inline-flex gap-1"
+              style={{ opacity: t >= THINK && t < TYPE ? 1 : 0, transition: 'opacity .2s ease' }}
+            >
               {[0, 1, 2].map((d) => (
                 <span key={d} className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-hi" style={{ animationDelay: `${d * 150}ms` }} />
               ))}
             </span>
-          ) : (
-            <Typed text={ASK.a} n={(now - 350) * 0.06} />
-          )}
+            <Typed text={ASK.a} n={(t - TYPE) * 0.06} />
+          </div>
         </div>
-        <button onClick={() => setAt(null)} className="mt-2 text-[11.5px] text-t-3 underline-offset-2 hover:text-t-1 hover:underline">
-          {again}
-        </button>
-      </Reveal>
+      </div>
     </div>
   )
 }

@@ -129,7 +129,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
           <div className="mx-auto mt-10 max-w-[620px] lg:[zoom:1.32]">
             <HeroVideo
               labels={s.video}
-              answer="Stripe es un servicio de pagos online: tarjetas, suscripciones y facturas. Di: “Yes — I’ve set up Stripe Checkout with webhooks for several clients.”"
+              answer="Un webhook es un aviso de Stripe a tu servidor cuando un pago se completa. Di: “I’d add a Stripe webhook that confirms each booking as soon as the payment succeeds.”"
             />
           </div>
         </section>
@@ -200,7 +200,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               i === 0 ? (
                 <HardQuestionDemo clientLabel={s.video.client} hintLabel={s.demo.hint} />
               ) : i === 1 ? (
-                <AskDemo askLabel={s.demo.ask} clickHint={s.demo.click} again={s.demo.again} />
+                <AskDemo askLabel={s.demo.ask} />
               ) : (
                 <ShareDemo
                   title={s.pics.notesTitle}
