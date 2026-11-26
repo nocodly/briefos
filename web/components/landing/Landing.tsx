@@ -86,7 +86,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="block text-accent-hi">{s.hero.title2}</span>
             </h1>
             <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-t-2">{s.hero.sub}</p>
-            <a href={SITE.downloadUrl} className="btn-glow mt-8 px-7 py-3.5 text-[15.5px]">
+            <a href={SITE.downloadUrl} className="btn-glow mt-7 whitespace-nowrap px-5 py-3 text-[14px] sm:mt-8 sm:px-7 sm:py-3.5 sm:text-[15.5px]">
               <WindowsIcon /> {s.hero.cta}
             </a>
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -226,7 +226,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
             )
           })}
           <div className="text-center">
-            <a href={SITE.downloadUrl} className="btn-glow px-8 py-3.5 text-[15.5px]">
+            <a href={SITE.downloadUrl} className="btn-glow whitespace-nowrap px-5 py-3 text-[14px] sm:px-8 sm:py-3.5 sm:text-[15.5px]">
               <WindowsIcon /> {s.featuresCta}
             </a>
           </div>
@@ -314,7 +314,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
                 <h2 className="font-display text-[28px] font-bold leading-tight sm:text-[32px]">{c.final.title}</h2>
                 <p className="mt-2 text-[15.5px] text-t-2">{c.final.sub}</p>
               </div>
-              <a href={SITE.downloadUrl} className="btn-glow w-full flex-none px-6 py-3.5 text-[15px] md:w-auto">
+              <a href={SITE.downloadUrl} className="btn-glow flex-none whitespace-nowrap px-5 py-3 text-[14px] sm:px-7 sm:py-3.5 sm:text-[15.5px]">
                 <WindowsIcon className="h-4 w-4 flex-none" /> {c.final.cta}
               </a>
             </div>

@@ -69,7 +69,7 @@ export function Pricing({
                 </li>
               ))}
             </ul>
-            <a href={downloadUrl} className={`${featured ? 'btn-glow' : 'btn-soft'} mt-7 w-full text-center`}>
+            <a href={downloadUrl} className={`${featured ? 'btn-glow' : 'btn-soft'} mt-7 w-full px-3 text-center text-[13.5px] sm:text-[15px]`}>
               {p.cta}
             </a>
           </div>
