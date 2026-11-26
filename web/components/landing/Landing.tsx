@@ -7,6 +7,7 @@ import { SITE } from '@/lib/site'
 import { BRANDS } from './brands'
 import { HeroVideo } from './HeroVideo'
 import { HeroSplit } from './HeroSplit'
+import { TryCallButton } from './TryCall'
 import { AnimatedChart, AskDemo, Faq, HardQuestionDemo, ShareDemo } from './Demos'
 import { Icon } from './Icon'
 import { Pricing } from './Pricing'
@@ -86,9 +87,14 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <span className="block text-accent-hi">{s.hero.title2}</span>
             </h1>
             <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-t-2">{s.hero.sub}</p>
-            <a href={SITE.downloadUrl} className="btn-glow mt-7 whitespace-nowrap px-5 py-3 text-[14px] sm:mt-8 sm:px-7 sm:py-3.5 sm:text-[15.5px]">
-              <WindowsIcon /> {s.hero.cta}
-            </a>
+            <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
+              <a href={SITE.downloadUrl} className="btn-glow whitespace-nowrap px-5 py-3 text-[14px] sm:px-7 sm:py-3.5 sm:text-[15.5px]">
+                <WindowsIcon /> {s.hero.cta}
+              </a>
+              <TryCallButton copy={s.tryCall} defaultLang="es" className="btn-soft whitespace-nowrap px-5 py-3 text-[14px] sm:py-3.5 sm:text-[15.5px]">
+                <Icon name="phone" className="h-4 w-4 text-accent-hi" /> {s.tryCall.heroButton}
+              </TryCallButton>
+            </div>
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <div className="flex -space-x-2">
                 {['UK', 'ES', 'PT', 'HI', 'TR', 'AR'].map((code) => (
@@ -172,6 +178,56 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
               <AnimatedChart label={s.band.without} />
               <Icon name="arrow" className="h-6 w-6 text-t-3" />
               <AnimatedChart label={s.band.with} rising delay={450} />
+            </div>
+          </div>
+        </section>
+
+        {/* ── Try a call now (no install) ── */}
+        <section id="try" className="container-x scroll-mt-20 pt-20">
+          <div className="relative overflow-hidden rounded-[26px] border border-accent/30 bg-[radial-gradient(600px_300px_at_85%_0%,rgba(255,106,61,.22),transparent_70%)] p-6 sm:p-10">
+            <div className="grid items-center gap-8 md:grid-cols-[1.25fr_1fr]">
+              <div>
+                <p className="eyebrow !text-accent-hi">{s.tryCall.eyebrow}</p>
+                <h2 className="mt-3 font-display text-[28px] font-bold leading-[1.1] tracking-[-0.02em] sm:text-[36px]">{s.tryCall.sectionTitle}</h2>
+                <p className="mt-4 max-w-xl text-[15.5px] leading-relaxed text-t-2">{s.tryCall.sectionSub}</p>
+                <ul className="mt-5 space-y-2.5 text-[15px] text-t-2">
+                  {s.tryCall.points.map((x) => (
+                    <Check key={x}>{x}</Check>
+                  ))}
+                </ul>
+                <TryCallButton copy={s.tryCall} defaultLang="es" className="btn-glow mt-7 whitespace-nowrap px-6 py-3.5 text-[15.5px]">
+                  <Icon name="phone" className="h-4 w-4" /> {s.tryCall.button}
+                </TryCallButton>
+              </div>
+              {/* Anna's card */}
+              <div className="glass-card mx-auto w-full max-w-sm rounded-[22px] p-5">
+                <div className="flex items-center gap-3">
+                  <span className="relative flex h-14 w-14 items-center justify-center rounded-full bg-[linear-gradient(135deg,#FFB088,#FF6A3D)] font-display text-[18px] font-bold text-white shadow-[0_0_0_4px_rgba(34,197,94,.35)]">
+                    AW
+                    <span className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-night bg-[#22C55E]" />
+                  </span>
+                  <div>
+                    <div className="font-display text-[17px] font-bold">Anna Weber</div>
+                    <div className="text-[12.5px] text-t-3">{s.tryCall.anna}</div>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl bg-white/[.04] p-3">
+                  <div className="text-[14px] font-medium text-t-1">“Have you worked with Stripe before?”</div>
+                  <div className="mt-0.5 text-[13.5px] text-[#8FD8F7]">¿Has trabajado antes con Stripe?</div>
+                  <div className="mt-2 text-[12px] text-t-2">
+                    <b className="text-[#F5A524]">Stripe</b> — servicio de pagos online
+                  </div>
+                </div>
+                <div className="mt-4 flex items-center justify-center gap-[3px]">
+                  {[0.4, 0.7, 1, 0.6, 0.9, 0.5, 0.8, 0.45, 0.75, 0.55, 0.9, 0.4].map((h, i) => (
+                    <span
+                      key={i}
+                      className="w-[4px] origin-bottom rounded-full bg-[#22C55E]/80"
+                      style={{ height: `${h * 22}px`, animation: `hero-bar ${0.7 + (i % 4) * 0.15}s ease-in-out ${i * 60}ms infinite` }}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
