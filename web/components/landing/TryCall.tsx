@@ -56,7 +56,24 @@ export interface TryCallCopy {
   failed: string
 }
 
-type Line = { id: string; who: 'anna' | 'you'; text: string; done: boolean; at: number; tr?: string | null; terms?: { term: string; explanation: string }[] }
+type Term = { term: string; explanation: string }
+/** One of Anna's sentences: where it ends in her line, and its translation. */
+type Sent = { end: number; tr?: string | null }
+type Line = { id: string; who: 'anna' | 'you'; text: string; done: boolean; at: number; sents?: Sent[]; terms?: Term[] }
+
+const EN_CPS = 0.0135 // Anna's speaking pace, letters per ms
+const TR_CPS = 0.05 // a sentence's translation types in at this pace
+
+/** Sentences of a line with their end positions. */
+function splitSentences(text: string): { text: string; end: number }[] {
+  const out: { text: string; end: number }[] = []
+  const re = /[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    if (m[0].trim()) out.push({ text: m[0].trim(), end: m.index + m[0].trimEnd().length })
+  }
+  return out
+}
 
 async function call<T>(body: unknown): Promise<T> {
   const res = await fetch(FN, {
@@ -174,13 +191,42 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
       return next
     })
 
+  // Terms already explained in this call (each only once).
+  const explained = useRef(new Set<string>())
+  // When each sentence's translation was allowed to appear (for its typing).
+  const unlocked = useRef(new Map<string, number>())
+
+  // Each sentence is translated on its own, so its translation can appear
+  // right after Anna says it — not the whole line before she finished.
   const translateLine = async (id: string, text: string) => {
-    try {
-      const r = await call<{ translation: string | null; terms: { term: string; explanation: string }[] }>({ action: 'translate', token: tokenRef.current, text, target })
-      upsert(id, 'anna', { tr: r.translation ?? text, terms: r.terms })
-    } catch {
-      upsert(id, 'anna', { tr: null })
-    }
+    const parts = splitSentences(text)
+    setLines((ls) => ls.map((l) => (l.id === id ? { ...l, sents: parts.map((p) => ({ end: p.end })) } : l)))
+    await Promise.all(
+      parts.map(async (p, i) => {
+        let tr: string | null = null
+        let terms: Term[] = []
+        try {
+          const r = await call<{ translation: string | null; terms: Term[] }>({ action: 'translate', token: tokenRef.current, text: p.text, target })
+          tr = r.translation ?? p.text
+          terms = (r.terms ?? []).filter((t) => {
+            const k = t.term.toLowerCase()
+            if (explained.current.has(k)) return false
+            explained.current.add(k)
+            return true
+          })
+        } catch {
+          tr = null
+        }
+        setLines((ls) =>
+          ls.map((l) => {
+            if (l.id !== id || !l.sents) return l
+            const sents = l.sents.slice()
+            sents[i] = { ...sents[i], tr }
+            return { ...l, sents, terms: [...(l.terms ?? []), ...terms].slice(0, 3) }
+          })
+        )
+      })
+    )
   }
 
   const start = async () => {
@@ -282,7 +328,34 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
 
   const now = typeof performance !== 'undefined' ? performance.now() : 0
   // Anna's words appear at speaking pace (~15 letters a second), not all at once.
-  const shownText = (l: Line) => (l.who === 'you' ? l.text : l.text.slice(0, Math.max(0, Math.floor((now - l.at) * 0.015))))
+  const shownChars = (l: Line) => (l.who === 'you' ? l.text.length : Math.max(0, Math.floor((now - l.at) * EN_CPS)))
+  const shownText = (l: Line) => l.text.slice(0, shownChars(l))
+  // The translation under Anna's words: a sentence appears once she has said
+  // it, and types in smoothly (the rest keeps its place, so nothing jumps).
+  const shownTr = (l: Line): { done: string; rest: string } | null => {
+    if (!l.sents?.length) return null
+    const said = shownChars(l)
+    let done = ''
+    let rest = ''
+    l.sents.forEach((p, i) => {
+      if (!p.tr) return
+      const key = `${l.id}#${i}`
+      if (said >= p.end && !unlocked.current.has(key)) unlocked.current.set(key, now)
+      const at = unlocked.current.get(key)
+      const sep = done || rest ? ' ' : ''
+      if (at === undefined) {
+        rest += sep + p.tr
+        return
+      }
+      const n = Math.floor((now - at) * TR_CPS)
+      if (rest) rest += sep + p.tr
+      else {
+        done += sep + p.tr.slice(0, n)
+        rest += p.tr.slice(n)
+      }
+    })
+    return done || rest ? { done, rest } : null
+  }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
@@ -362,12 +435,17 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
                   <div key={l.id} className="animate-rise">
                     <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-accent-pale">Anna</div>
                     <div className="mt-0.5 text-[15px] font-medium leading-snug text-t-1">{shownText(l)}</div>
-                    {l.tr && (
-                      <div dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className="mt-0.5 animate-rise text-[14.5px] leading-snug text-[#8FD8F7]">
-                        {l.tr}
-                      </div>
-                    )}
-                    {l.terms?.map((t) => (
+                    {(() => {
+                      const tr = shownTr(l)
+                      if (!tr || !tr.done) return null
+                      return (
+                        <div dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className="mt-0.5 text-[14.5px] leading-snug text-[#8FD8F7]">
+                          {tr.done}
+                          <span className="invisible">{tr.rest}</span>
+                        </div>
+                      )
+                    })()}
+                    {shownChars(l) >= l.text.length && l.terms?.map((t) => (
                       <div key={t.term} className="mt-1.5 animate-rise rounded-lg border border-[#F5A524]/25 bg-[#F5A524]/[.07] px-2.5 py-1.5 text-[12.5px] text-t-2">
                         <b className="text-[#F5A524]">{t.term}</b> — {t.explanation}
                       </div>

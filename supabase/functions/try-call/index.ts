@@ -23,7 +23,7 @@ const TR_MODEL = Deno.env.get('TRANSLATE_MODEL') ?? 'gpt-4.1-mini'
 const PER_IP_DAY = Number(Deno.env.get('TRY_CALL_PER_IP') ?? 3)
 const SITE_DAY = Number(Deno.env.get('TRY_CALL_PER_DAY') ?? 200)
 const TOKEN_MS = 6 * 60 * 1000
-const MAX_TRANSLATIONS = 60
+const MAX_TRANSLATIONS = 150
 
 const ALLOWED_ORIGINS = ['https://minutama.com', 'https://www.minutama.com', 'http://localhost:3007', 'http://localhost:3000']
 
@@ -146,8 +146,11 @@ async function translate(text: string, target: string): Promise<{ translation: s
           role: 'system',
           content:
             `A client on a business call said the text below. Translate it into ${target}: natural and precise, keep ` +
-            `names, numbers and technical terms. Also, for each technical term in it (tool, service, technology, ` +
-            `dev process), give a plain explanation in ${target} in at most 12 words. Reply as JSON: ` +
+            `names, numbers and technical terms. Also list ONLY real software / IT terms a non-developer may not ` +
+            `know — e.g. Stripe, webhook, API, Docker, CI/CD, GitHub Actions, DNS, SSL, staging, CMS, SDK — with a plain ` +
+            `explanation in ${target} in at most 12 words. NEVER list everyday words (website, menu, online menu, ` +
+            `reservations, booking, payments, account, app, budget, deadline, design). Most sentences have no such ` +
+            `term: then "terms" is []. Reply as JSON: ` +
             `{"translation":"...","terms":[{"term":"...","explanation":"..."}]}. If the text is already in ${target}, ` +
             `translation is "".`
         },
@@ -169,7 +172,8 @@ async function translate(text: string, target: string): Promise<{ translation: s
       terms: (out.terms ?? [])
         .map((t) => ({ term: String(t.term ?? '').slice(0, 60), explanation: String(t.explanation ?? '').slice(0, 200) }))
         .filter((t) => t.term && t.explanation)
-        .slice(0, 3)
+        
+        .slice(0, 2)
     }
   } catch {
     return { translation: null, terms: [] }
