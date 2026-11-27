@@ -205,12 +205,14 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
 
-  // Keep the newest line in view.
-  const count = lines.current.length
+  // Follow the conversation: stay pinned to the bottom while text types in,
+  // unless the visitor scrolled up to reread (then follow again once they
+  // come back near the bottom).
+  const follow = useRef(true)
   useEffect(() => {
     const el = listRef.current
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [count])
+    if (el && follow.current && el.scrollHeight - el.clientHeight - el.scrollTop > 1) el.scrollTop = el.scrollHeight
+  })
 
   const annaLine = (id: string): AnnaLine => {
     let l = lines.current.find((x) => x.id === id) as AnnaLine | undefined
@@ -512,7 +514,14 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
 
         {phase === 'live' && (
           <>
-            <div ref={listRef} className="min-h-[300px] flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div
+              ref={listRef}
+              onScroll={(e) => {
+                const el = e.currentTarget
+                follow.current = el.scrollHeight - el.clientHeight - el.scrollTop < 60
+              }}
+              className="min-h-[300px] flex-1 space-y-4 overflow-y-auto px-5 py-4"
+            >
               {lines.current.length === 0 && <p className="py-10 text-center text-[14px] text-t-3">{copy.waitAnna}</p>}
               {lines.current.map((l) => {
                 if (l.who === 'you') {
