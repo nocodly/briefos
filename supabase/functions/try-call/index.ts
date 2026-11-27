@@ -60,7 +60,7 @@ serve(async (req) => {
   const origin = req.headers.get('origin') ?? ''
   if (!ALLOWED_ORIGINS.includes(origin)) throw new ApiError(403, 'origin', 'Not allowed.')
 
-  let body: { action?: string; token?: string; text?: string; target?: string }
+  let body: { action?: string; token?: string; text?: string; target?: string; context?: string }
   try {
     body = await req.json()
   } catch {
@@ -77,6 +77,17 @@ serve(async (req) => {
     const target = String(body.target ?? '').trim().slice(0, 30)
     if (!text || !target) throw new ApiError(400, 'bad_request', 'text and target are required.')
     return json(await translate(text, target))
+  }
+
+  if (body.action === 'ask') {
+    const payload = await checkToken(String(body.token ?? ''))
+    const n = (used.get(payload) ?? 0) + 1
+    if (n > MAX_TRANSLATIONS) throw new ApiError(429, 'too_many', 'This test call has ended.')
+    used.set(payload, n)
+    const question = String(body.text ?? '').trim().slice(0, 500)
+    const target = String(body.target ?? '').trim().slice(0, 30)
+    if (!question || !target) throw new ApiError(400, 'bad_request', 'text and target are required.')
+    return json({ answer: await askAi(question, String(body.context ?? '').slice(0, 1500), target) })
   }
 
   if (body.action !== 'start') throw new ApiError(400, 'bad_request', 'Unknown action.')
@@ -110,8 +121,10 @@ serve(async (req) => {
           '\n- This call is short (about 3 minutes): ask 3–4 questions, at least two of them technical, then wrap up.',
         audio: {
           input: {
-            noise_reduction: { type: 'far_field' },
-            turn_detection: { type: 'semantic_vad', eagerness: 'medium', interrupt_response: false },
+            // A browser on a laptop or headset: near-field mic. "High" eagerness
+            // so Anna answers right after you finish — the demo feels fast.
+            noise_reduction: { type: 'near_field' },
+            turn_detection: { type: 'semantic_vad', eagerness: 'high', interrupt_response: false },
             // The visitor's own words, shown as "You" lines.
             transcription: { model: 'gpt-4o-mini-transcribe', language: 'en' }
           },
@@ -133,10 +146,7 @@ serve(async (req) => {
 })
 
 async function translate(text: string, target: string): Promise<{ translation: string | null; terms: { term: string; explanation: string }[] }> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const res = await chat({
       model: TR_MODEL,
       temperature: 0,
       max_tokens: 400,
@@ -156,7 +166,6 @@ async function translate(text: string, target: string): Promise<{ translation: s
         },
         { role: 'user', content: text }
       ]
-    })
   })
   if (!res.ok) {
     console.error('[try-call] translate error', res.status, (await res.text()).slice(0, 200))
@@ -178,4 +187,50 @@ async function translate(text: string, target: string): Promise<{ translation: s
   } catch {
     return { translation: null, terms: [] }
   }
+}
+
+// Ask AI in the demo: what the client wants + a short answer to say.
+async function askAi(question: string, context: string, target: string): Promise<string> {
+  const res = await chat({
+      model: TR_MODEL,
+      temperature: 0.3,
+      max_tokens: 220,
+      messages: [
+        {
+          role: 'system',
+          content:
+            `You help a freelance web developer during a live call with a client (Anna, café owner, wants a booking ` +
+            `site with Stripe payments). The freelancer clicked a question the client asked. Reply in ${target}, very ` +
+            `short: one sentence with what she wants to know (explain any tech term in plain words), then a new line ` +
+            `starting with the ${target} word for "Say:" followed by a short natural answer IN ENGLISH (at most 20 words) the ` +
+            `freelancer can say right now. No lists, no markdown.`
+        },
+        ...(context ? [{ role: 'user', content: `Call so far:
+${context}` }] : []),
+        { role: 'user', content: `Her question: ${question}` }
+      ]
+  })
+  if (!res.ok) {
+    console.error('[try-call] ask error', res.status, (await res.text()).slice(0, 200))
+    throw new ApiError(502, 'ask_failed', 'Ask AI is not available right now.')
+  }
+  return (((await res.json()) as { choices?: { message?: { content?: string } }[] }).choices?.[0]?.message?.content ?? '').trim().slice(0, 700)
+}
+
+// Chat completion with priority processing (steadier, faster for a live demo);
+// falls back to the default tier if the account doesn't support it.
+let usePriority = true
+async function chat(body: Record<string, unknown>): Promise<Response> {
+  const send = (priority: boolean) =>
+    fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...body, ...(priority ? { service_tier: 'priority' } : {}) })
+    })
+  let res = await send(usePriority)
+  if (usePriority && res.status === 400) {
+    usePriority = false
+    res = await send(false)
+  }
+  return res
 }

@@ -6,7 +6,6 @@ import { L, type LandingLocale } from '@/lib/landing-i18n'
 import { SITE } from '@/lib/site'
 import { BRANDS } from './brands'
 import { HeroVideo } from './HeroVideo'
-import { HeroSplit } from './HeroSplit'
 import { TryCallButton } from './TryCall'
 import { AnimatedChart, AskDemo, Faq, HardQuestionDemo, ShareDemo } from './Demos'
 import { Icon } from './Icon'
@@ -45,7 +44,7 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
   const faq = [c.faq.items[1], c.faq.items[2], c.faq.items[4], c.faq.items[5]]
 
   return (
-    <div lang={locale} className="night-glow min-h-screen text-t-1">
+    <div lang={locale} className="night-glow min-h-screen overflow-x-clip text-t-1">
       {/* ── Nav ── */}
       <header className="sticky top-0 z-40 border-b border-white/[.06] bg-night/80 backdrop-blur">
         <nav className="container-x flex h-16 items-center justify-between gap-3">
@@ -79,37 +78,76 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
       </header>
 
       <main>
-        {/* ── Hero ── */}
-        <section className="container-x grid items-center gap-10 pb-14 pt-12 lg:grid-cols-[1fr_1.12fr] lg:pt-16">
-          <div>
-            <h1 className="font-display text-[38px] font-extrabold leading-[1.05] tracking-[-0.03em] sm:text-[52px]">
-              {s.hero.title1}
-              <span className="block text-accent-hi">{s.hero.title2}</span>
-            </h1>
-            <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-t-2">{s.hero.sub}</p>
-            <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
-              <a href={SITE.downloadUrl} className="btn-glow whitespace-nowrap px-5 py-3 text-[14px] sm:px-7 sm:py-3.5 sm:text-[15.5px]">
-                <WindowsIcon /> {s.hero.cta}
-              </a>
-              <TryCallButton copy={s.tryCall} defaultLang="es" className="btn-soft whitespace-nowrap px-5 py-3 text-[14px] sm:py-3.5 sm:text-[15.5px]">
-                <Icon name="phone" className="h-4 w-4 text-accent-hi" /> {s.tryCall.heroButton}
-              </TryCallButton>
-            </div>
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <div className="flex -space-x-2">
+        {/* ── Hero: centred promise, then the live call right under it ── */}
+        <section className="container-x pb-14 pt-12 text-center sm:pt-16">
+          {/* Badge → opens the browser test call */}
+          <TryCallButton
+            copy={s.tryCall}
+            defaultLang="es"
+            className="group mx-auto inline-flex max-w-full items-center gap-2.5 rounded-full border border-accent/30 bg-white/[.03] py-1 pl-1 pr-3 text-left text-[13px] text-t-2 transition-colors hover:border-accent/60 hover:bg-white/[.06]"
+          >
+            <span className="flex-none rounded-full bg-accent/20 px-2.5 py-1 text-[12px] font-semibold text-accent-hi">{s.hero2.badge}</span>
+            <span className="truncate">{s.hero2.badgeText}</span>
+            <Icon name="arrow" className="h-3.5 w-3.5 flex-none text-t-3 transition-transform group-hover:translate-x-0.5" />
+          </TryCallButton>
+
+          <h1 className="mx-auto mt-7 max-w-5xl font-display text-[38px] font-extrabold leading-[1.06] tracking-[-0.035em] sm:text-[60px] lg:text-[68px]">
+            {s.hero2.line1}
+            <span className="mt-1 block">
+              <span className="text-accent-hi">{s.hero2.line2a}</span>{' '}
+              {/* Call apps, like a logo in the headline */}
+              <span className="inline-flex translate-y-[-0.08em] items-center gap-[0.12em] align-middle text-t-1">
+                {[0, 1, 6].map((i) => (
+                  <span key={i} className="flex h-[0.95em] w-[0.95em] items-center justify-center rounded-[0.22em] bg-white/[.07]">
+                    <svg viewBox="0 0 24 24" className="h-[0.58em] w-[0.58em]" fill="currentColor" aria-label={BRANDS[i].name}>
+                      <path d={BRANDS[i].path} />
+                    </svg>
+                  </span>
+                ))}
+              </span>
+            </span>
+          </h1>
+
+          <p className="mx-auto mt-6 max-w-[640px] text-[17px] leading-relaxed text-t-2 sm:text-[18.5px]">{s.hero2.sub}</p>
+
+          {/* CTA pill (like an input with a button) */}
+          <div className="mx-auto mt-8 flex max-w-[560px] items-center gap-2 rounded-full border border-white/10 bg-white/[.04] p-1.5 shadow sm:pl-5-[0_10px_40px_-15px_rgba(0,0,0,.8)]">
+            <WindowsIcon className="hidden h-4 w-4 flex-none text-t-3 sm:block" />
+            <span className="hidden min-w-0 flex-1 truncate text-left text-[14px] text-t-3 sm:block sm:text-[15px]">{s.hero2.pillText}</span>
+            <a href={SITE.downloadUrl} className="btn-glow flex-1 whitespace-nowrap px-5 py-3 text-[14px] sm:flex-none sm:px-6 sm:text-[15px]">
+              {s.hero2.pillCta} <Icon name="arrow" className="h-4 w-4" />
+            </a>
+          </div>
+
+          <p className="mt-4 flex items-center justify-center gap-2 text-[13.5px] text-t-3">
+            <Icon name="shield" className="h-4 w-4 flex-none text-accent-hi" />
+            {s.hero2.trust}
+          </p>
+
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+            <span className="glass-card flex items-center gap-2.5 rounded-xl px-3 py-2">
+              <span className="flex -space-x-1.5">
                 {['UK', 'ES', 'PT', 'HI', 'TR', 'AR'].map((code) => (
-                  <span
-                    key={code}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-night bg-night-3 text-[11px] font-bold text-accent-pale"
-                  >
+                  <span key={code} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-night bg-night-3 text-[9.5px] font-bold text-accent-pale">
                     {code}
                   </span>
                 ))}
-              </div>
-              <span className="text-[13.5px] text-t-3">{s.hero.langs}</span>
-            </div>
+              </span>
+              <span className="text-[13px] text-t-2">{s.hero2.langsChip}</span>
+            </span>
+            <TryCallButton copy={s.tryCall} defaultLang="es" className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[13px] font-semibold text-accent-hi hover:bg-white/[.05]">
+              <Icon name="phone" className="h-4 w-4" /> {s.tryCall.heroButton}
+            </TryCallButton>
           </div>
-          <HeroSplit clientSays={s.flow.clients} youSee={s.flow.you} spanishOnly={locale === 'es'} />
+
+          {/* The product at work: a client call with Minutama on top */}
+          <div className="relative mx-auto mt-12 max-w-[620px] text-left lg:[zoom:1.32]">
+            <div className="pointer-events-none absolute -inset-10 -z-10 rounded-[40px] bg-[radial-gradient(closest-side,rgba(255,106,61,.22),transparent)]" />
+            <HeroVideo
+              labels={s.video}
+              answer="Un webhook es un aviso de Stripe a tu servidor cuando un pago se completa. Di: “I’d add a Stripe webhook that confirms each booking as soon as the payment succeeds.”"
+            />
+          </div>
         </section>
 
         {/* ── Works with ── */}
@@ -128,17 +166,6 @@ export function Landing({ locale = 'en' }: { locale?: LandingLocale }) {
           </div>
           <p className="mt-3 text-center text-[13px] text-t-3">{s.works}</p>
         </div>
-
-        {/* ── The call demo (video) ── */}
-        <section className="container-x pt-20">
-          <SectionHead title={s.demo.videoTitle} sub={s.demo.videoSub} />
-          <div className="mx-auto mt-10 max-w-[620px] lg:[zoom:1.32]">
-            <HeroVideo
-              labels={s.video}
-              answer="Un webhook es un aviso de Stripe a tu servidor cuando un pago se completa. Di: “I’d add a Stripe webhook that confirms each booking as soon as the payment succeeds.”"
-            />
-          </div>
-        </section>
 
         {/* ── Problems ── */}
         <section className="container-x py-20">

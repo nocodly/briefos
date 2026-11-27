@@ -6,12 +6,21 @@ import { WindowsIcon } from '../Chrome'
 import { Icon } from './Icon'
 
 // "Try a call now": a 3-minute voice call with Anna (an AI client) right in
-// the browser. She speaks English; her words appear live with the translation
-// into the visitor's language and one-line hints for tech terms — what
-// Minutama does on a real call. Server: supabase/functions/try-call.
+// the browser — what Minutama does on a real call:
+//   • her words appear at the pace she speaks,
+//   • each sentence is translated the moment its text arrives (the text comes
+//     ahead of her voice), and shown under her words once she has said it,
+//   • one-line hints for technical terms,
+//   • Ask AI on her questions: what she means + an answer to say,
+//   • your own words, so you see she hears you (plus a live mic meter).
+// Server: supabase/functions/try-call.
 
 const FN = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/try-call`
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
+
+const EN_CPS = 0.0145 // Anna's speaking pace, letters per ms
+const TR_CPS = 0.06 // translation types in at this pace
+const AI_CPS = 0.07 // Ask AI answer
 
 export const TRY_LANGS: { code: string; native: string; en: string }[] = [
   { code: 'es', native: 'Español', en: 'Spanish' },
@@ -54,26 +63,27 @@ export interface TryCallCopy {
   close: string
   micDenied: string
   failed: string
+  hearing?: string
+  ask?: string
+  thinking?: string
 }
 
 type Term = { term: string; explanation: string }
-/** One of Anna's sentences: where it ends in her line, and its translation. */
-type Sent = { end: number; tr?: string | null }
-type Line = { id: string; who: 'anna' | 'you'; text: string; done: boolean; at: number; sents?: Sent[]; terms?: Term[] }
-
-const EN_CPS = 0.0135 // Anna's speaking pace, letters per ms
-const TR_CPS = 0.05 // a sentence's translation types in at this pace
-
-/** Sentences of a line with their end positions. */
-function splitSentences(text: string): { text: string; end: number }[] {
-  const out: { text: string; end: number }[] = []
-  const re = /[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
-    if (m[0].trim()) out.push({ text: m[0].trim(), end: m.index + m[0].trimEnd().length })
-  }
-  return out
+type Sent = { text: string; end: number; tr?: string | null; unlockAt?: number }
+type AnnaLine = {
+  who: 'anna'
+  id: string
+  text: string
+  done: boolean
+  at: number
+  aligned: boolean
+  sents: Sent[]
+  requested: Set<number>
+  terms: Term[]
+  ask?: { state: 'loading' | 'done' | 'error'; text: string; at: number }
 }
+type YouLine = { who: 'you'; id: string; text: string }
+type Line = AnnaLine | YouLine
 
 async function call<T>(body: unknown): Promise<T> {
   const res = await fetch(FN, {
@@ -84,6 +94,18 @@ async function call<T>(body: unknown): Promise<T> {
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new Error((data as { error?: { message?: string } }).error?.message ?? `Request failed (${res.status})`)
   return data as T
+}
+
+/** Sentences of a text with their end positions; `complete` = ends with . ! ? */
+function sentencesOf(text: string): { text: string; end: number; complete: boolean }[] {
+  const out: { text: string; end: number; complete: boolean }[] = []
+  const re = /[^.!?…]+[.!?…]+["”’)]*\s*|[^.!?…]+$/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text))) {
+    const t = m[0].trim()
+    if (t) out.push({ text: t, end: m.index + m[0].trimEnd().length, complete: /[.!?…]["”’)]*$/.test(t) })
+  }
+  return out
 }
 
 export function TryCallButton({ copy, className, children, defaultLang }: { copy: TryCallCopy; className: string; children?: React.ReactNode; defaultLang: string }) {
@@ -105,17 +127,24 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
   })
   const [phase, setPhase] = useState<'pick' | 'connecting' | 'live' | 'ended' | 'error'>('pick')
   const [error, setError] = useState('')
-  const [lines, setLines] = useState<Line[]>([])
-  const [annaTalking, setAnnaTalking] = useState(false)
   const [left, setLeft] = useState(180)
   const [, setTick] = useState(0)
+  const rerender = () => setTick((n) => n + 1)
+
+  const lines = useRef<Line[]>([])
+  const annaTalking = useRef(false)
+  const micOpen = useRef(false)
+  const level = useRef(0)
+  const explained = useRef(new Set<string>())
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const micRef = useRef<MediaStream | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
   const listRef = useRef<HTMLDivElement | null>(null)
   const tokenRef = useRef('')
   const endedRef = useRef(false)
-  const target = TRY_LANGS.find((l) => l.code === lang)?.en ?? 'Spanish'
+  const targetRef = useRef('Spanish')
+  targetRef.current = TRY_LANGS.find((l) => l.code === lang)?.en ?? 'Spanish'
 
   // Hang up and release the microphone (no state changes — safe on unmount).
   const teardown = () => {
@@ -124,21 +153,21 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
     pcRef.current = null
     micRef.current?.getTracks().forEach((t) => t.stop())
     micRef.current = null
+    void ctxRef.current?.close().catch(() => {})
+    ctxRef.current = null
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.srcObject = null
     }
   }
-
   const stop = (next: 'ended' | 'error' = 'ended') => {
     if (endedRef.current) return
     endedRef.current = true
     teardown()
-    setAnnaTalking(false)
+    annaTalking.current = false
     setPhase(next)
   }
 
-  // Close: Escape key; stop everything when the popup goes away.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -151,12 +180,12 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // While live: a frame clock (Anna's words appear at speaking pace) + countdown.
+  // While live: a frame clock (pacing, typing, mic meter) + the countdown.
   useEffect(() => {
     if (phase !== 'live') return
     let raf = 0
     const loop = () => {
-      setTick((n) => n + 1)
+      rerender()
       raf = requestAnimationFrame(loop)
     }
     raf = requestAnimationFrame(loop)
@@ -177,68 +206,99 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
   }, [phase])
 
   // Keep the newest line in view.
+  const count = lines.current.length
   useEffect(() => {
     const el = listRef.current
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-  }, [lines.length])
+  }, [count])
 
-  const upsert = (id: string, who: Line['who'], patch: Partial<Line>) =>
-    setLines((ls) => {
-      const i = ls.findIndex((l) => l.id === id)
-      if (i < 0) return [...ls, { id, who, text: '', done: false, at: performance.now(), ...patch }]
-      const next = ls.slice()
-      next[i] = { ...next[i], ...patch }
-      return next
-    })
+  const annaLine = (id: string): AnnaLine => {
+    let l = lines.current.find((x) => x.id === id) as AnnaLine | undefined
+    if (!l) {
+      l = { who: 'anna', id, text: '', done: false, at: performance.now(), aligned: annaTalking.current, sents: [], requested: new Set(), terms: [] }
+      lines.current = [...lines.current, l]
+    }
+    return l
+  }
 
-  // Terms already explained in this call (each only once).
-  const explained = useRef(new Set<string>())
-  // When each sentence's translation was allowed to appear (for its typing).
-  const unlocked = useRef(new Map<string, number>())
-
-  // Each sentence is translated on its own, so its translation can appear
-  // right after Anna says it — not the whole line before she finished.
-  const translateLine = async (id: string, text: string) => {
-    const parts = splitSentences(text)
-    setLines((ls) => ls.map((l) => (l.id === id ? { ...l, sents: parts.map((p) => ({ end: p.end })) } : l)))
-    await Promise.all(
-      parts.map(async (p, i) => {
-        let tr: string | null = null
-        let terms: Term[] = []
-        try {
-          const r = await call<{ translation: string | null; terms: Term[] }>({ action: 'translate', token: tokenRef.current, text: p.text, target })
-          tr = r.translation ?? p.text
-          terms = (r.terms ?? []).filter((t) => {
+  // Translate every finished sentence right away (her text arrives before her
+  // voice, so the translation is ready by the time she has said it).
+  const translateReady = (l: AnnaLine) => {
+    const parts = sentencesOf(l.text)
+    l.sents = parts.map((p, i) => ({ ...(l.sents[i] ?? {}), text: p.text, end: p.end }))
+    parts.forEach((p, i) => {
+      if (l.requested.has(i) || (!p.complete && !l.done)) return
+      l.requested.add(i)
+      const text = p.text
+      void call<{ translation: string | null; terms: Term[] }>({ action: 'translate', token: tokenRef.current, text, target: targetRef.current })
+        .then((r) => {
+          if (l.sents[i]) l.sents[i].tr = r.translation || text
+          for (const t of r.terms ?? []) {
             const k = t.term.toLowerCase()
-            if (explained.current.has(k)) return false
+            if (explained.current.has(k) || l.terms.length >= 2) continue
             explained.current.add(k)
-            return true
-          })
-        } catch {
-          tr = null
-        }
-        setLines((ls) =>
-          ls.map((l) => {
-            if (l.id !== id || !l.sents) return l
-            const sents = l.sents.slice()
-            sents[i] = { ...sents[i], tr }
-            return { ...l, sents, terms: [...(l.terms ?? []), ...terms].slice(0, 3) }
-          })
-        )
+            l.terms.push(t)
+          }
+          rerender()
+        })
+        .catch(() => {
+          if (l.sents[i]) l.sents[i].tr = null
+        })
+    })
+  }
+
+  const askAi = (l: AnnaLine) => {
+    const question = sentencesOf(l.text).filter((p) => /\?/.test(p.text)).map((p) => p.text).join(' ') || l.text
+    const context = lines.current
+      .slice(-8)
+      .map((x) => `${x.who === 'anna' ? 'Anna' : 'Me'}: ${x.text}`)
+      .join('\n')
+    l.ask = { state: 'loading', text: '', at: performance.now() }
+    rerender()
+    call<{ answer: string }>({ action: 'ask', token: tokenRef.current, text: question, context, target: targetRef.current })
+      .then((r) => {
+        l.ask = { state: 'done', text: r.answer, at: performance.now() }
+        rerender()
       })
-    )
+      .catch((e) => {
+        l.ask = { state: 'error', text: (e as Error).message, at: performance.now() }
+        rerender()
+      })
   }
 
   const start = async () => {
     setError('')
     setPhase('connecting')
     endedRef.current = false
+    lines.current = []
+    explained.current.clear()
     try {
-      micRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false } })
+      // Auto gain on: laptop mics are quiet, and Anna must hear you clearly.
+      micRef.current = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     } catch {
       setError(copy.micDenied)
       setPhase('error')
       return
+    }
+    // Live mic meter, so you see you're heard.
+    try {
+      const ctx = new AudioContext()
+      ctxRef.current = ctx
+      const an = ctx.createAnalyser()
+      an.fftSize = 512
+      ctx.createMediaStreamSource(micRef.current).connect(an)
+      const buf = new Float32Array(an.fftSize)
+      const read = () => {
+        if (!ctxRef.current) return
+        an.getFloatTimeDomainData(buf)
+        let sum = 0
+        for (const v of buf) sum += v * v
+        level.current = level.current * 0.7 + Math.sqrt(sum / buf.length) * 0.3
+        requestAnimationFrame(read)
+      }
+      read()
+    } catch {
+      /* meter is optional */
     }
     try {
       const { secret, model, token, maxSeconds } = await call<{ secret: string; model: string; token: string; maxSeconds: number }>({ action: 'start' })
@@ -255,10 +315,23 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
       }
       const mic = micRef.current!
       mic.getTracks().forEach((t) => pc.addTrack(t, mic))
-      // Half-duplex like the app: Anna's mic is closed while she talks, so she
-      // never hears herself through the visitor's speakers.
-      const setMic = (on: boolean) => mic.getAudioTracks().forEach((t) => (t.enabled = on))
+
+      // Half-duplex: your mic is closed only while Anna's voice plays (so she
+      // never hears herself through speakers), and always reopens shortly after.
       let reopen: ReturnType<typeof setTimeout> | null = null
+      let safety: ReturnType<typeof setTimeout> | null = null
+      const setMic = (on: boolean) => {
+        micOpen.current = on
+        mic.getAudioTracks().forEach((t) => (t.enabled = on))
+      }
+      const openSoon = (ms: number) => {
+        if (reopen) clearTimeout(reopen)
+        reopen = setTimeout(() => {
+          if (safety) clearTimeout(safety)
+          setMic(true)
+        }, ms)
+      }
+
       const ev = pc.createDataChannel('oai-events')
       ev.onopen = () => {
         setMic(false)
@@ -273,40 +346,59 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
           return
         }
         switch (m.type) {
-          case 'output_audio_buffer.started':
+          case 'output_audio_buffer.started': {
             if (reopen) clearTimeout(reopen)
             setMic(false)
-            setAnnaTalking(true)
+            if (safety) clearTimeout(safety)
+            safety = setTimeout(() => setMic(true), 30_000)
+            annaTalking.current = true
+            // Her words start appearing when her voice starts.
+            const last = [...lines.current].reverse().find((x) => x.who === 'anna') as AnnaLine | undefined
+            if (last && !last.aligned) {
+              last.at = performance.now()
+              last.aligned = true
+            }
             break
+          }
           case 'output_audio_buffer.stopped':
           case 'output_audio_buffer.cleared':
-            setAnnaTalking(false)
-            if (reopen) clearTimeout(reopen)
-            reopen = setTimeout(() => setMic(true), 800)
+            annaTalking.current = false
+            openSoon(500)
+            break
+          case 'response.done':
+            // Backup in case the "stopped" event goes missing.
+            openSoon(2500)
             break
           case 'response.output_audio_transcript.delta':
             if (m.item_id && m.delta) {
-              const id = m.item_id
-              const d = m.delta
-              setLines((ls) => {
-                const i = ls.findIndex((l) => l.id === id)
-                if (i < 0) return [...ls, { id, who: 'anna', text: d, done: false, at: performance.now() }]
-                const next = ls.slice()
-                next[i] = { ...next[i], text: next[i].text + d }
-                return next
-              })
+              const l = annaLine(m.item_id)
+              l.text += m.delta
+              translateReady(l)
             }
             break
           case 'response.output_audio_transcript.done':
             if (m.item_id && m.transcript) {
-              upsert(m.item_id, 'anna', { text: m.transcript, done: true })
-              void translateLine(m.item_id, m.transcript)
+              const l = annaLine(m.item_id)
+              l.text = m.transcript
+              l.done = true
+              translateReady(l)
+            }
+            break
+          case 'input_audio_buffer.speech_started':
+            if (m.item_id && !lines.current.some((x) => x.id === m.item_id)) {
+              lines.current = [...lines.current, { who: 'you', id: m.item_id, text: '' }]
             }
             break
           case 'conversation.item.input_audio_transcription.completed':
-            if (m.item_id && m.transcript?.trim()) upsert(m.item_id, 'you', { text: m.transcript.trim(), done: true })
+            if (m.item_id) {
+              const l = lines.current.find((x) => x.id === m.item_id) as YouLine | undefined
+              const text = (m.transcript ?? '').trim()
+              if (l) l.text = text || '…'
+              else if (text) lines.current = [...lines.current, { who: 'you', id: m.item_id, text }]
+            }
             break
         }
+        rerender()
       }
       pc.onconnectionstatechange = () => {
         if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) stop('ended')
@@ -327,35 +419,40 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
   }
 
   const now = typeof performance !== 'undefined' ? performance.now() : 0
-  // Anna's words appear at speaking pace (~15 letters a second), not all at once.
-  const shownChars = (l: Line) => (l.who === 'you' ? l.text.length : Math.max(0, Math.floor((now - l.at) * EN_CPS)))
-  const shownText = (l: Line) => l.text.slice(0, shownChars(l))
-  // The translation under Anna's words: a sentence appears once she has said
-  // it, and types in smoothly (the rest keeps its place, so nothing jumps).
-  const shownTr = (l: Line): { done: string; rest: string } | null => {
-    if (!l.sents?.length) return null
-    const said = shownChars(l)
-    let done = ''
-    let rest = ''
-    l.sents.forEach((p, i) => {
-      if (!p.tr) return
-      const key = `${l.id}#${i}`
-      if (said >= p.end && !unlocked.current.has(key)) unlocked.current.set(key, now)
-      const at = unlocked.current.get(key)
-      const sep = done || rest ? ' ' : ''
-      if (at === undefined) {
-        rest += sep + p.tr
+  const rtl = lang === 'ar' || lang === 'ur'
+
+  // How much of Anna's line is "said": her pace, or all of it once she's done.
+  const said = (l: AnnaLine) => (l.done && !annaTalking.current ? l.text.length : Math.min(l.text.length, Math.floor((now - l.at) * EN_CPS)))
+
+  const trOf = (l: AnnaLine): { a: string; b: string } => {
+    const n = said(l)
+    let a = ''
+    let b = ''
+    let blocked = false
+    l.sents.forEach((p) => {
+      const sep = a || b ? ' ' : ''
+      if (!p.tr || blocked) {
+        if (p.tr) b += sep + p.tr
+        blocked = blocked || !p.tr
         return
       }
-      const n = Math.floor((now - at) * TR_CPS)
-      if (rest) rest += sep + p.tr
-      else {
-        done += sep + p.tr.slice(0, n)
-        rest += p.tr.slice(n)
+      if (n >= p.end && p.unlockAt === undefined) p.unlockAt = now
+      if (p.unlockAt === undefined) {
+        b += sep + p.tr
+        blocked = true
+        return
+      }
+      const k = Math.floor((now - p.unlockAt) * TR_CPS)
+      a += sep + p.tr.slice(0, k)
+      if (k < p.tr.length) {
+        b += p.tr.slice(k)
+        blocked = true
       }
     })
-    return done || rest ? { done, rest } : null
+    return { a, b }
   }
+
+  const bars = Math.min(5, Math.round(level.current * 120))
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
@@ -370,10 +467,7 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
         <div className="flex items-center gap-3 border-b border-white/[.07] px-5 py-4">
           <span
             className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-[linear-gradient(135deg,#FFB088,#FF6A3D)] font-display text-[14px] font-bold text-white"
-            style={{
-              boxShadow: annaTalking ? '0 0 0 3px rgba(34,197,94,.55), 0 0 0 8px rgba(34,197,94,.15)' : 'none',
-              transition: 'box-shadow .4s ease'
-            }}
+            style={{ boxShadow: annaTalking.current ? '0 0 0 3px rgba(34,197,94,.55), 0 0 0 8px rgba(34,197,94,.15)' : 'none', transition: 'box-shadow .4s ease' }}
           >
             AW
           </span>
@@ -392,7 +486,6 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
           </button>
         </div>
 
-        {/* Pick a language */}
         {(phase === 'pick' || phase === 'error') && (
           <div className="p-5">
             <h3 className="font-display text-[22px] font-bold leading-tight text-t-1">{copy.title}</h3>
@@ -425,44 +518,92 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
           </div>
         )}
 
-        {/* Live captions */}
         {phase === 'live' && (
           <>
-            <div ref={listRef} className="min-h-[280px] flex-1 space-y-3 overflow-y-auto px-5 py-4">
-              {lines.length === 0 && <p className="py-10 text-center text-[14px] text-t-3">{copy.waitAnna}</p>}
-              {lines.map((l) =>
-                l.who === 'anna' ? (
-                  <div key={l.id} className="animate-rise">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-accent-pale">Anna</div>
-                    <div className="mt-0.5 text-[15px] font-medium leading-snug text-t-1">{shownText(l)}</div>
-                    {(() => {
-                      const tr = shownTr(l)
-                      if (!tr || !tr.done) return null
-                      return (
-                        <div dir={lang === 'ar' || lang === 'ur' ? 'rtl' : 'ltr'} className="mt-0.5 text-[14.5px] leading-snug text-[#8FD8F7]">
-                          {tr.done}
-                          <span className="invisible">{tr.rest}</span>
-                        </div>
-                      )
-                    })()}
-                    {shownChars(l) >= l.text.length && l.terms?.map((t) => (
-                      <div key={t.term} className="mt-1.5 animate-rise rounded-lg border border-[#F5A524]/25 bg-[#F5A524]/[.07] px-2.5 py-1.5 text-[12.5px] text-t-2">
-                        <b className="text-[#F5A524]">{t.term}</b> — {t.explanation}
+            <div ref={listRef} className="min-h-[300px] flex-1 space-y-4 overflow-y-auto px-5 py-4">
+              {lines.current.length === 0 && <p className="py-10 text-center text-[14px] text-t-3">{copy.waitAnna}</p>}
+              {lines.current.map((l) => {
+                if (l.who === 'you') {
+                  return (
+                    <div key={l.id} className="animate-rise text-right">
+                      <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-[#9DB7FF]/80">{copy.you}</div>
+                      <div className="mt-0.5 inline-block rounded-2xl bg-white/[.06] px-3 py-1.5 text-left text-[14px] text-t-2">
+                        {l.text || <span className="inline-flex gap-1 py-1">{[0, 1, 2].map((d) => <span key={d} className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#9DB7FF]" style={{ animationDelay: `${d * 150}ms` }} />)}</span>}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div key={l.id} className="animate-rise text-right">
-                    <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-[#9DB7FF]/80">{copy.you}</div>
-                    <div className="mt-0.5 inline-block rounded-2xl bg-white/[.06] px-3 py-1.5 text-left text-[14px] text-t-2">{l.text}</div>
+                    </div>
+                  )
+                }
+                const n = said(l)
+                const tr = trOf(l)
+                const full = n >= l.text.length && l.text.length > 0
+                const isQuestion = /\?/.test(l.text)
+                return (
+                  <div key={l.id} className="animate-rise">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-accent-pale">Anna</div>
+                        <div className="mt-0.5 text-[15px] font-medium leading-snug text-t-1">
+                          {l.text.slice(0, n)}
+                          <span className="invisible">{l.text.slice(n)}</span>
+                        </div>
+                        {tr.a && (
+                          <div dir={rtl ? 'rtl' : 'ltr'} className="mt-1 text-[14.5px] leading-snug text-[#8FD8F7]">
+                            {tr.a}
+                            <span className="invisible">{tr.b}</span>
+                          </div>
+                        )}
+                      </div>
+                      {isQuestion && full && !l.ask && (
+                        <button
+                          onClick={() => askAi(l)}
+                          className="mt-4 flex flex-none animate-rise items-center gap-1 rounded-full bg-accent px-3 py-1.5 text-[12px] font-semibold text-white shadow-[0_3px_14px_rgba(255,106,61,.5)] hover:brightness-110 active:scale-95"
+                        >
+                          <Icon name="sparkles" className="h-3.5 w-3.5" /> {copy.ask ?? 'Ask AI'}
+                        </button>
+                      )}
+                    </div>
+                    {full &&
+                      l.terms.map((t) => (
+                        <div key={t.term} className="mt-1.5 animate-rise rounded-lg border border-[#F5A524]/25 bg-[#F5A524]/[.07] px-2.5 py-1.5 text-[12.5px] text-t-2">
+                          <b className="text-[#F5A524]">{t.term}</b> — {t.explanation}
+                        </div>
+                      ))}
+                    {l.ask && (
+                      <div className="mt-2 animate-rise rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-[13px] leading-relaxed text-t-1">
+                        <div className="mb-0.5 flex items-center gap-1.5 text-[12px] font-semibold text-accent-hi">
+                          <Icon name="sparkles" className="h-3.5 w-3.5" /> {copy.ask ?? 'Ask AI'}
+                        </div>
+                        {l.ask.state === 'loading' ? (
+                          <span className="inline-flex items-center gap-1 py-1 text-t-3">
+                            {[0, 1, 2].map((d) => (
+                              <span key={d} className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent-hi" style={{ animationDelay: `${d * 150}ms` }} />
+                            ))}
+                          </span>
+                        ) : (
+                          <span dir={rtl ? 'rtl' : 'ltr'} className="whitespace-pre-line">
+                            {l.ask.text.slice(0, Math.floor((now - l.ask.at) * AI_CPS))}
+                            <span className="invisible">{l.ask.text.slice(Math.floor((now - l.ask.at) * AI_CPS))}</span>
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )
-              )}
+              })}
             </div>
             <div className="flex items-center gap-3 border-t border-white/[.07] px-5 py-3.5">
               <span className="flex flex-1 items-center gap-2 text-[12.5px] text-t-3">
-                <span className={`h-2 w-2 rounded-full ${annaTalking ? 'bg-[#22C55E]' : 'animate-pulse bg-[#9DB7FF]'}`} />
-                {annaTalking ? 'Anna…' : copy.live}
+                {/* Mic meter: shows that Anna hears you */}
+                <span className="flex h-4 items-end gap-[2px]" aria-hidden="true">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <span
+                      key={i}
+                      className="w-[3px] rounded-full transition-all duration-100"
+                      style={{ height: `${30 + i * 15}%`, background: micOpen.current && i < bars ? '#22C55E' : 'rgba(255,255,255,.15)' }}
+                    />
+                  ))}
+                </span>
+                {annaTalking.current ? 'Anna…' : micOpen.current && bars > 1 ? copy.hearing ?? 'Listening to you…' : copy.live}
               </span>
               <button onClick={() => stop('ended')} className="rounded-full bg-[#F2555A] px-4 py-2 text-[13.5px] font-semibold text-white hover:brightness-110">
                 {copy.end}

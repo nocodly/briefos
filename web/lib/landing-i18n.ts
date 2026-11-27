@@ -7,6 +7,18 @@ export type LandingLocale = 'en' | 'es'
 
 export const L = {
   en: {
+    hero2: {
+      badge: 'New',
+      badgeText: 'Try a call with an AI client — right in your browser',
+      line1: 'Understand every client call',
+      line2a: 'in your language',
+      line2b: 'on',
+      sub: 'Live translation, tech-term hints and an AI answer when you freeze. Notes, tasks and the follow-up email after the call.',
+      pillText: 'Free for Windows · no card · no bot joins',
+      pillCta: 'Download free',
+      trust: 'Audio is never stored. Your notes stay on your computer.',
+      langsChip: 'Live translation into 18 languages'
+    },
     tryCall: {
       eyebrow: 'Try it now — no install',
       sectionTitle: 'Talk to a client. Read her in your language.',
@@ -32,7 +44,9 @@ export const L = {
       download: 'Download for Windows, free',
       close: 'Close',
       micDenied: 'Allow the microphone to talk to Anna (the lock icon in the address bar).',
-      failed: 'The call could not start. Check your internet and try again.'
+      failed: 'The call could not start. Check your internet and try again.',
+      hearing: 'Anna hears you…',
+      ask: 'Ask AI'
     },
     flow: { clients: 'Client says', you: 'You see' },
     demo: { hint: 'Hint during the call', ask: 'Ask AI', click: 'Click the button — that’s how it works in the app.', again: 'Ask again', share: 'Share', videoTitle: 'Watch a real call', videoSub: 'Captions, translation, term hints and Ask AI — right on top of your call.' },
@@ -103,6 +117,18 @@ export const L = {
     footer: { privacy: 'Privacy', terms: 'Terms', impressum: 'Impressum', cancel: 'Verträge hier kündigen', mail: 'Email us', download: 'Download', account: 'Your subscription' }
   },
   es: {
+    hero2: {
+      badge: 'Nuevo',
+      badgeText: 'Prueba una llamada con una clienta IA — en tu navegador',
+      line1: 'Entiende cada llamada',
+      line2a: 'en tu idioma',
+      line2b: 'en',
+      sub: 'Traducción en vivo, pistas de términos técnicos y una respuesta de IA cuando te bloqueas. Notas, tareas y el email de seguimiento después.',
+      pillText: 'Gratis para Windows · sin tarjeta · sin bots',
+      pillCta: 'Descargar gratis',
+      trust: 'El audio nunca se guarda. Tus notas quedan en tu ordenador.',
+      langsChip: 'Traducción en vivo a 18 idiomas'
+    },
     tryCall: {
       eyebrow: 'Pruébalo ahora — sin instalar',
       sectionTitle: 'Habla con una clienta. Léela en tu idioma.',
@@ -128,7 +154,9 @@ export const L = {
       download: 'Descargar para Windows, gratis',
       close: 'Cerrar',
       micDenied: 'Permite el micrófono para hablar con Anna (el candado en la barra de direcciones).',
-      failed: 'No se pudo iniciar la llamada. Revisa tu conexión e inténtalo de nuevo.'
+      failed: 'No se pudo iniciar la llamada. Revisa tu conexión e inténtalo de nuevo.',
+      hearing: 'Anna te escucha…',
+      ask: 'Ask AI'
     },
     flow: { clients: 'El cliente dice', you: 'Tú ves' },
     demo: { hint: 'Pista durante la llamada', ask: 'Ask AI', click: 'Haz clic en el botón — así funciona en la app.', again: 'Preguntar de nuevo', share: 'Compartir', videoTitle: 'Mira una llamada real', videoSub: 'Subtítulos, traducción, pistas de términos y Ask AI — encima de tu llamada.' },
