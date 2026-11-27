@@ -424,32 +424,24 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
   // How much of Anna's line is "said": her pace, or all of it once she's done.
   const said = (l: AnnaLine) => (l.done && !annaTalking.current ? l.text.length : Math.min(l.text.length, Math.floor((now - l.at) * EN_CPS)))
 
-  const trOf = (l: AnnaLine): { a: string; b: string } => {
+  // The translation types in under her words, in step with them: sentence by
+  // sentence, as far into its translation as she is into the English
+  // sentence (the translation is ready early — her text arrives before her
+  // voice — so it truly runs alongside, like live).
+  const trOf = (l: AnnaLine): string => {
     const n = said(l)
-    let a = ''
-    let b = ''
-    let blocked = false
-    l.sents.forEach((p) => {
-      const sep = a || b ? ' ' : ''
-      if (!p.tr || blocked) {
-        if (p.tr) b += sep + p.tr
-        blocked = blocked || !p.tr
-        return
-      }
-      if (n >= p.end && p.unlockAt === undefined) p.unlockAt = now
-      if (p.unlockAt === undefined) {
-        b += sep + p.tr
-        blocked = true
-        return
-      }
-      const k = Math.floor((now - p.unlockAt) * TR_CPS)
-      a += sep + p.tr.slice(0, k)
-      if (k < p.tr.length) {
-        b += p.tr.slice(k)
-        blocked = true
-      }
-    })
-    return { a, b }
+    let out = ''
+    let start = 0
+    for (const p of l.sents) {
+      if (!p.tr) break
+      const len = Math.max(1, p.end - start)
+      const frac = Math.min(1, Math.max(0, (n - start) / len))
+      const k = Math.ceil(frac * p.tr.length)
+      if (k > 0) out += (out ? ' ' : '') + p.tr.slice(0, k)
+      if (frac < 1) break
+      start = p.end
+    }
+    return out
   }
 
   const bars = Math.min(5, Math.round(level.current * 120))
@@ -542,14 +534,10 @@ function TryCallModal({ copy, defaultLang, onClose }: { copy: TryCallCopy; defau
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-[10.5px] font-semibold uppercase tracking-[.14em] text-accent-pale">Anna</div>
-                        <div className="mt-0.5 text-[15px] font-medium leading-snug text-t-1">
-                          {l.text.slice(0, n)}
-                          <span className="invisible">{l.text.slice(n)}</span>
-                        </div>
-                        {tr.a && (
+                        <div className="mt-0.5 text-[15px] font-medium leading-snug text-t-1">{l.text.slice(0, n)}</div>
+                        {tr && (
                           <div dir={rtl ? 'rtl' : 'ltr'} className="mt-1 text-[14.5px] leading-snug text-[#8FD8F7]">
-                            {tr.a}
-                            <span className="invisible">{tr.b}</span>
+                            {tr}
                           </div>
                         )}
                       </div>
